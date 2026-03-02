@@ -463,6 +463,9 @@ end
 _G.IsSpellKnown = function(spellID) return true end  -- assume player knows all spells in tests
 
 -- Other WoW globals
+_G.ReloadUI = function() end
+_G.SlashCmdList = _G.SlashCmdList or {}
+
 _G.CreateColor = function(r, g, b, a)
     return { r = r, g = g, b = b, a = a or 1.0,
              GetRGB = function(self) return self.r, self.g, self.b end }
@@ -483,6 +486,8 @@ _G.RAID_CLASS_COLORS = {
     DEMONHUNTER = { r = 0.64, g = 0.19, b = 0.79 },
     EVOKER = { r = 0.2, g = 0.58, b = 0.5 },
 }
+
+_G.PowerBarColor = {}
 
 _G.UIFrameFadeIn = function(frame, time, startAlpha, endAlpha)
     frame:SetAlpha(endAlpha)  -- instant in tests
@@ -519,205 +524,5 @@ if not _G.bit then
             lshift = function(a, b) return a << b end,
             rshift = function(a, b) return a >> b end,
         }
-    end
-end
-
--- LibStub mock (for Ace3 module loading in tests)
-local _libs = {}
-_G.LibStub = setmetatable({}, {
-    __call = function(self, major, silent)
-        if not _libs[major] and not silent then
-            error("Cannot find a library instance of '" .. tostring(major) .. "'", 2)
-        end
-        return _libs[major]
-    end
-})
-
-function _G.LibStub:NewLibrary(major, minor)
-    _libs[major] = _libs[major] or {}
-    return _libs[major]
-end
-
-function _G.LibStub:GetLibrary(major, silent)
-    if not _libs[major] and not silent then
-        error("Cannot find a library instance of '" .. tostring(major) .. "'", 2)
-    end
-    return _libs[major]
-end
-
--- AceAddon-3.0 mock
-local AceAddon = LibStub:NewLibrary("AceAddon-3.0", 12)
-AceAddon._addons = {}
-
-function AceAddon:NewAddon(name, ...)
-    local addon = {
-        name = name,
-        _modules = {},
-        _enabled = false,
-        db = nil,
-    }
-    
-    -- Mix in requested modules (e.g., AceEvent-3.0)
-    for i = 1, select('#', ...) do
-        local libName = select(i, ...)
-        local lib = LibStub(libName, true)
-        if lib and lib._mixin then
-            lib._mixin(addon)
-        end
-    end
-    
-    function addon:NewModule(modName, ...)
-        local mod = { name = modName, _enabled = false }
-        for i = 1, select('#', ...) do
-            local libName = select(i, ...)
-            local lib = LibStub(libName, true)
-            if lib and lib._mixin then
-                lib._mixin(mod)
-            end
-        end
-        function mod:Enable()
-            self._enabled = true
-            if self.OnEnable then self:OnEnable() end
-        end
-        function mod:Disable()
-            self._enabled = false
-            if self.OnDisable then self:OnDisable() end
-        end
-        function mod:IsEnabled() return self._enabled end
-        self._modules[modName] = mod
-        return mod
-    end
-    
-    function addon:GetModule(modName, silent)
-        if not self._modules[modName] and not silent then
-            error("Module '" .. modName .. "' not found", 2)
-        end
-        return self._modules[modName]
-    end
-    
-    function addon:Enable()
-        self._enabled = true
-        if self.OnEnable then self:OnEnable() end
-    end
-    function addon:Disable()
-        self._enabled = false
-        if self.OnDisable then self:OnDisable() end
-    end
-    function addon:IsEnabled() return self._enabled end
-    
-    AceAddon._addons[name] = addon
-    _G[name] = addon
-    return addon
-end
-
--- AceDB-3.0 mock
-local AceDB = LibStub:NewLibrary("AceDB-3.0", 27)
-function AceDB:New(varName, defaults, defaultProfile)
-    local db = {
-        profile = {},
-        char = {},
-        _defaults = defaults or {},
-    }
-    
-    -- Deep merge defaults
-    local function mergeDefaults(target, source)
-        for k, v in pairs(source) do
-            if type(v) == "table" then
-                target[k] = target[k] or {}
-                mergeDefaults(target[k], v)
-            elseif target[k] == nil then
-                target[k] = v
-            end
-        end
-    end
-    
-    if defaults and defaults.profile then
-        mergeDefaults(db.profile, defaults.profile)
-    end
-    if defaults and defaults.char then
-        mergeDefaults(db.char, defaults.char)
-    end
-    
-    return db
-end
-
--- AceEvent-3.0 mock
-local AceEvent = LibStub:NewLibrary("AceEvent-3.0", 4)
-AceEvent._callbacks = {}
-
-function AceEvent._mixin(target)
-    target._eventCallbacks = {}
-    
-    function target:RegisterEvent(event, handler)
-        AceEvent._callbacks[event] = AceEvent._callbacks[event] or {}
-        local fn = type(handler) == "function" and handler or function(...)
-            if self[handler] then self[handler](self, ...) end
-        end
-        AceEvent._callbacks[event][self] = fn
-        self._eventCallbacks[event] = fn
-    end
-    
-    function target:UnregisterEvent(event)
-        if AceEvent._callbacks[event] then
-            AceEvent._callbacks[event][self] = nil
-        end
-        self._eventCallbacks[event] = nil
-    end
-    
-    function target:UnregisterAllEvents()
-        for event in pairs(self._eventCallbacks) do
-            self:UnregisterEvent(event)
-        end
-        self._eventCallbacks = {}
-    end
-end
-
--- Test helper: fire an event to all registered handlers
-AceEvent._FireEvent = function(event, ...)
-    local callbacks = AceEvent._callbacks[event]
-    if callbacks then
-        for obj, fn in pairs(callbacks) do
-            fn(event, ...)
-        end
-    end
-end
-
--- AceConsole-3.0 mock
-local AceConsole = LibStub:NewLibrary("AceConsole-3.0", 7)
-AceConsole._mixin = function(target)
-    target._printMessages = {}
-    function target:Print(...)
-        local msg = table.concat({...}, " ")
-        table.insert(target._printMessages, msg)
-    end
-    function target:RegisterChatCommand(cmd, handler)
-        _G["SLASH_" .. cmd:upper() .. "1"] = "/" .. cmd
-        _G.SlashCmdList = _G.SlashCmdList or {}
-        _G.SlashCmdList[cmd:upper()] = type(handler) == "function" and handler
-            or function(input) if target[handler] then target[handler](target, input) end end
-    end
-end
-
--- AceTimer-3.0 mock
-local AceTimer = LibStub:NewLibrary("AceTimer-3.0", 17)
-AceTimer._mixin = function(target)
-    function target:ScheduleTimer(handler, delay, ...)
-        local args = {...}
-        local fn = type(handler) == "function" and handler
-            or function(...) if self[handler] then self[handler](self, ...) end end
-        return C_Timer.After(delay, function() fn(table.unpack(args)) end)
-    end
-    
-    function target:ScheduleRepeatingTimer(handler, interval)
-        local fn = type(handler) == "function" and handler
-            or function(...) if self[handler] then self[handler](self) end end
-        return C_Timer.NewTicker(interval, fn)
-    end
-    
-    function target:CancelTimer(handle)
-        -- C_Timer handles cancel via returned object
-        if type(handle) == "table" and handle.Cancel then
-            handle:Cancel()
-        end
     end
 end

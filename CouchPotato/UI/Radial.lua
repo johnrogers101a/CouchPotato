@@ -6,7 +6,7 @@
 -- Patch 12.0.1 (Interface 120001)
 
 local CP = CouchPotato
-local Radial = CP:NewModule("Radial", "AceEvent-3.0", "AceTimer-3.0")
+local Radial = CP:NewModule("Radial")
 
 local MAX_WHEELS = 8
 local MAX_SLOTS = 12

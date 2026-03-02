@@ -32,3 +32,30 @@ All 39 specs defined with 13 binding slots: primary/secondary/tertiary (face but
 - Modifier layer (LT hold) is stubbed but not fully wired; requires secure button implementation from Kaylee's RadialWheel.
 - Spell name strings in Specs.lua may need adjustment based on actual WoW spell names (some may vary by rank or talent).
 - LED color updates on spell cast assume `C_Spell.GetSpellInfo` API (Patch 10.0+); fallback to older `GetSpellInfo` included.
+
+### 2026-03-01: Frameworkless Core — Ace3/LibStub Removal
+
+**What Changed:**
+- Removed all Ace3 and LibStub dependencies from CouchPotato.lua
+- Replaced AceAddon-3.0, AceDB-3.0, AceEvent-3.0, AceConsole-3.0, AceTimer-3.0 with hand-rolled equivalents
+- Updated all Core module files (GamePad, Bindings, Specs, BlizzardFrames) to drop mixin arguments from `CP:NewModule()` calls
+
+**Architecture Design:**
+- **Single event frame**: `CP._mainFrame` handles all event registration; `CP._eventCallbacks[event] = [{obj, fn}, ...]` table dispatches to registered objects
+- **Event API injection**: `_injectEventAPI()` adds `RegisterEvent`, `UnregisterEvent`, `UnregisterAllEvents` to any object
+- **Timer API injection**: `_injectTimerAPI()` adds `ScheduleTimer`, `ScheduleRepeatingTimer`, `CancelTimer` using `C_Timer.After` and `C_Timer.NewTicker`
+- **Print API injection**: `_injectPrintAPI()` adds `Print()` method with CouchPotato-branded chat output
+- **Module system**: `CP:NewModule(name)` creates module table with all APIs injected; `CP:GetModule(name, silent)` retrieves with optional error
+- **SavedVariables**: Hand-rolled `deepMerge()` function merges defaults into `CouchPotatoDB.profile` and `CouchPotatoDB.char`; `db.ResetProfile()` helper for `/cp reset`
+- **Slash commands**: `CP:RegisterChatCommand(cmd, handler)` sets global `SLASH_` and `SlashCmdList` directly
+
+**Test Helper:**
+- `CP._FireEvent(event, ...)` — public function for spec/helpers.lua to dispatch events directly to all callbacks without going through WoW frame system
+- Enables unit testing of event handlers in Busted
+
+**Timer Return Values:**
+- `ScheduleTimer()` returns `{Cancel(), IsCancelled()}` table for proper timer cancellation
+- Compatible with existing code that calls `self:CancelTimer(handle)` or `handle:Cancel()`
+
+**API Surface Preserved:**
+All production code unchanged — `CP:NewModule(name)`, `mod:RegisterEvent(event, handler)`, `mod:ScheduleTimer(fn, delay)`, `mod:Print(...)` work identically.

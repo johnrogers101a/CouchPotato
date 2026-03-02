@@ -57,3 +57,21 @@
 - Bindings can only be changed outside combat (SetOverrideBinding requires !InCombatLockdown)
 - HealMode stores currentHealUnit for post-combat re-application
 - Frame visibility changes are safe during combat, but attribute changes are not
+
+### 2026-03-01: Ace3 Removal from UI Layer
+
+**Module Declaration Pattern:**
+- Changed all 4 UI modules from `CP:NewModule("Name", "AceEvent-3.0", ...)` to `CP:NewModule("Name")`
+- Removed mixin library arguments from: Radial, HUD, VirtualCursor, HealMode
+- Core module system still provides event registration via inherited AceAddon methods
+
+**TOC File Structure:**
+- Removed all libs\ entries (LibStub, AceAddon, AceDB, AceEvent, AceConsole, AceTimer)
+- Removed embeds.xml line completely
+- TOC now lists only Lua files directly: CouchPotato.lua, Core/*.lua, UI/*.lua
+- Dependencies still properly declared: `LoadOnDemand: 1`, `Dependencies: CouchPotato_Loader`
+
+**Cleaned Up:**
+- Deleted entire CouchPotato/libs/ directory
+- Deleted CouchPotato/embeds.xml file
+- UI modules now have zero external library dependencies at declaration time

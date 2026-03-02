@@ -9,25 +9,26 @@ describe("Bindings Module", function()
     
     before_each(function()
         helpers.resetMocks()
-        
-        CP = LibStub("AceAddon-3.0"):NewAddon("CouchPotato", "AceConsole-3.0", "AceEvent-3.0")
-        _G["CouchPotato"] = CP
-        CP.db = LibStub("AceDB-3.0"):New("CouchPotatoDB", {
-            profile = { vibrationEnabled = true }
-        })
-        
+
+        dofile("CouchPotato/CouchPotato.lua")
+        CP = CouchPotato
+        CP.db = {
+            profile = { vibrationEnabled = true },
+            char    = { currentWheel = 1, wheelLayouts = {} },
+        }
+
         dofile("CouchPotato/Core/Specs.lua")
         dofile("CouchPotato/Core/Bindings.lua")
-        
-        Specs = CP:GetModule("Specs")
+
+        Specs    = CP:GetModule("Specs")
         Bindings = CP:GetModule("Bindings")
         Specs:Enable()
         Bindings:Enable()
-        
+
         -- Simulate Fire Mage (classID=8, spec=2)
         _MockPlayer.classID = 8
-        _MockPlayer.class = "MAGE"
-        _MockPlayer.spec = 2
+        _MockPlayer.class   = "MAGE"
+        _MockPlayer.spec    = 2
     end)
     
     describe("initialization", function()
@@ -78,7 +79,7 @@ describe("Bindings Module", function()
             
             -- Simulate combat end
             _G._SetCombatState(false)
-            LibStub("AceEvent-3.0")._FireEvent("PLAYER_REGEN_ENABLED")
+            helpers.fireEvent("PLAYER_REGEN_ENABLED")
             
             assert.is_false(Bindings.pendingApply)
         end)
@@ -109,7 +110,7 @@ describe("Bindings Module", function()
             assert.is_true(Bindings.pendingClear)
             
             _G._SetCombatState(false)
-            LibStub("AceEvent-3.0")._FireEvent("PLAYER_REGEN_ENABLED")
+            helpers.fireEvent("PLAYER_REGEN_ENABLED")
             
             assert.is_false(Bindings.pendingClear)
             helpers.assertNoBindings(Bindings.ownerFrame)

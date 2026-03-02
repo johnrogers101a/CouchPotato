@@ -5,7 +5,7 @@
 -- Patch 12.0.1 (Interface 120001)
 
 local CP = CouchPotato
-local HealMode = CP:NewModule("HealMode", "AceEvent-3.0")
+local HealMode = CP:NewModule("HealMode")
 
 HealMode.active = false
 HealMode.cursorIndex = 1  -- 1-5 for party (1=tank/PT1, 2-4=party2-4, 5=self)

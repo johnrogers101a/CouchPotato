@@ -43,3 +43,11 @@
   - TOC LoadOnDemand behavior with real WoW addon loader
 
 <!-- Append new learnings below. Each entry is something lasting about the project. -->
+
+### 2026-03-01: Removed Ace3 Mocks, Migrated to Frameworkless API
+- **New Bootstrap Pattern**: All test files now use `dofile("CouchPotato/CouchPotato.lua")` then `CP = CouchPotato`, setting `CP.db` directly instead of AceAddon NewAddon + AceDB:New()
+- **Event Firing**: `helpers.fireEvent(event, ...)` now routes through `CP._FireEvent()` instead of `LibStub("AceEvent-3.0")._FireEvent()`
+- **No Mixin Args**: Modules created with `CP:NewModule(name)` have event/timer/print APIs built-in, no "AceEvent-3.0", "AceTimer-3.0" mixin args
+- **Mock Cleanup**: Removed ~200 lines of LibStub/AceAddon/AceDB/AceEvent/AceConsole/AceTimer mocks from `spec/wow_mock.lua`; retained WoW API mocks (C_GamePad, C_AddOns, CreateFrame, etc.)
+- **Test Independence**: `loader_spec.lua` required zero changes as it never used AceAddon—only raw WoW APIs
+- **Global Additions**: Added `ReloadUI`, `SlashCmdList`, and `PowerBarColor` to wow_mock.lua for HUD.lua compatibility

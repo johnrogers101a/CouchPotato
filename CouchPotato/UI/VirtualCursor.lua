@@ -4,7 +4,7 @@
 -- Patch 12.0.1 (Interface 120001)
 
 local CP = CouchPotato
-local VirtualCursor = CP:NewModule("VirtualCursor", "AceEvent-3.0")
+local VirtualCursor = CP:NewModule("VirtualCursor")
 
 VirtualCursor.enabled = false
 VirtualCursor.focusedElement = nil

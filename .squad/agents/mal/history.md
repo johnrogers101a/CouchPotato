@@ -34,3 +34,23 @@
 - Each stub has clear "STUB: Replace with real X for production" header
 - Stubs implement core API surface needed for development and testing
 - BigWigs packager replaces with real libs via .pkgmeta externals
+
+## Reviews
+
+### 2026-03-01: Frameworkless Migration Sign-off
+
+**Scope:** Full Ace3 → pure Lua migration  
+**Files Reviewed:** 16 files (CouchPotato.lua, Core/*, UI/*, TOC, spec/*)
+
+**Critical Checks — All Pass:**
+- InCombatLockdown() guards intact on all 7 combat-sensitive functions
+- SecureActionButtonTemplate usage preserved in Radial.lua
+- No mixin arguments to NewModule() anywhere
+- Event dispatch correctly routes string handlers to methods
+- Timer handles have Cancel() method
+- CP._FireEvent() exists for test helpers
+- Zero LibStub/Ace3 references remaining (only comments)
+
+**Verdict:** ✅ APPROVED
+
+The new frameworkless architecture matches Ace3's API surface cleanly. Combat safety is preserved. Ready to ship.
