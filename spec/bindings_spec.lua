@@ -1,6 +1,11 @@
 -- spec/bindings_spec.lua
--- Tests for Bindings module: SetBinding (permanent) for direct mode,
+-- Tests for Bindings module: SetOverrideBindingSpell (override layer) for direct mode,
 -- SetOverrideBindingClick (transient) for wheel mode, combat safety.
+--
+-- WHY override layer (not SetBinding)?
+--   WoW's built-in gamepad preset re-applies on UPDATE_BINDINGS every login,
+--   overwriting any SetBinding PAD key. SetOverrideBindingSpell sits in the
+--   override layer which has higher priority and is never clobbered by presets.
 
 require("spec/wow_mock")
 local helpers = require("spec/helpers")
@@ -53,34 +58,42 @@ describe("Bindings Module", function()
     end)
     
     describe("ApplyControllerBindings (direct mode)", function()
-        it("writes face-button spells to the permanent binding layer", function()
+        it("writes face-button spells to the override binding layer", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyControllerBindings()
             
-            -- Direct mode uses SetBinding — permanent layer, NOT override layer
-            local permanent = _G._GetPermanentBindings()
+            -- Direct mode now uses SetOverrideBindingSpell — override layer, NOT permanent
+            local override = _G._GetOverrideBindings(Bindings.ownerFrame)
             local count = 0
-            for _ in pairs(permanent) do count = count + 1 end
-            assert.is_true(count > 0, "Should have applied at least one permanent binding")
+            for _ in pairs(override) do count = count + 1 end
+            assert.is_true(count > 0, "Should have applied at least one override binding")
         end)
 
-        it("binds face buttons to correct spells for Fire Mage", function()
+        it("does NOT touch the permanent binding layer", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyControllerBindings()
 
-            local permanent = _G._GetPermanentBindings()
-            assert.equals("SPELL Fireball",    permanent["PAD4"], "PAD4 (Y) should be primary spell")
-            assert.equals("SPELL Pyroblast",   permanent["PAD2"], "PAD2 (B) should be secondary spell")
-            assert.equals("SPELL Fire Blast",  permanent["PAD1"], "PAD1 (A) should be tertiary spell")
-            assert.equals("SPELL Counterspell",permanent["PAD3"], "PAD3 (X) should be interrupt")
+            -- Permanent (SetBinding) layer must remain untouched
+            helpers.assertNoPermanentBindings()
         end)
 
-        it("calls SaveBindings after applying", function()
+        it("binds face buttons to correct spells for Fire Mage (override layer)", function()
+            C_GamePad._SimulateConnect(1)
+            Bindings:ApplyControllerBindings()
+
+            local override = _G._GetOverrideBindings(Bindings.ownerFrame)
+            assert.equals("SPELL Fireball",    override["PAD4"], "PAD4 (Y) should be primary spell")
+            assert.equals("SPELL Pyroblast",   override["PAD2"], "PAD2 (B) should be secondary spell")
+            assert.equals("SPELL Fire Blast",  override["PAD1"], "PAD1 (A) should be tertiary spell")
+            assert.equals("SPELL Counterspell",override["PAD3"], "PAD3 (X) should be interrupt")
+        end)
+
+        it("does NOT call SaveBindings (override bindings are session-only)", function()
             C_GamePad._SimulateConnect(1)
             local before = _G._GetSaveBindingsCalls()
             Bindings:ApplyControllerBindings()
-            assert.is_true(_G._GetSaveBindingsCalls() > before,
-                "SaveBindings should be called after applying direct bindings")
+            assert.equals(before, _G._GetSaveBindingsCalls(),
+                "SaveBindings must NOT be called — override bindings need no persistence")
         end)
         
         it("does not bind RT/LT (Radial owns them)", function()
@@ -95,7 +108,7 @@ describe("Bindings Module", function()
             assert.is_nil(override["PADLTRIGGER"],  "LT must not be in override bindings")
         end)
         
-        it("queues apply during combat — no SetBinding called", function()
+        it("queues apply during combat — no override set", function()
             _G._SetCombatState(true)
             Bindings:ApplyControllerBindings()
             
@@ -115,9 +128,9 @@ describe("Bindings Module", function()
             helpers.fireEvent("PLAYER_REGEN_ENABLED")
             
             assert.is_false(Bindings.pendingApply)
-            -- Permanent bindings should now be set
-            local permanent = _G._GetPermanentBindings()
-            assert.is_not_nil(permanent["PAD4"], "PAD4 should be bound after combat ends")
+            -- Override bindings should now be set
+            local override = _G._GetOverrideBindings(Bindings.ownerFrame)
+            assert.is_not_nil(override["PAD4"], "PAD4 should be bound after combat ends")
         end)
     end)
     
@@ -153,7 +166,7 @@ describe("Bindings Module", function()
             assert.is_false(Bindings.wheelOpen)
         end)
 
-        it("RestoreDirectBindings clears wheel overrides and sets permanent spells", function()
+        it("RestoreDirectBindings clears wheel overrides and re-applies spell overrides", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyWheelBindings(1)
             assert.is_true(Bindings.wheelOpen)
@@ -161,36 +174,34 @@ describe("Bindings Module", function()
             Bindings:RestoreDirectBindings()
             assert.is_false(Bindings.wheelOpen)
 
-            -- Wheel-mode override bindings for face buttons are cleared
+            -- Wheel-mode CLICK overrides are cleared; spell overrides are back
             local override = _G._GetOverrideBindings(Bindings.ownerFrame)
-            assert.is_nil(override["PAD4"], "PAD4 wheel override should be gone after restore")
-
-            -- Permanent layer now has the spell bindings
-            local permanent = _G._GetPermanentBindings()
-            assert.is_not_nil(permanent["PAD4"], "PAD4 should have a permanent binding after restore")
-            assert.is_truthy(permanent["PAD4"]:find("^SPELL "),
-                "PAD4 permanent binding should be a SPELL, got: " .. tostring(permanent["PAD4"]))
+            -- PAD4 should now have a SPELL override, not a CLICK override
+            assert.is_not_nil(override["PAD4"], "PAD4 should still have a binding after restore")
+            assert.is_truthy(override["PAD4"]:find("^SPELL "),
+                "PAD4 binding should be SPELL after restore, got: " .. tostring(override["PAD4"]))
         end)
     end)
 
     describe("GetBindingAction reflects binding layers", function()
-        it("permanent layer has SPELL binding after ApplyDirectBindings", function()
+        it("override layer has SPELL binding after ApplyDirectBindings", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyDirectBindings()
 
-            -- Direct bindings are permanent — checkOverride=false reads permanent layer only
-            local binding = GetBindingAction("PAD4", false)
-            assert.is_not_nil(binding, "PAD4 should have a permanent binding")
+            -- Direct bindings are in the override layer — checkOverride=true required
+            local binding = GetBindingAction("PAD4", true)
+            assert.is_not_nil(binding, "PAD4 should have an override binding")
             assert.equals("SPELL Fireball", binding)
         end)
 
-        it("checkOverride=true also finds permanent binding when no override exists", function()
+        it("permanent layer is NOT set after ApplyDirectBindings", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyDirectBindings()
 
-            -- No override on face buttons in direct mode; falls through to permanent
-            local binding = GetBindingAction("PAD4", true)
-            assert.equals("SPELL Fireball", binding)
+            -- No permanent binding should exist (we use override, not SetBinding)
+            local binding = GetBindingAction("PAD4", false)
+            assert.is_nil(binding,
+                "PAD4 must NOT be in the permanent layer — override layer only")
         end)
 
         it("override layer has CLICK binding after ApplyWheelBindings", function()
@@ -203,34 +214,42 @@ describe("Bindings Module", function()
                 "PAD4 in wheel mode should be a CLICK binding")
         end)
 
-        it("permanent layer is nil after ClearControllerBindings", function()
+        it("override layer is nil after ClearControllerBindings", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyDirectBindings()
             Bindings:ClearControllerBindings()
 
-            -- Original saved binding was nil → should be nil after restore
-            assert.is_nil(GetBindingAction("PAD4", false))
+            assert.is_nil(GetBindingAction("PAD4", true),
+                "PAD4 override should be nil after ClearControllerBindings")
         end)
     end)
 
     describe("ClearControllerBindings", function()
-        it("restores original permanent bindings and clears overrides", function()
+        it("clears all override bindings", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyControllerBindings()
             
             Bindings:ClearControllerBindings()
             helpers.assertNoBindings(Bindings.ownerFrame)
+        end)
+
+        it("never touches the permanent binding layer", function()
+            C_GamePad._SimulateConnect(1)
+            Bindings:ApplyControllerBindings()
+            Bindings:ClearControllerBindings()
+
+            -- Permanent layer should remain untouched (empty)
             helpers.assertNoPermanentBindings()
         end)
 
-        it("calls SaveBindings after restoring", function()
+        it("does NOT call SaveBindings", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyControllerBindings()
             local before = _G._GetSaveBindingsCalls()
 
             Bindings:ClearControllerBindings()
-            assert.is_true(_G._GetSaveBindingsCalls() > before,
-                "SaveBindings should be called after clearing bindings")
+            assert.equals(before, _G._GetSaveBindingsCalls(),
+                "SaveBindings must NOT be called — no permanent bindings to save")
         end)
         
         it("queues clear during combat", function()
@@ -260,24 +279,24 @@ describe("Bindings Module", function()
     describe("UPDATE_BINDINGS debounce", function()
         it("does not apply immediately — schedules a timer", function()
             C_GamePad._SimulateConnect(1)
-            helpers.assertNoPermanentBindings()  -- nothing set yet
+            helpers.assertNoBindings(Bindings.ownerFrame)  -- nothing set yet
 
             helpers.fireEvent("UPDATE_BINDINGS")
 
             -- Timer is pending but not fired
-            helpers.assertNoPermanentBindings()
+            helpers.assertNoBindings(Bindings.ownerFrame)
             assert.is_not_nil(Bindings._applyTimer, "A debounce timer should be pending")
         end)
 
-        it("applies bindings when the timer fires", function()
+        it("applies override bindings when the timer fires", function()
             C_GamePad._SimulateConnect(1)
             helpers.fireEvent("UPDATE_BINDINGS")
 
             -- Fire all pending C_Timer.After callbacks
             C_Timer._FireAll()
 
-            local permanent = _G._GetPermanentBindings()
-            assert.is_not_nil(permanent["PAD4"], "PAD4 should be bound after debounce fires")
+            local override = _G._GetOverrideBindings(Bindings.ownerFrame)
+            assert.is_not_nil(override["PAD4"], "PAD4 should be bound after debounce fires")
             assert.is_nil(Bindings._applyTimer, "Timer handle should be cleared after firing")
         end)
 
@@ -304,33 +323,33 @@ describe("Bindings Module", function()
             C_Timer._FireAll()
 
             -- wheelOpen=true → ApplyDirectBindings should NOT run
+            helpers.assertNoBindings(Bindings.ownerFrame)
             helpers.assertNoPermanentBindings()
         end)
     end)
     
     describe("combat safety — CRITICAL", function()
-        it("NEVER calls SetBinding during combat", function()
+        it("NEVER calls SetOverrideBindingSpell during combat", function()
             local combatCallDetected = false
-            local originalSB = _G.SetBinding
-            _G.SetBinding = function(key, command)
+            local originalSOBS = _G.SetOverrideBindingSpell
+            _G.SetOverrideBindingSpell = function(owner, isPriority, key, spell)
                 if InCombatLockdown() then
                     combatCallDetected = true
-                    error("TAINT: SetBinding called during combat!")
+                    error("TAINT: SetOverrideBindingSpell called during combat!")
                 end
-                return originalSB(key, command)
+                return originalSOBS(owner, isPriority, key, spell)
             end
             
             _G._SetCombatState(true)
             C_GamePad._SimulateConnect(1)
             
-            -- Should queue, NOT call SetBinding
             assert.has_no.errors(function()
                 Bindings:ApplyControllerBindings()
             end)
             assert.is_false(combatCallDetected,
-                "SetBinding was called during combat — taint risk!")
+                "SetOverrideBindingSpell was called during combat — taint risk!")
             
-            _G.SetBinding = originalSB
+            _G.SetOverrideBindingSpell = originalSOBS
         end)
         
         it("NEVER calls ClearOverrideBindings during combat", function()
@@ -354,25 +373,43 @@ describe("Bindings Module", function()
             _G.ClearOverrideBindings = originalCOB
         end)
 
-        it("NEVER calls SaveBindings during combat", function()
-            local combatCallDetected = false
+        it("NEVER calls SetBinding at any time (permanent layer is off-limits)", function()
+            -- SetBinding should never be called since we switched to override bindings
+            local setBindingCallDetected = false
+            local originalSB = _G.SetBinding
+            _G.SetBinding = function(key, command)
+                setBindingCallDetected = true
+                return originalSB(key, command)
+            end
+
+            C_GamePad._SimulateConnect(1)
+            assert.has_no.errors(function()
+                Bindings:ApplyControllerBindings()
+                Bindings:ClearControllerBindings()
+                Bindings:ApplyWheelBindings(1)
+                Bindings:RestoreDirectBindings()
+            end)
+            assert.is_false(setBindingCallDetected,
+                "SetBinding was called — should use SetOverrideBindingSpell instead!")
+
+            _G.SetBinding = originalSB
+        end)
+
+        it("NEVER calls SaveBindings at any time (no permanent bindings to save)", function()
+            local saveBindingsCallDetected = false
             local originalSave = _G.SaveBindings
             _G.SaveBindings = function(setID)
-                if InCombatLockdown() then
-                    combatCallDetected = true
-                    error("TAINT: SaveBindings called during combat!")
-                end
+                saveBindingsCallDetected = true
                 return originalSave(setID)
             end
 
-            _G._SetCombatState(true)
             C_GamePad._SimulateConnect(1)
-
             assert.has_no.errors(function()
                 Bindings:ApplyControllerBindings()
+                Bindings:ClearControllerBindings()
             end)
-            assert.is_false(combatCallDetected,
-                "SaveBindings was called during combat!")
+            assert.is_false(saveBindingsCallDetected,
+                "SaveBindings was called — override bindings need no persistence!")
 
             _G.SaveBindings = originalSave
         end)
