@@ -1,0 +1,8 @@
+return {
+  _all = {
+    lpath = "./?.lua;./?/init.lua",
+    pattern = "_spec",
+    verbose = true,
+    output = "utfTerminal",
+  }
+}

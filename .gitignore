@@ -1,0 +1,9 @@
+# Compiled Lua files
+*.luac
+
+# LuaRocks build and dependencies
+/lua_modules/
+/luarocks/
+
+# Default luac compiler output
+luac.out
