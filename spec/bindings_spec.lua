@@ -4,7 +4,9 @@
 --
 -- NEW ARCHITECTURE:
 --   Wheel closed: ONLY PADRTRIGGER is bound (opens wheel). PAD1-4 = WoW's normal action bars.
---   Wheel open:   PAD1-4 bound to wheel slots, bumpers cycle wheels, trigger closes wheel.
+--   Wheel open:   PAD1=confirm (execute+close), PAD2=cancel (close no execute),
+--                 PAD3/PAD4 NOT bound (stick controls selection), bumpers cycle wheels,
+--                 trigger cancels on release.
 --   Wheel closes: ClearOverrideBindings restores WoW's bindings, re-apply PADRTRIGGER only.
 
 require("spec/wow_mock")
@@ -122,15 +124,19 @@ describe("Bindings Module", function()
     end)
     
     describe("ApplyWheelBindings (wheel mode — transient overrides)", function()
-        it("binds bumpers and trigger in wheel mode (no face buttons)", function()
+        it("binds bumpers, trigger, A/B confirm/cancel in wheel mode (PAD3/PAD4 unbound)", function()
             Bindings:ApplyWheelBindings(1)
 
             local bindings = _G._GetOverrideBindings(Bindings.ownerFrame)
-            -- Face buttons are NO LONGER bound (stick controls selection now)
+            -- PAD3/PAD4 not bound (stick controls selection)
             assert.is_nil(bindings["PAD4"], "PAD4 should NOT be bound in wheel mode")
-            assert.is_nil(bindings["PAD2"], "PAD2 should NOT be bound in wheel mode")
-            assert.is_nil(bindings["PAD1"], "PAD1 should NOT be bound in wheel mode")
             assert.is_nil(bindings["PAD3"], "PAD3 should NOT be bound in wheel mode")
+
+            -- PAD1 (A) → confirm/execute; PAD2 (B) → cancel/close
+            assert.is_truthy(bindings["PAD1"] and bindings["PAD1"]:find("CouchPotatoConfirmBtn"),
+                "PAD1 should be bound to CouchPotatoConfirmBtn")
+            assert.is_truthy(bindings["PAD2"] and bindings["PAD2"]:find("CouchPotatoCloseBtn"),
+                "PAD2 should be bound to CouchPotatoCloseBtn")
             
             -- Bumpers should be bound for wheel cycling
             assert.is_truthy(bindings["PADLSHOULDER"]:find("CouchPotatoLSBtn"),

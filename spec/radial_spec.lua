@@ -194,4 +194,46 @@ describe("Radial Module", function()
             assert.is_false(ok)
         end)
     end)
+
+    describe("A/B button confirm/cancel semantics", function()
+        it("CouchPotatoConfirmBtn frame is created on init", function()
+            assert.is_not_nil(_G["CouchPotatoConfirmBtn"])
+        end)
+
+        it("CouchPotatoCloseBtn frame is created on init", function()
+            assert.is_not_nil(_G["CouchPotatoCloseBtn"])
+        end)
+
+        it("CloseWheel hides the wheel without executing the highlighted slot", function()
+            local executed = false
+            Radial:ShowCurrentWheel()
+            Radial.highlightedSlot = 1
+
+            local orig = Radial.ConfirmAndClose
+            Radial.ConfirmAndClose = function(self)
+                executed = true
+                orig(self)
+            end
+
+            Radial:CloseWheel()
+
+            assert.is_false(executed, "CloseWheel must NOT call ConfirmAndClose")
+            assert.is_false(Radial.isVisible, "wheel should be hidden after CloseWheel")
+
+            Radial.ConfirmAndClose = orig
+        end)
+
+        it("CloseWheel does nothing when wheel is already closed", function()
+            assert.is_false(Radial.isVisible)
+            assert.has_no.errors(function() Radial:CloseWheel() end)
+            assert.is_false(Radial.isVisible)
+        end)
+
+        it("ConfirmAndClose executes and closes", function()
+            Radial:ShowCurrentWheel()
+            assert.is_true(Radial.isVisible)
+            Radial:ConfirmAndClose()
+            assert.is_false(Radial.isVisible)
+        end)
+    end)
 end)
