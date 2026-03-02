@@ -97,7 +97,8 @@ local function _build()
     runBtn:SetScript("OnClick", function()
         local Diag = CP:GetModule("Diagnostics", true)
         if Diag then
-            Diag:RunTests()
+            local ok, err = pcall(function() Diag:RunTests() end)
+            if not ok then CP:Print("|cffff4444ERROR|r " .. tostring(err)) end
         else
             CP:Print("Diagnostics module not loaded")
         end
@@ -111,7 +112,8 @@ local function _build()
     dumpBtn:SetScript("OnClick", function()
         local Diag = CP:GetModule("Diagnostics", true)
         if Diag then
-            Diag:DumpDebug()
+            local ok, err = pcall(function() Diag:DumpDebug() end)
+            if not ok then CP:Print("|cffff4444ERROR|r " .. tostring(err)) end
         else
             CP:Print("Diagnostics module not loaded")
         end

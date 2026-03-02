@@ -47,7 +47,7 @@ function Diagnostics:RunTests()
     -- All helpers are local closures that capture `lines`.
     local function out(msg)
         CP:Print(msg)
-        table.insert(lines, stripColors(msg))
+        lines[#lines + 1] = stripColors(msg)
     end
     local function pass(label, detail)
         local msg = "|cff00ff00PASS|r " .. tostring(label)
@@ -327,10 +327,8 @@ function Diagnostics:DumpDebug()
     local lines = {}
     local function out(msg)
         CP:Print(msg)
-        table.insert(lines, stripColors(msg))
+        lines[#lines + 1] = stripColors(msg)
     end
-
-    out("── Debug Dump ──")
 
     -- Gamepad state
     out(string.format("C_GamePad.IsEnabled()       = %s",
