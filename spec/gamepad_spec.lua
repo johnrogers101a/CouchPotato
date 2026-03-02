@@ -40,11 +40,13 @@ describe("GamePad Module", function()
         it("detects active controller on enable", function()
             helpers.resetMocks()
             C_GamePad._SimulateConnect(1)
-            
-            -- Re-create and enable module with controller connected
+
+            -- Simulate a fresh enable cycle: Disable resets _enabled so the
+            -- double-enable guard lets OnEnable run again with the new state.
+            GamePad:Disable()
             GamePad.isActive = nil
             GamePad:Enable()
-            
+
             assert.is_true(GamePad:IsActive())
         end)
     end)
