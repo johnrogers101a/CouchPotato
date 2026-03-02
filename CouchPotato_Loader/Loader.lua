@@ -53,6 +53,14 @@ local function LoadCouchPotato()
     isLoaded = true
     print("|cffff6600CouchPotato:|r Controller detected - addon loaded.")
     CouchPotatoLoaderDB.lastKnownState = true
+
+    -- Activate modules now that the addon is freshly loaded.
+    -- OnControllerActivated enables all modules and applies bindings.
+    -- (When the addon was already loaded we call this in the early-return branch above;
+    --  here we mirror that call so both paths are identical.)
+    if CouchPotato then
+        CouchPotato:OnControllerActivated()
+    end
 end
 
 -- Signal CouchPotato to restore keyboard UI
