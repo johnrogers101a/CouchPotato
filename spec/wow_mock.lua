@@ -62,8 +62,7 @@ local function createMockFrame(frameType, name, parent, template)
     function frame:EnableGamePadButton(e) self._gpEnabled = e end
     function frame:EnableGamePadStick(e) self._stickEnabled = e end
     function frame:RegisterForClicks(...) end
-    function frame:SetMovable(m) end
-    function frame:EnableMouse(e) end
+    function frame:GetName() return self._name end
     
     function frame:SetScript(event, fn)
         self._scripts[event] = fn
@@ -165,7 +164,14 @@ local function createMockFrame(frameType, name, parent, template)
     return frame
 end
 
-_G.CreateFrame = createMockFrame
+-- CreateFrame - returns a FUNCTIONAL frame mock and registers named frames in _G,
+-- mirroring WoW's behaviour where CreateFrame("Button", "MyFrame", ...) makes
+-- _G["MyFrame"] available immediately.
+_G.CreateFrame = function(frameType, name, parent, template)
+    local frame = createMockFrame(frameType, name, parent, template)
+    if name then _G[name] = frame end   -- register globally by name, just like WoW
+    return frame
+end
 
 -- C_GamePad API
 _G.C_GamePad = {
