@@ -40,9 +40,10 @@ end
 
 -- Set LED color
 function LED:SetColor(r, g, b)
+    if not CP.db or not CP.db.profile then return end
     if not CP.db.profile.ledEnabled then return end
     if not C_GamePad.IsEnabled() then return end
-    
+
     local color = CreateColor(r, g, b)
     C_GamePad.SetLedColor(color)
     self.currentColor = { r = r, g = g, b = b }

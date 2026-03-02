@@ -96,6 +96,7 @@ function BlizzardFrames:OnCombatLeave()
 end
 
 function BlizzardFrames:OnEnable()
+    if not CP.db or not CP.db.profile then return end
     if CP.db.profile.hideBlizzardFrames and C_GamePad.IsEnabled() then
         self:HideAll()
     end

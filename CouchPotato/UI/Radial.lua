@@ -185,10 +185,11 @@ function Radial:ShowCurrentWheel()
     wheel:SetAlpha(0)
     
     -- Fade in using UIFrameFadeIn if available, else instant
+    local alpha = (CP.db and CP.db.profile and CP.db.profile.radialAlpha) or 0.9
     if UIFrameFadeIn then
-        UIFrameFadeIn(wheel, WHEEL_FADE_TIME, 0, CP.db.profile.radialAlpha or 0.9)
+        UIFrameFadeIn(wheel, WHEEL_FADE_TIME, 0, alpha)
     else
-        wheel:SetAlpha(CP.db.profile.radialAlpha or 0.9)
+        wheel:SetAlpha(alpha)
     end
     
     self.isVisible = true
@@ -291,32 +292,37 @@ function Radial:InitTriggerDetection()
         self_frame.elapsed = self_frame.elapsed + elapsed
         if self_frame.elapsed < 0.05 then return end  -- poll at ~20Hz
         self_frame.elapsed = 0
-        
+
+        -- Guard: db not ready yet (can happen if OnUpdate fires before init completes)
+        if not CP.db or not CP.db.profile then return end
+
         local GamePad = CP:GetModule("GamePad")
         if not GamePad then return end
-        
-        local lt, rt = GamePad:GetTriggerValues()
-        local prevRT = self_frame.lastRT
-        self_frame.lastRT = rt
-        
-        local db = CP.db.profile
-        local peek = db.peekThreshold or PEEK_THRESHOLD
-        local lock = db.lockThreshold or LOCK_THRESHOLD
-        
-        -- Right trigger controls wheel visibility
-        if rt >= lock and prevRT < lock then
-            -- Crossed lock threshold
-            Radial:LockWheel()
-        elseif rt >= peek and prevRT < peek then
-            -- Crossed peek threshold
-            Radial:PeekWheel()
-        elseif rt < peek and prevRT >= peek then
-            -- Released trigger
-            if Radial.isLocked then
-                Radial:UnlockWheel()
-            else
-                Radial:HideCurrentWheel()
+
+        local ok, err = pcall(function()
+            local lt, rt = GamePad:GetTriggerValues()
+            local prevRT = self_frame.lastRT
+            self_frame.lastRT = rt
+
+            local peek = CP.db.profile.peekThreshold or PEEK_THRESHOLD
+            local lock = CP.db.profile.lockThreshold or LOCK_THRESHOLD
+
+            if rt >= lock and prevRT < lock then
+                Radial:LockWheel()
+            elseif rt >= peek and prevRT < peek then
+                Radial:PeekWheel()
+            elseif rt < peek and prevRT >= peek then
+                if Radial.isLocked then
+                    Radial:UnlockWheel()
+                else
+                    Radial:HideCurrentWheel()
+                end
             end
+        end)
+        if not ok then
+            -- Stop the poller on error to prevent log spam; report once
+            self_frame:SetScript("OnUpdate", nil)
+            CP:Print("|cffff0000Radial trigger error (poller stopped):|r " .. tostring(err))
         end
     end)
 end

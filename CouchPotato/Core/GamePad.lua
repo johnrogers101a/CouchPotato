@@ -119,6 +119,7 @@ end
 -- Event: UNIT_SPELLCAST_SUCCEEDED
 function GamePad:OnSpellCast(event, unit, castGUID, spellID)
     if unit ~= "player" then return end
+    if not CP.db or not CP.db.profile then return end
     if not CP.db.profile.ledEnabled then return end
     
     -- Update LED for spell school
@@ -133,6 +134,7 @@ end
 
 -- Vibration system
 function GamePad:Vibrate(patternName)
+    if not CP.db or not CP.db.profile then return end
     if not CP.db.profile.vibrationEnabled then return end
     if not C_GamePad.IsEnabled() then return end
     
