@@ -85,6 +85,83 @@ describe("Bindings Module", function()
         end)
     end)
     
+    describe("ApplyWheelBindings", function()
+        it("binds face buttons to radial slot click targets", function()
+            Bindings:ApplyWheelBindings(1)
+
+            local bindings = _G._GetOverrideBindings(Bindings.ownerFrame)
+            -- PAD4 (Y/top) → slot 1
+            assert.is_not_nil(bindings["PAD4"], "PAD4 should be bound in wheel mode")
+            assert.is_truthy(bindings["PAD4"]:find("CouchPotatoWheel1Slot1"),
+                "PAD4 should click Wheel1Slot1, got: " .. tostring(bindings["PAD4"]))
+            -- PAD2 (B/right) → slot 4
+            assert.is_truthy(bindings["PAD2"]:find("CouchPotatoWheel1Slot4"),
+                "PAD2 should click Wheel1Slot4")
+            -- PAD1 (A/bottom) → slot 7
+            assert.is_truthy(bindings["PAD1"]:find("CouchPotatoWheel1Slot7"),
+                "PAD1 should click Wheel1Slot7")
+            -- PAD3 (X/left) → slot 10  ← was the missing binding
+            assert.is_truthy(bindings["PAD3"]:find("CouchPotatoWheel1Slot10"),
+                "PAD3 should click Wheel1Slot10")
+        end)
+
+        it("sets wheelOpen flag", function()
+            Bindings:ApplyWheelBindings(1)
+            assert.is_true(Bindings.wheelOpen)
+        end)
+
+        it("does nothing during combat lockdown", function()
+            _G._SetCombatState(true)
+            Bindings:ApplyWheelBindings(1)
+            helpers.assertNoBindings(Bindings.ownerFrame)
+            assert.is_false(Bindings.wheelOpen)
+        end)
+
+        it("RestoreDirectBindings switches back to direct mode", function()
+            C_GamePad._SimulateConnect(1)
+            Bindings:ApplyWheelBindings(1)
+            assert.is_true(Bindings.wheelOpen)
+
+            Bindings:RestoreDirectBindings()
+            assert.is_false(Bindings.wheelOpen)
+
+            -- Direct mode: face buttons should be spell bindings again
+            local bindings = _G._GetOverrideBindings(Bindings.ownerFrame)
+            assert.is_not_nil(bindings["PAD4"])
+            assert.is_truthy(bindings["PAD4"]:find("^SPELL "),
+                "PAD4 should be a SPELL binding after restore")
+        end)
+    end)
+
+    describe("GetBindingByKey reflects override bindings", function()
+        it("returns SPELL binding after ApplyDirectBindings", function()
+            C_GamePad._SimulateConnect(1)
+            Bindings:ApplyDirectBindings()
+
+            -- Fire Mage primary = "Fireball"
+            local binding = GetBindingByKey("PAD4")
+            assert.is_not_nil(binding, "PAD4 should have a binding")
+            assert.equals("SPELL Fireball", binding)
+        end)
+
+        it("returns CLICK binding after ApplyWheelBindings", function()
+            Bindings:ApplyWheelBindings(1)
+
+            local binding = GetBindingByKey("PAD4")
+            assert.is_not_nil(binding)
+            assert.is_truthy(binding:find("^CLICK "),
+                "PAD4 in wheel mode should be a CLICK binding")
+        end)
+
+        it("returns nil after ClearControllerBindings", function()
+            C_GamePad._SimulateConnect(1)
+            Bindings:ApplyDirectBindings()
+            Bindings:ClearControllerBindings()
+
+            assert.is_nil(GetBindingByKey("PAD4"))
+        end)
+    end)
+
     describe("ClearControllerBindings", function()
         it("clears all controller bindings", function()
             C_GamePad._SimulateConnect(1)

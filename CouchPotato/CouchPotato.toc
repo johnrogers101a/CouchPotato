@@ -16,6 +16,7 @@ Core\Bindings.lua
 Core\LED.lua
 Core\Specs.lua
 Core\BlizzardFrames.lua
+Core\Diagnostics.lua
 
 UI\Radial.lua
 UI\HUD.lua

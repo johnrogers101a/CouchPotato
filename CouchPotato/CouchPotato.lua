@@ -404,6 +404,22 @@ function CP:ChatCommand(input)
         self:Print("Profile reset to defaults")
 
     elseif cmd == "debug" then
+        local Diagnostics = self:GetModule("Diagnostics", true)
+        if Diagnostics then
+            Diagnostics:DumpDebug()
+        else
+            self:Print("Diagnostics module not loaded")
+        end
+
+    elseif cmd == "test" then
+        local Diagnostics = self:GetModule("Diagnostics", true)
+        if Diagnostics then
+            Diagnostics:RunTests()
+        else
+            self:Print("Diagnostics module not loaded")
+        end
+
+    elseif cmd == "debugmode" then
         self.db.profile.debugMode = not self.db.profile.debugMode
         self:Print(string_format("Debug mode: %s",
             self.db.profile.debugMode and "ON" or "OFF"))
@@ -414,13 +430,15 @@ function CP:ChatCommand(input)
     else
         self:Print("CouchPotato v" .. self.version)
         self:Print("Commands:")
-        self:Print("  /cp show    - Show radial UI")
-        self:Print("  /cp hide    - Hide radial UI")
-        self:Print("  /cp reload  - Reload UI")
-        self:Print("  /cp config  - Open configuration")
-        self:Print("  /cp reset   - Reset profile to defaults")
-        self:Print("  /cp status  - Show addon status")
-        self:Print("  /cp debug   - Toggle debug mode")
+        self:Print("  /cp show      - Show radial UI")
+        self:Print("  /cp hide      - Hide radial UI")
+        self:Print("  /cp reload    - Reload UI")
+        self:Print("  /cp config    - Open configuration")
+        self:Print("  /cp reset     - Reset profile to defaults")
+        self:Print("  /cp status    - Show addon status")
+        self:Print("  /cp test      - Run in-game diagnostics")
+        self:Print("  /cp debug     - Dump binding/module/DB state")
+        self:Print("  /cp debugmode - Toggle verbose debug logging")
     end
 end
 
