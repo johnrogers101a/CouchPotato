@@ -1,0 +1,31 @@
+## Interface: 120001
+## Title: CouchPotato
+## Notes: BG3-inspired radial controller UI for World of Warcraft. Loaded on demand by CouchPotato Loader.
+## Author: CouchPotato Team
+## Version: 1.0.0
+## LoadOnDemand: 1
+## Dependencies: CouchPotato_Loader
+## SavedVariables: CouchPotatoDB
+## X-Category: Interface Enhancements
+
+libs\LibStub\LibStub.lua
+libs\AceAddon-3.0\AceAddon-3.0.lua
+libs\AceDB-3.0\AceDB-3.0.lua
+libs\AceEvent-3.0\AceEvent-3.0.lua
+libs\AceConsole-3.0\AceConsole-3.0.lua
+libs\AceTimer-3.0\AceTimer-3.0.lua
+
+embeds.xml
+
+CouchPotato.lua
+
+Core\GamePad.lua
+Core\Bindings.lua
+Core\LED.lua
+Core\Specs.lua
+Core\BlizzardFrames.lua
+
+UI\Radial.lua
+UI\HUD.lua
+UI\VirtualCursor.lua
+UI\HealMode.lua
