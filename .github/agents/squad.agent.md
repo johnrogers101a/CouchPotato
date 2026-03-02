@@ -728,9 +728,34 @@ prompt: |
   Never speak to user. ⚠️ End with plain text summary after all tool calls.
 ```
 
-5. **Immediately assess:** Does anything trigger follow-up work? Launch it NOW.
+5. **Bob acceptance gate (REQUIRED before declaring done):** Before telling the user work is complete, spawn Bob (sync) to validate the output against the original task.
 
-6. **Ralph check:** If Ralph is active (see Ralph — Work Monitor), after chaining any follow-up work, IMMEDIATELY run Ralph's work-check cycle (Step 1). Do NOT stop. Do NOT wait for user input. Ralph keeps the pipeline moving until the board is clear.
+```
+agent_type: "general-purpose"
+mode: "sync"
+description: "🗂️ Bob: Acceptance check"
+prompt: |
+  You are Bob, the Acceptance Validator. Read .squad/agents/bob/charter.md.
+  TEAM ROOT: {team_root}
+
+  ORIGINAL TASK: {original_task_description}
+
+  WORK COMPLETED:
+  {compact_results_summary}
+
+  Compare the completed work against the original task.
+  Answer exactly: Does this work satisfy what was asked?
+  - If YES: Output "✅ Bob approves — work is done." followed by a 1–2 sentence confirmation.
+  - If NO: Output "❌ Bob rejects — not done yet." followed by a clear bullet list of what's missing or wrong.
+  Do NOT rewrite code. Do NOT suggest improvements beyond scope. Just rule: done or not done.
+```
+
+  - If Bob **approves** → proceed to step 6, then tell the user the work is complete.
+  - If Bob **rejects** → surface his rejection list to the user. Do NOT declare the work done. Route gaps back to the appropriate agent(s) for remediation, then re-run Bob after fixes.
+
+6. **Immediately assess:** Does anything trigger follow-up work? Launch it NOW.
+
+7. **Ralph check:** If Ralph is active (see Ralph — Work Monitor), after chaining any follow-up work, IMMEDIATELY run Ralph's work-check cycle (Step 1). Do NOT stop. Do NOT wait for user input. Ralph keeps the pipeline moving until the board is clear.
 
 ### Ceremonies
 
