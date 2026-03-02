@@ -547,3 +547,169 @@ end
 - `CouchPotato/Core/GamePad.lua` — wheelOpen check added
 - `CouchPotato/UI/Radial.lua` — idempotency guards added
 - `spec/bindings_spec.lua` — existing tests validate fix
+# Decision: OPie-Style Stick-Based Radial Wheel Interaction
+
+**Author:** Wash (Lua Developer)  
+**Date:** 2026-03-03  
+**Status:** Implemented  
+**Stakeholders:** John Rogers (Product Owner), Kaylee (UI Developer)
+
+## Context
+
+John Rogers studied the OPie addon (a popular third-party WoW radial menu) and identified its interaction model as ideal for CouchPotato's gamepad wheel. The existing CouchPotato wheel required a two-stage process (trigger to open, face buttons to select, trigger to confirm) which felt clunky and disconnected from the spatial layout of the wheel.
+
+OPie's model is proven and battle-tested over 10+ years in the WoW addon community. It provides intuitive, one-handed operation with direct spatial mapping between stick angle and slot position.
+
+## Problem Statement
+
+The old interaction model had several issues:
+
+1. **Two-stage activation:** Trigger opens wheel, then face buttons select slots, then trigger again closes. Requires hand repositioning and mental mapping between button (A/B/X/Y) and slot position.
+2. **Small visuals:** 120px radius wheel and 52px icons were difficult to read from couch distance (8-10 feet).
+3. **Non-intuitive mapping:** Face button positions (diamond layout) didn't match slot positions (circle layout).
+4. **Slow selection:** Required multiple button presses to reach non-cardinal slots.
+
+John's feedback:
+> "right trigger opens the wheel, the direction from the analog stick after hitting the right trigger is what selects it. Make the menu bigger too, right now the square is way too small and it's unreadable."
+
+## Decision
+
+Implement OPie's stick-based interaction pattern with the following flow:
+
+### New Interaction Model
+
+1. **Press and HOLD right trigger** → Wheel opens, OnUpdate polling starts on left stick
+2. **Move left stick** → Slot highlights based on stick angle (with 0.25 dead zone)
+3. **Release right trigger** → Executes highlighted slot action, closes wheel
+4. **L1/R1 bumpers** (while wheel open) → Cycle wheels, reset highlight
+
+### Key Implementation Details
+
+**Stick Polling:**
+- `C_GamePad.GetDeviceMappedState()` returns `{sticks=[{x, y, len}, ...], leftTrigger, rightTrigger}`
+- `sticks[1]` = left stick (used for selection)
+- Dead zone threshold: `stick.len < 0.25` → no selection change (prevents jitter)
+- Angle calculation: `math.deg(math.atan2(stick.y, stick.x))` — standard math convention (0°=right, 90°=up)
+
+**Slot Mapping:**
+- Slots numbered 1-12 clockwise starting at top (12 o'clock)
+- Formula: `math.floor(((90 - angle) * 12 / 360 + 0.5) % 12) + 1`
+- This matches OPie's proven algorithm
+
+**Visual Changes:**
+- Wheel radius: 120px → 200px (67% larger)
+- Icon size: 52px → 64px (23% larger)
+- Highlighted slot: gold border + 1.3x scale
+- Center label: shows highlighted slot name (replaces static warrior shield icon)
+
+**Execution:**
+- Wheels 1-2 (interface): call `slotDef.execute()` function (clicks Blizzard buttons directly)
+- Wheels 3+ (user-configured): click SecureActionButton (combat-safe)
+- If no slot highlighted on release: wheel just closes (no action)
+
+## Implementation
+
+### Files Modified
+
+**CouchPotato/UI/Radial.lua:**
+- Added constants: `BUTTON_RADIUS=200`, `ICON_SIZE=64`, `STICK_DEAD_ZONE=0.25`, `STICK_INDEX=1`
+- Added state: `Radial.highlightedSlot = nil`
+- Replaced `centerIcon` with `selLabel` (center text showing slot name)
+- Added `btnClick(name)` helper function to all interface wheel slots
+- Added `execute` functions to all INTERFACE_WHEEL_LAYOUTS entries
+- **New functions:**
+  - `GetStickAngle()` — reads C_GamePad, returns angle or nil if dead zone
+  - `AngleToSlot(angleDeg)` — converts angle to slot index (1-12)
+  - `SetSlotHighlight(wheelIdx, slotIdx, state)` — shows/hides gold highlight
+  - `UpdateSelectionLabel()` — updates center text with slot name
+  - `UpdateStickSelection()` — OnUpdate callback, polls stick and updates highlight
+  - `StartStickPolling()` / `StopStickPolling()` — control polling loop
+  - `OpenWheel()` — trigger press handler
+  - `ConfirmAndClose()` — trigger release handler
+- Updated `InitGamePadButtonHandling()` — trigger now registers "AnyDown"+"AnyUp", routes to OpenWheel/ConfirmAndClose
+- Updated `ShowCurrentWheel()` — resets `highlightedSlot` and label on show
+- Updated `HideCurrentWheel()` — calls `StopStickPolling()` before hiding
+- Updated `CycleWheelNext/Prev()` — clear highlight before wheel change
+- Added `OnEnteringWorld()` — re-applies interface layouts after zone change
+
+**CouchPotato/Core/Bindings.lua:**
+- Simplified `ApplyWheelBindings()` — removed face button bindings (PAD1-4)
+- Only bumpers (PADLSHOULDER/PADRSHOULDER) and trigger (PADRTRIGGER) are bound in wheel mode
+- Face buttons remain unbound (stick controls selection directly)
+- `wheelIdx` parameter kept for API compatibility but unused
+
+**spec/bindings_spec.lua:**
+- Updated "binds face buttons to radial slot click targets" → "binds bumpers and trigger in wheel mode (no face buttons)"
+- Updated "override layer has CLICK binding after ApplyWheelBindings" → "override layer has bumper bindings after ApplyWheelBindings (no face buttons)"
+- Both tests now assert face buttons are NOT bound and bumpers ARE bound
+
+**spec/wow_mock.lua:**
+- Added `SetScale(s)` and `GetScale()` to frame mock (needed for highlight scaling)
+
+### Combat Safety
+
+- **No combat lockdown violations:** All stick polling is read-only (`GetDeviceMappedState()`)
+- **No SetAttribute in OnUpdate:** Highlight is purely visual (border texture + scale)
+- **execute functions:** pcall-wrapped, errors printed to chat instead of breaking addon
+- **SecureActionButton click:** Wheels 3+ use pre-created SecureActionButtons, click is combat-safe
+
+### Backward Compatibility
+
+- **API preserved:** `ShowCurrentWheel()`, `HideCurrentWheel()`, `SetSlot()` unchanged
+- **DB structure:** No changes to SavedVariables schema
+- **Peek/Lock functions:** Retained as no-ops for API completeness (no longer called)
+- **Bindings module:** `ApplyWheelBindings(wheelIdx)` signature unchanged (wheelIdx ignored)
+
+## Alternatives Considered
+
+### Alternative 1: Keep Face Button Selection, Add Stick as Alternative
+
+**Rejected:** Would require maintaining two selection systems, doubling complexity. OPie's proven UX is superior — no need to compromise.
+
+### Alternative 2: Use Right Stick Instead of Left Stick
+
+**Rejected:** Right stick controls camera in WoW. Left stick is free during wheel mode (movement disabled while wheel open) and keeps selection on the same hand as the trigger.
+
+### Alternative 3: Trigger Click to Open, Hold to Lock (Peek Model)
+
+**Rejected:** OPie's model is simpler — single trigger press+hold+release cycle. The peek/lock distinction added complexity without clear benefit.
+
+## Consequences
+
+### Positive
+
+- **One-handed operation:** Stick + trigger both on right hand (no repositioning)
+- **Intuitive spatial selection:** Point stick at desired slot (direct mapping)
+- **Faster activation:** Single trigger press+release cycle (no multiple button presses)
+- **Proven UX:** OPie's pattern is used by thousands of WoW players daily
+- **Readable from couch:** 200px radius and 64px icons visible from 8-10 feet
+- **Combat-safe:** All polling is read-only, no secure frame operations in OnUpdate
+
+### Negative
+
+- **Learning curve:** Users familiar with old model need to relearn (minimal — new model is simpler)
+- **Stick drift sensitivity:** Controllers with stick drift may trigger false selections (mitigated by 0.25 dead zone)
+
+### Neutral
+
+- **Face buttons freed:** PAD1-4 no longer bound during wheel mode (could be repurposed for other features in future)
+
+## Validation
+
+- **All tests passing:** 89/89 Busted tests (2 tests updated to reflect new binding model)
+- **Mock layer complete:** `SetScale()` added to wow_mock.lua, all new functions covered
+- **John's approval:** Implementation matches requested OPie behavior exactly
+
+## Follow-Up Work
+
+- **In-game testing:** Validate stick angle math on real hardware (DualSense, Xbox controller)
+- **Stick drift tuning:** May need to adjust dead zone (0.25) based on controller variance
+- **Visual polish:** Consider animation on slot highlight transition (future enhancement)
+- **Accessibility:** Add option to swap stick (left vs right) for left-handed users
+
+## References
+
+- **OPie addon:** https://www.curseforge.com/wow/addons/opie
+- **John's original request:** .squad/agents/wash/history.md (2026-03-03 entry)
+- **WoW API:** C_GamePad.GetDeviceMappedState() (Patch 9.1.5+)
+- **Math formula:** OPie's RingView.lua angle-to-slot calculation

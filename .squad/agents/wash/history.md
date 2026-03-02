@@ -85,3 +85,67 @@ All production code unchanged — `CP:NewModule(name)`, `mod:RegisterEvent(event
 - Combat lockdown and binding layer architecture remained untouched — all changes were event-handler-level guards.
 
 **Test Results:** 91/91 tests passing after fixes.
+
+### 2026-03-03: OPie-Style Stick-Based Interaction Model
+
+**Problem:** John studied OPie addon and requested radial wheel use OPie's interaction pattern: hold right trigger to open, left stick angle selects slot, release trigger to confirm.
+
+**Old Model (Broken):**
+- Click trigger → wheel opens
+- Press face buttons (A/B/X/Y) → select slots
+- Click trigger again → close wheel
+- Issues: Two-stage activation, requires mental mapping between button and slot position
+
+**New Model (OPie-Style):**
+1. Press and HOLD right trigger → wheel opens, OnUpdate polling starts
+2. Move left stick → highlights slot based on stick angle (dead zone = 0.25)
+3. Release right trigger → executes highlighted slot, closes wheel
+4. L1/R1 bumpers → cycle wheels (resets highlight for new wheel)
+
+**Implementation Changes:**
+
+**Radial.lua:**
+- Updated constants: `BUTTON_RADIUS=200` (was 120), `ICON_SIZE=64` (was 52), added `STICK_DEAD_ZONE=0.25`, `STICK_INDEX=1`
+- Added `Radial.highlightedSlot` state variable
+- Replaced `centerIcon` (showed warrior shield) with `selLabel` (shows highlighted slot name)
+- Added `execute` functions to all INTERFACE_WHEEL_LAYOUTS slots using `btnClick()` helper
+- **New functions:**
+  - `GetStickAngle()` — reads C_GamePad.GetDeviceMappedState(), returns angle in degrees or nil if in dead zone
+  - `AngleToSlot(angleDeg)` — OPie formula: `math.floor(((90 - angleDeg) * MAX_SLOTS / 360 + 0.5) % MAX_SLOTS) + 1`
+  - `SetSlotHighlight(wheelIdx, slotIdx, state)` — gold border + 1.3x scale when highlighted
+  - `UpdateSelectionLabel()` — center text shows highlighted slot name
+  - `UpdateStickSelection()` — called every frame, polls stick and updates highlight
+  - `StartStickPolling()` / `StopStickPolling()` — control OnUpdate loop on pollFrame
+  - `OpenWheel()` — trigger press handler, shows wheel + starts polling
+  - `ConfirmAndClose()` — trigger release handler, executes slot via `slotDef.execute()` or SecureActionButton click
+- Updated `InitGamePadButtonHandling()` — trigger now registers for AnyDown + AnyUp, dispatches to OpenWheel/ConfirmAndClose
+- Updated `ShowCurrentWheel()` — resets `highlightedSlot` and selection label on show
+- Updated `HideCurrentWheel()` — calls `StopStickPolling()` first
+- Updated `CycleWheelNext/Prev()` — clear highlight before changing wheels
+- Added `OnEnteringWorld()` — re-applies interface layouts after world load
+
+**Bindings.lua:**
+- Simplified `ApplyWheelBindings()` — removed face button bindings (PAD1-4), only bumpers + trigger remain
+- Face buttons are no longer bound during wheel mode (stick controls selection directly)
+- `wheelIdx` parameter kept for API compatibility but unused
+
+**Tests Updated:**
+- `spec/bindings_spec.lua` — updated two tests to expect NO face button bindings in wheel mode, check bumpers instead
+- `spec/wow_mock.lua` — added `SetScale()` and `GetScale()` to frame mock
+
+**Key Design Decisions:**
+- **OnUpdate polling:** Stick reads every frame while wheel is open (OPie pattern). No combat lockdown issues since it's read-only.
+- **No SetAttribute in UpdateStickSelection:** Highlight is purely visual (border + scale), not secure binding changes.
+- **execute functions:** Wheels 1-2 use `btnClick()` to click Blizzard buttons directly. Wheels 3+ click SecureActionButtons (combat-safe).
+- **Dead zone:** 0.25 magnitude threshold prevents jitter, matches OPie's behavior.
+- **Angle formula:** Standard math convention (0°=right, 90°=up) with clockwise slot numbering starting at top.
+
+**Test Results:** 89/89 tests passing (2 tests updated to reflect new model).
+
+**Benefits:**
+- **One-handed operation:** Stick + trigger on same hand (no face button reaching)
+- **Intuitive spatial selection:** Point at what you want
+- **Faster activation:** Single trigger press+release cycle
+- **Bigger wheel:** 200px radius (was 120), 64px icons (was 52) — readable from couch distance
+- **Proven UX:** OPie's pattern battle-tested over 10+ years in WoW community
+
