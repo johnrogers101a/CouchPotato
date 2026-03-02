@@ -13,7 +13,18 @@ VirtualCursor.navigableFrames = {}
 
 function VirtualCursor:OnEnable()
     self:CreateCursorFrame()
+    self.enabled = true
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
+    -- Focus first available element if any UI is already up
+    self:FindAndFocusFirst()
+end
+
+function VirtualCursor:OnDisable()
+    self.enabled = false
+    if self.cursorFrame then
+        self.cursorFrame:Hide()
+    end
+    self.focusedElement = nil
 end
 
 function VirtualCursor:CreateCursorFrame()
@@ -32,19 +43,6 @@ function VirtualCursor:CreateCursorFrame()
     cursor.border = border
     
     self.cursorFrame = cursor
-end
-
-function VirtualCursor:Enable()
-    self.enabled = true
-    self.cursorFrame:Show()
-    -- Focus first available element
-    self:FindAndFocusFirst()
-end
-
-function VirtualCursor:Disable()
-    self.enabled = false
-    self.cursorFrame:Hide()
-    self.focusedElement = nil
 end
 
 function VirtualCursor:Navigate(direction)
