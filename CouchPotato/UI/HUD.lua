@@ -1,123 +1,29 @@
 -- CouchPotato/UI/HUD.lua
--- Controller-optimized HUD: cast bar, target info, resource display
--- Designed for "couch distance" readability — large, clear, minimal
+-- Controller HUD: cast bar + interrupt indicator only.
+-- Health, power, party, and raid frames are handled by Blizzard's built-in
+-- UI or the player's existing unit frame addon (e.g. ElvUI, SUF, etc.).
 -- Patch 12.0.1 (Interface 120001)
 
 local CP = CouchPotato
 local HUD = CP:NewModule("HUD")
 
-HUD.frames = {}   -- all created frames
+HUD.frames = {}
 
 function HUD:OnEnable()
     self:CreateFrames()
-    self:RegisterEvent("UNIT_HEALTH", "OnHealthUpdate")
-    self:RegisterEvent("UNIT_POWER_UPDATE", "OnPowerUpdate")
     self:RegisterEvent("PLAYER_TARGET_CHANGED", "OnTargetChanged")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnTargetChanged")
     self:RegisterEvent("UNIT_SPELLCAST_START", "OnSpellCastStart")
     self:RegisterEvent("UNIT_SPELLCAST_STOP", "OnSpellCastStop")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "OnChannelStart")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnChannelStop")
     self:RegisterEvent("UNIT_SPELLCAST_FAILED", "OnSpellCastStop")
     self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnSpellCastStop")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
 end
 
 function HUD:CreateFrames()
-    -- Container frame
-    local container = CreateFrame("Frame", "CouchPotatoHUD", UIParent)
-    container:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-    container:SetSize(800, 600)
-    self.frames.container = container
-    
-    -- Player health bar (bottom left)
-    self:CreatePlayerHealth()
-    
-    -- Player power bar (bottom left, under health)
-    self:CreatePlayerPower()
-    
-    -- Cast bar (bottom center)
     self:CreateCastBar()
-    
-    -- Target display (top center)
     self:CreateTargetFrame()
-    
-    -- Initial update
-    self:OnHealthUpdate()
-    self:OnPowerUpdate()
-    self:OnTargetChanged()
-end
-
-function HUD:CreatePlayerHealth()
-    local healthFrame = CreateFrame("Frame", "CouchPotatoHealthFrame", UIParent)
-    healthFrame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 40, 60)
-    healthFrame:SetSize(280, 40)
-    
-    -- Background
-    local bg = healthFrame:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints(healthFrame)
-    bg:SetColorTexture(0, 0, 0, 0.7)
-    
-    -- Health bar
-    local healthBar = CreateFrame("StatusBar", nil, healthFrame)
-    healthBar:SetPoint("TOPLEFT", healthFrame, "TOPLEFT", 4, -4)
-    healthBar:SetPoint("BOTTOMRIGHT", healthFrame, "BOTTOMRIGHT", -4, 4)
-    healthBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    
-    -- Class color
-    local _, class = UnitClass("player")
-    local classColor = RAID_CLASS_COLORS[class]
-    if classColor then
-        healthBar:SetStatusBarColor(classColor.r, classColor.g, classColor.b)
-    else
-        healthBar:SetStatusBarColor(0, 1, 0)
-    end
-    
-    healthBar:SetMinMaxValues(0, 100)
-    healthBar:SetValue(100)
-    healthFrame.bar = healthBar
-    
-    -- Health text
-    local healthText = healthFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    healthText:SetPoint("CENTER", healthBar, "CENTER", 0, 0)
-    healthText:SetText("100%")
-    healthFrame.text = healthText
-    
-    -- Label
-    local label = healthFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label:SetPoint("BOTTOM", healthFrame, "TOP", 0, 2)
-    label:SetText("Health")
-    label:SetTextColor(0.7, 0.7, 0.7)
-    
-    self.frames.health = healthFrame
-end
-
-function HUD:CreatePlayerPower()
-    local powerFrame = CreateFrame("Frame", "CouchPotatoPowerFrame", UIParent)
-    powerFrame:SetPoint("TOPLEFT", self.frames.health, "BOTTOMLEFT", 0, -8)
-    powerFrame:SetSize(280, 28)
-    
-    -- Background
-    local bg = powerFrame:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints(powerFrame)
-    bg:SetColorTexture(0, 0, 0, 0.7)
-    
-    -- Power bar
-    local powerBar = CreateFrame("StatusBar", nil, powerFrame)
-    powerBar:SetPoint("TOPLEFT", powerFrame, "TOPLEFT", 4, -4)
-    powerBar:SetPoint("BOTTOMRIGHT", powerFrame, "BOTTOMRIGHT", -4, 4)
-    powerBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    powerBar:SetStatusBarColor(0, 0.5, 1)  -- default blue (mana)
-    powerBar:SetMinMaxValues(0, 100)
-    powerBar:SetValue(100)
-    powerFrame.bar = powerBar
-    
-    -- Power text
-    local powerText = powerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    powerText:SetPoint("CENTER", powerBar, "CENTER", 0, 0)
-    powerText:SetText("100")
-    powerFrame.text = powerText
-    
-    self.frames.power = powerFrame
 end
 
 function HUD:CreateCastBar()
@@ -207,139 +113,55 @@ function HUD:CreateCastBar()
 end
 
 function HUD:CreateTargetFrame()
+    -- Minimal target overlay: just name, level, and an INTERRUPTIBLE flash.
+    -- Health/power bars are handled by the player's existing unit frame addon.
     local targetFrame = CreateFrame("Frame", "CouchPotatoTargetFrame", UIParent)
     targetFrame:SetPoint("TOP", UIParent, "TOP", 0, -80)
-    targetFrame:SetSize(320, 60)
-    targetFrame:Hide()  -- hidden when no target
-    
-    -- Background
+    targetFrame:SetSize(320, 40)
+    targetFrame:Hide()
+
     local bg = targetFrame:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(targetFrame)
-    bg:SetColorTexture(0, 0, 0, 0.7)
-    
-    -- Target name
+    bg:SetColorTexture(0, 0, 0, 0.6)
+
     local targetName = targetFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    targetName:SetPoint("TOP", targetFrame, "TOP", 0, -6)
+    targetName:SetPoint("CENTER", targetFrame, "CENTER", 10, 0)
     targetName:SetText("")
     targetFrame.targetName = targetName
-    
-    -- Target level
+
     local targetLevel = targetFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    targetLevel:SetPoint("TOPLEFT", targetFrame, "TOPLEFT", 8, -6)
+    targetLevel:SetPoint("LEFT", targetFrame, "LEFT", 8, 0)
     targetLevel:SetText("")
     targetLevel:SetTextColor(0.7, 0.7, 0.7)
     targetFrame.targetLevel = targetLevel
-    
-    -- Health bar
-    local healthBar = CreateFrame("StatusBar", nil, targetFrame)
-    healthBar:SetPoint("BOTTOMLEFT", targetFrame, "BOTTOMLEFT", 6, 6)
-    healthBar:SetPoint("BOTTOMRIGHT", targetFrame, "BOTTOMRIGHT", -6, 6)
-    healthBar:SetHeight(24)
-    healthBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    healthBar:SetStatusBarColor(1, 0, 0)  -- red for hostile
-    healthBar:SetMinMaxValues(0, 100)
-    healthBar:SetValue(100)
-    targetFrame.healthBar = healthBar
-    
-    -- Health text
-    local healthText = targetFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    healthText:SetPoint("CENTER", healthBar, "CENTER", 0, 0)
-    healthText:SetText("100%")
-    targetFrame.healthText = healthText
-    
-    -- Interruptible indicator
+
+    -- INTERRUPTIBLE badge — shown above the cast bar when target cast is kickable
     local interruptIndicator = targetFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     interruptIndicator:SetPoint("BOTTOM", targetFrame, "TOP", 0, 4)
-    interruptIndicator:SetText("INTERRUPTIBLE")
-    interruptIndicator:SetTextColor(1, 0.2, 0.2)
+    interruptIndicator:SetText("|cFFFF3333INTERRUPTIBLE|r")
     interruptIndicator:Hide()
     targetFrame.interruptIndicator = interruptIndicator
-    
+
     self.frames.target = targetFrame
-end
-
-function HUD:OnHealthUpdate(event, unit)
-    if unit and unit ~= "player" and unit ~= "target" then return end
-    
-    -- Player health
-    if not unit or unit == "player" then
-        local health = UnitHealth("player")
-        local healthMax = UnitHealthMax("player")
-        if healthMax > 0 then
-            local percent = (health / healthMax) * 100
-            self.frames.health.bar:SetMinMaxValues(0, healthMax)
-            self.frames.health.bar:SetValue(health)
-            self.frames.health.text:SetText(string.format("%d%%", percent))
-        end
-    end
-    
-    -- Target health
-    if not unit or unit == "target" then
-        if UnitExists("target") then
-            local health = UnitHealth("target")
-            local healthMax = UnitHealthMax("target")
-            if healthMax > 0 then
-                local percent = (health / healthMax) * 100
-                self.frames.target.healthBar:SetMinMaxValues(0, healthMax)
-                self.frames.target.healthBar:SetValue(health)
-                self.frames.target.healthText:SetText(string.format("%d%%", percent))
-            end
-        end
-    end
-end
-
-function HUD:OnPowerUpdate(event, unit, powerType)
-    if unit and unit ~= "player" then return end
-    
-    local power = UnitPower("player")
-    local powerMax = UnitPowerMax("player")
-    local powerType, powerToken = UnitPowerType("player")
-    
-    if powerMax > 0 then
-        self.frames.power.bar:SetMinMaxValues(0, powerMax)
-        self.frames.power.bar:SetValue(power)
-        self.frames.power.text:SetText(tostring(power))
-        
-        -- Color by power type
-        local color = PowerBarColor[powerType]
-        if color then
-            self.frames.power.bar:SetStatusBarColor(color.r, color.g, color.b)
-        end
-    end
 end
 
 function HUD:OnTargetChanged()
     if UnitExists("target") then
         self.frames.target:Show()
-        
-        -- Update name
-        local name = UnitName("target")
-        self.frames.target.targetName:SetText(name or "Unknown")
-        
-        -- Update level
+        local name = UnitName("target") or "Unknown"
+        self.frames.target.targetName:SetText(name)
         local level = UnitLevel("target")
-        if level == -1 then
-            self.frames.target.targetLevel:SetText("??")
-        else
-            self.frames.target.targetLevel:SetText(tostring(level))
-        end
-        
-        -- Color by reaction
+        self.frames.target.targetLevel:SetText(level == -1 and "??" or tostring(level))
         if UnitIsEnemy("player", "target") then
-            self.frames.target.healthBar:SetStatusBarColor(1, 0, 0)  -- red
-            self.frames.target.targetName:SetTextColor(1, 0, 0)
+            self.frames.target.targetName:SetTextColor(1, 0.2, 0.2)
         elseif UnitIsFriend("player", "target") then
-            self.frames.target.healthBar:SetStatusBarColor(0, 1, 0)  -- green
-            self.frames.target.targetName:SetTextColor(0, 1, 0)
+            self.frames.target.targetName:SetTextColor(0.2, 1, 0.2)
         else
-            self.frames.target.healthBar:SetStatusBarColor(1, 1, 0)  -- yellow
-            self.frames.target.targetName:SetTextColor(1, 1, 0)
+            self.frames.target.targetName:SetTextColor(1, 1, 0.2)
         end
-        
-        -- Update health
-        self:OnHealthUpdate(nil, "target")
     else
         self.frames.target:Hide()
+        self.frames.target.interruptIndicator:Hide()
     end
 end
 
@@ -405,9 +227,4 @@ function HUD:OnChannelStop(event, unit)
     end
 end
 
-function HUD:OnEnteringWorld()
-    -- Refresh all displays
-    self:OnHealthUpdate()
-    self:OnPowerUpdate()
-    self:OnTargetChanged()
-end
+
