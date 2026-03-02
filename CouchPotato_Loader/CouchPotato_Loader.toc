@@ -5,6 +5,7 @@
 ## Version: 1.0.0
 ## SavedVariables: CouchPotatoLoaderDB
 ## X-Category: Interface Enhancements
+## IconTexture: Interface\Icons\Achievement_BG_winAV
 ## X-Curse-Project-ID: 0
 
 Loader.lua

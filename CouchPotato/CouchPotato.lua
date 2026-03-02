@@ -446,6 +446,20 @@ function CP:PrintStatus()
     self:Print(string_format("Modules Loaded: %d", moduleCount))
 end
 
+function CP:OnControllerActivated()
+    self:NotifyModules("CONTROLLER_ACTIVATED")
+    for name, mod in self:IterateModules() do
+        if mod.Enable then mod:Enable() end
+    end
+end
+
+function CP:OnControllerDeactivated()
+    self:NotifyModules("CONTROLLER_DEACTIVATED")
+    for name, mod in self:IterateModules() do
+        if mod.Disable then mod:Disable() end
+    end
+end
+
 function CP:IsControllerActive()
     if C_GamePad and C_GamePad.IsEnabled then
         return C_GamePad.IsEnabled()
