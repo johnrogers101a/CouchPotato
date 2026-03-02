@@ -447,9 +447,12 @@ function CP:PrintStatus()
 end
 
 function CP:OnControllerActivated()
+    -- Ensure db is always ready before any module touches it,
+    -- regardless of which event path triggered the load.
+    if not self.db then _initDB() end
     self:NotifyModules("CONTROLLER_ACTIVATED")
     for name, mod in self:IterateModules() do
-        if mod.Enable then mod:Enable() end
+        if mod.Enable and not mod._enabled then mod:Enable() end
     end
 end
 
