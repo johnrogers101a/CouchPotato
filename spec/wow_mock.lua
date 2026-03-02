@@ -458,6 +458,12 @@ _G.SetBinding = function(key, command)
     return true
 end
 
+_G.SetBindingClick = function(key, frameName, mouseButton)
+    if _inCombat then error("SetBindingClick called during combat lockdown!") end
+    _permanentBindings[key] = "CLICK " .. (frameName or "") .. ":" .. (mouseButton or "LeftButton")
+    return true
+end
+
 _G.SaveBindings = function(setID)
     _saveBindingsCalls = _saveBindingsCalls + 1
 end
@@ -565,6 +571,29 @@ _G.SetGamePadCursorControl = function(enabled) end
 _G.SetGamePadFreeLook = function(enabled) end
 _G.IsGamePadCursorControlEnabled = function() return false end
 _G.IsGamePadFreelookEnabled = function() return false end
+
+-- Interface panel toggle stubs (real protected APIs, not MicroButton clicks)
+_G.BOOKTYPE_SPELL = "spell"
+_G.CloseAllWindows         = function() end
+_G.ToggleCharacter         = function(tab) end
+_G.ToggleSpellBook         = function(bookType) end
+_G.ToggleTalentFrame       = function() end
+_G.ToggleWorldMap          = function() end
+_G.ToggleQuestLog          = function() end
+_G.ToggleAchievementFrame  = function() end
+_G.ToggleAllBags           = function() end
+_G.ToggleCollectionsJournal= function(tab) end
+_G.ToggleFriendsFrame      = function() end
+_G.ToggleEncounterJournal  = function() end
+_G.ToggleGuildFrame        = function() end
+_G.ToggleLFDParentFrame    = function() end
+_G.TogglePVPUI             = function() end
+_G.ToggleStoreUI           = function() end
+_G.ToggleHelpFrame         = function() end
+_G.ToggleGameMenu          = function() end
+_G.GameTimeCalendar_Toggle = function() end
+_G.ToggleProfessionsBook   = function() end
+_G.Screenshot              = function() end
 
 _G.GetTime = function() return os.time() end
 

@@ -204,6 +204,17 @@ describe("Radial Module", function()
             assert.is_not_nil(_G["CouchPotatoCloseBtn"])
         end)
 
+        it("CouchPotatoGlobalCloseBtn frame is created on init", function()
+            assert.is_not_nil(_G["CouchPotatoGlobalCloseBtn"])
+        end)
+
+        it("PAD2 has a permanent binding to CouchPotatoGlobalCloseBtn at addon load", function()
+            local bindings = _G._GetPermanentBindings()
+            assert.is_not_nil(bindings["PAD2"], "PAD2 should have a permanent binding")
+            assert.is_truthy(bindings["PAD2"]:find("CouchPotatoGlobalCloseBtn"),
+                "PAD2 permanent binding should target CouchPotatoGlobalCloseBtn")
+        end)
+
         it("CloseWheel hides the wheel without executing the highlighted slot", function()
             local executed = false
             Radial:ShowCurrentWheel()
@@ -234,6 +245,45 @@ describe("Radial Module", function()
             assert.is_true(Radial.isVisible)
             Radial:ConfirmAndClose()
             assert.is_false(Radial.isVisible)
+        end)
+    end)
+
+    describe("execute functions use direct WoW API", function()
+        it("wheel 1 Map slot calls ToggleWorldMap", function()
+            local called = false
+            _G.ToggleWorldMap = function() called = true end
+            Radial:ShowCurrentWheel()
+            Radial.highlightedSlot = 4  -- Map is slot 4
+            Radial:ConfirmAndClose()
+            assert.is_true(called, "Map slot should call ToggleWorldMap()")
+        end)
+
+        it("wheel 1 Bags slot calls ToggleAllBags", function()
+            local called = false
+            _G.ToggleAllBags = function() called = true end
+            Radial:ShowCurrentWheel()
+            Radial.highlightedSlot = 7  -- Bags is slot 7
+            Radial:ConfirmAndClose()
+            assert.is_true(called, "Bags slot should call ToggleAllBags()")
+        end)
+
+        it("wheel 2 Mounts slot calls ToggleCollectionsJournal(2)", function()
+            local tabArg = nil
+            _G.ToggleCollectionsJournal = function(tab) tabArg = tab end
+            Radial.currentWheel = 2
+            Radial:ShowCurrentWheel()
+            Radial.highlightedSlot = 10  -- Mounts is slot 10 on wheel 2
+            Radial:ConfirmAndClose()
+            assert.equals(2, tabArg, "Mounts should open Collections tab 2")
+        end)
+    end)
+
+    describe("combat auto-close", function()
+        it("PLAYER_REGEN_DISABLED calls CloseAllWindows", function()
+            local closed = false
+            _G.CloseAllWindows = function() closed = true end
+            CP._FireEvent("PLAYER_REGEN_DISABLED")
+            assert.is_true(closed, "CloseAllWindows should fire on PLAYER_REGEN_DISABLED")
         end)
     end)
 end)

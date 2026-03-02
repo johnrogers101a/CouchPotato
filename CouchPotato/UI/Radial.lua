@@ -34,45 +34,40 @@ Radial.highlightedSlot = nil -- currently highlighted slot index (nil = none)
 -- Button names are correct for Interface 120001 (TWW). Cardinal slots (face btns):
 --   slot 1 = Y/△ (top), slot 4 = B/○ (right), slot 7 = A/✕ (bottom), slot 10 = X/□ (left)
 
--- Helper: creates an execute function that clicks a named Blizzard button
-local function btnClick(name)
-    return function()
-        local b = _G[name]
-        if b and b.Click then b:Click() end
-    end
-end
-
+-- Direct WoW API execute functions for interface-panel slots.
+-- MicroButtons are protected in Dragonflight/TWW and cannot be :Click()ed by addons
+-- without causing taint. We call the real toggle APIs instead.
 local INTERFACE_WHEEL_LAYOUTS = {
     [1] = {
         name = "Interface",
         slots = {
-            [1]  = { name="Character",    macro="/click CharacterMicroButton",      icon="Interface\\Buttons\\UI-MicroButton-Character-Up", execute=btnClick("CharacterMicroButton") },
-            [2]  = { name="Spellbook",    macro="/click SpellbookMicroButton",      icon="Interface\\Buttons\\UI-MicroButton-Spellbook-Up", execute=btnClick("SpellbookMicroButton") },
-            [3]  = { name="Talents",      macro="/click TalentMicroButton",         icon="Interface\\Buttons\\UI-MicroButton-Talent-Up", execute=btnClick("TalentMicroButton") },
-            [4]  = { name="Map",          macro="/click WorldMapMicroButton",       icon="Interface\\Buttons\\UI-MicroButton-WorldMap-Up", execute=btnClick("WorldMapMicroButton") },
-            [5]  = { name="Quests",       macro="/click QuestLogMicroButton",       icon="Interface\\Buttons\\UI-MicroButton-Quest-Up", execute=btnClick("QuestLogMicroButton") },
-            [6]  = { name="Achievements", macro="/click AchievementMicroButton",    icon="Interface\\Buttons\\UI-MicroButton-Achievement-Up", execute=btnClick("AchievementMicroButton") },
-            [7]  = { name="Bags",         macro="/click MainMenuBarBackpackButton", icon="Interface\\Buttons\\Button-Backpack-Up", execute=btnClick("MainMenuBarBackpackButton") },
-            [8]  = { name="Collections",  macro="/click CollectionsMicroButton",    icon="Interface\\Buttons\\UI-MicroButton-Collections-Up", execute=btnClick("CollectionsMicroButton") },
-            [9]  = { name="Social",       macro="/click SocialsMicroButton",        icon="Interface\\Buttons\\UI-MicroButton-Socials-Up", execute=btnClick("SocialsMicroButton") },
-            [10] = { name="Journal",      macro="/click EJMicroButton",             icon="Interface\\Buttons\\UI-MicroButton-EJ-Up", execute=btnClick("EJMicroButton") },
-            [11] = { name="Guild",        macro="/click GuildMicroButton",          icon="Interface\\Buttons\\UI-MicroButton-Guild-Up", execute=btnClick("GuildMicroButton") },
-            [12] = { name="Group",        macro="/click GroupFinderMicroButton",    icon="Interface\\Buttons\\UI-MicroButton-GroupFinder-Up", execute=btnClick("GroupFinderMicroButton") },
+            [1]  = { name="Character",    macro="/click CharacterMicroButton",      icon="Interface\\Buttons\\UI-MicroButton-Character-Up",    execute=function() ToggleCharacter(0) end },
+            [2]  = { name="Spellbook",    macro="/click SpellbookMicroButton",      icon="Interface\\Buttons\\UI-MicroButton-Spellbook-Up",    execute=function() ToggleSpellBook(BOOKTYPE_SPELL) end },
+            [3]  = { name="Talents",      macro="/click TalentMicroButton",         icon="Interface\\Buttons\\UI-MicroButton-Talent-Up",       execute=function() ToggleTalentFrame() end },
+            [4]  = { name="Map",          macro="/click WorldMapMicroButton",       icon="Interface\\Buttons\\UI-MicroButton-WorldMap-Up",     execute=function() ToggleWorldMap() end },
+            [5]  = { name="Quests",       macro="/click QuestLogMicroButton",       icon="Interface\\Buttons\\UI-MicroButton-Quest-Up",        execute=function() ToggleQuestLog() end },
+            [6]  = { name="Achievements", macro="/click AchievementMicroButton",    icon="Interface\\Buttons\\UI-MicroButton-Achievement-Up",  execute=function() ToggleAchievementFrame() end },
+            [7]  = { name="Bags",         macro="/click MainMenuBarBackpackButton", icon="Interface\\Buttons\\Button-Backpack-Up",             execute=function() ToggleAllBags() end },
+            [8]  = { name="Collections",  macro="/click CollectionsMicroButton",    icon="Interface\\Buttons\\UI-MicroButton-Collections-Up",  execute=function() ToggleCollectionsJournal() end },
+            [9]  = { name="Social",       macro="/click SocialsMicroButton",        icon="Interface\\Buttons\\UI-MicroButton-Socials-Up",      execute=function() ToggleFriendsFrame() end },
+            [10] = { name="Journal",      macro="/click EJMicroButton",             icon="Interface\\Buttons\\UI-MicroButton-EJ-Up",           execute=function() ToggleEncounterJournal() end },
+            [11] = { name="Guild",        macro="/click GuildMicroButton",          icon="Interface\\Buttons\\UI-MicroButton-Guild-Up",        execute=function() ToggleGuildFrame() end },
+            [12] = { name="Group",        macro="/click GroupFinderMicroButton",    icon="Interface\\Buttons\\UI-MicroButton-GroupFinder-Up",  execute=function() ToggleLFDParentFrame() end },
         },
     },
     [2] = {
         name = "System",
         slots = {
-            [1]  = { name="PvP",         macro="/click PVPMicroButton",            icon="Interface\\Buttons\\UI-MicroButton-PVP-Up", execute=btnClick("PVPMicroButton") },
-            [2]  = { name="Store",       macro="/click StoreMicroButton",          icon="Interface\\Buttons\\UI-MicroButton-Store-Up", execute=btnClick("StoreMicroButton") },
-            [3]  = { name="Help",        macro="/click HelpMicroButton",           icon="Interface\\Buttons\\UI-MicroButton-Help-Up", execute=btnClick("HelpMicroButton") },
-            [4]  = { name="Main Menu",   macro="/click MainMenuMicroButton",       icon="Interface\\Buttons\\UI-MicroButton-MainMenu-Up", execute=btnClick("MainMenuMicroButton") },
-            [5]  = { name="Calendar",    macro="/click GameTimeFrame",             icon="Interface\\Icons\\INV_Misc_SunCalendar", execute=btnClick("GameTimeFrame") },
-            [6]  = { name="Screenshot",  macro="/screenshot",                      icon="Interface\\Icons\\INV_Misc_Camera_01", execute=function() Screenshot() end },
-            [7]  = { name="Professions", macro="/click ProfessionMicroButton",     icon="Interface\\Buttons\\UI-MicroButton-Spellbook-Up", execute=btnClick("ProfessionMicroButton") },
-            [8]  = { name="World Map",   macro="/click MapMicroButton",            icon="Interface\\Buttons\\UI-MicroButton-WorldMap-Up", execute=btnClick("WorldMapMicroButton") },
-            [9]  = { name="LFD",         macro="/click LFDMicroButton",            icon="Interface\\Buttons\\UI-MicroButton-GroupFinder-Up", execute=btnClick("LFDMicroButton") },
-            [10] = { name="Mounts",      macro="/click CollectionsMicroButton",    icon="Interface\\Icons\\INV_Mount_DragonTurtle_Blue", execute=btnClick("CollectionsMicroButton") },
+            [1]  = { name="PvP",         macro="/click PVPMicroButton",            icon="Interface\\Buttons\\UI-MicroButton-PVP-Up",          execute=function() TogglePVPUI() end },
+            [2]  = { name="Store",       macro="/click StoreMicroButton",          icon="Interface\\Buttons\\UI-MicroButton-Store-Up",        execute=function() ToggleStoreUI() end },
+            [3]  = { name="Help",        macro="/click HelpMicroButton",           icon="Interface\\Buttons\\UI-MicroButton-Help-Up",         execute=function() ToggleHelpFrame() end },
+            [4]  = { name="Main Menu",   macro="/click MainMenuMicroButton",       icon="Interface\\Buttons\\UI-MicroButton-MainMenu-Up",     execute=function() ToggleGameMenu() end },
+            [5]  = { name="Calendar",    macro="/click GameTimeFrame",             icon="Interface\\Icons\\INV_Misc_SunCalendar",             execute=function() GameTimeCalendar_Toggle() end },
+            [6]  = { name="Screenshot",  macro="/screenshot",                      icon="Interface\\Icons\\INV_Misc_Camera_01",               execute=function() Screenshot() end },
+            [7]  = { name="Professions", macro="/click ProfessionMicroButton",     icon="Interface\\Buttons\\UI-MicroButton-Spellbook-Up",    execute=function() ToggleProfessionsBook() end },
+            [8]  = { name="World Map",   macro="/click MapMicroButton",            icon="Interface\\Buttons\\UI-MicroButton-WorldMap-Up",     execute=function() ToggleWorldMap() end },
+            [9]  = { name="LFD",         macro="/click LFDMicroButton",            icon="Interface\\Buttons\\UI-MicroButton-GroupFinder-Up",  execute=function() ToggleLFDParentFrame() end },
+            [10] = { name="Mounts",      macro="/click CollectionsMicroButton",    icon="Interface\\Icons\\INV_Mount_DragonTurtle_Blue",      execute=function() ToggleCollectionsJournal(2) end },
         },
     },
 }
@@ -488,6 +483,16 @@ function Radial:InitGamePadButtonHandling()
         Radial:CloseWheel()
     end)
 
+    -- PAD2 permanent global close: when wheel is NOT open, B closes all open windows.
+    -- Uses a regular click binding (priority 1 = addon layer). When the wheel opens,
+    -- SetOverrideBindingClick for PAD2 → CouchPotatoCloseBtn takes precedence; when the
+    -- wheel closes and overrides are cleared, PAD2 falls back to this binding.
+    self.globalCloseBtn = CreateFrame("Button", "CouchPotatoGlobalCloseBtn", UIParent,
+        "SecureActionButtonTemplate")
+    self.globalCloseBtn:RegisterForClicks("AnyDown")
+    self.globalCloseBtn:SetScript("OnClick", function() CloseAllWindows() end)
+    SetBindingClick("PAD2", "CouchPotatoGlobalCloseBtn", "LeftButton")
+
     -- PADLSHOULDER → cycle wheel left
     self.lsBtn = CreateFrame("Button", "CouchPotatoLSBtn", UIParent)
     self.lsBtn:RegisterForClicks("AnyDown")
@@ -640,6 +645,7 @@ function Radial:OnEnable()
     
     -- Register events
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatEnter")
 end
 
 function Radial:OnSpecChanged()
@@ -652,6 +658,11 @@ function Radial:OnEnteringWorld()
     if not InCombatLockdown() then
         self:LoadInterfaceLayouts()
     end
+end
+
+-- Close all open windows when the player enters combat (fires before lockdown).
+function Radial:OnCombatEnter()
+    CloseAllWindows()
 end
 
 function Radial:OnCombatStart()
