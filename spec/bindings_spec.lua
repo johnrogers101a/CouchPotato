@@ -1,11 +1,11 @@
 -- spec/bindings_spec.lua
--- Tests for Bindings module: SetOverrideBindingSpell (override layer) for direct mode,
--- SetOverrideBindingClick (transient) for wheel mode, combat safety.
+-- Tests for Bindings module: minimal trigger-only binding when wheel is closed,
+-- SetOverrideBindingClick for wheel mode, combat safety.
 --
--- WHY override layer (not SetBinding)?
---   WoW's built-in gamepad preset re-applies on UPDATE_BINDINGS every login,
---   overwriting any SetBinding PAD key. SetOverrideBindingSpell sits in the
---   override layer which has higher priority and is never clobbered by presets.
+-- NEW ARCHITECTURE:
+--   Wheel closed: ONLY PADRTRIGGER is bound (opens wheel). PAD1-4 = WoW's normal action bars.
+--   Wheel open:   PAD1-4 bound to wheel slots, bumpers cycle wheels, trigger closes wheel.
+--   Wheel closes: ClearOverrideBindings restores WoW's bindings, re-apply PADRTRIGGER only.
 
 require("spec/wow_mock")
 local helpers = require("spec/helpers")
@@ -57,16 +57,25 @@ describe("Bindings Module", function()
         end)
     end)
     
-    describe("ApplyControllerBindings (direct mode)", function()
-        it("writes face-button spells to the override binding layer", function()
+    describe("ApplyControllerBindings (trigger-only mode)", function()
+        it("binds ONLY the trigger button — PAD1-4 are NOT bound", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyControllerBindings()
             
-            -- Direct mode now uses SetOverrideBindingClick — CLICK format, NOT SPELL
             local override = _G._GetOverrideBindings(Bindings.ownerFrame)
-            local count = 0
-            for _ in pairs(override) do count = count + 1 end
-            assert.is_true(count > 0, "Should have applied at least one override binding")
+            -- Only PADRTRIGGER should be bound
+            assert.is_not_nil(override["PADRTRIGGER"], "PADRTRIGGER should be bound")
+            assert.equals("CLICK CouchPotatoTriggerBtn:LeftButton", override["PADRTRIGGER"])
+            
+            -- PAD1-4 should NOT be bound (WoW handles them normally)
+            assert.is_nil(override["PAD1"], "PAD1 should NOT be bound (WoW handles it)")
+            assert.is_nil(override["PAD2"], "PAD2 should NOT be bound (WoW handles it)")
+            assert.is_nil(override["PAD3"], "PAD3 should NOT be bound (WoW handles it)")
+            assert.is_nil(override["PAD4"], "PAD4 should NOT be bound (WoW handles it)")
+            
+            -- Bumpers should NOT be bound (WoW handles them normally)
+            assert.is_nil(override["PADLSHOULDER"], "PADLSHOULDER should NOT be bound")
+            assert.is_nil(override["PADRSHOULDER"], "PADRSHOULDER should NOT be bound")
         end)
 
         it("does NOT touch the permanent binding layer", function()
@@ -77,46 +86,12 @@ describe("Bindings Module", function()
             helpers.assertNoPermanentBindings()
         end)
 
-        it("binds face buttons to correct spells for Fire Mage (override layer)", function()
-            C_GamePad._SimulateConnect(1)
-            Bindings:ApplyControllerBindings()
-
-            -- Direct mode: SetOverrideBindingClick → CLICK binding to hidden SecureActionButton.
-            -- The spell lives on the button's attribute, NOT embedded in the binding string.
-            local override = _G._GetOverrideBindings(Bindings.ownerFrame)
-            assert.is_truthy(override["PAD4"] and override["PAD4"]:find("CouchPotatoDirectPAD4"),
-                "PAD4 should CLICK CouchPotatoDirectPAD4, got: " .. tostring(override["PAD4"]))
-            assert.is_truthy(override["PAD2"] and override["PAD2"]:find("CouchPotatoDirectPAD2"),
-                "PAD2 should CLICK CouchPotatoDirectPAD2, got: " .. tostring(override["PAD2"]))
-            assert.is_truthy(override["PAD1"] and override["PAD1"]:find("CouchPotatoDirectPAD1"),
-                "PAD1 should CLICK CouchPotatoDirectPAD1, got: " .. tostring(override["PAD1"]))
-            assert.is_truthy(override["PAD3"] and override["PAD3"]:find("CouchPotatoDirectPAD3"),
-                "PAD3 should CLICK CouchPotatoDirectPAD3, got: " .. tostring(override["PAD3"]))
-            -- Spell must be on the SecureActionButton attribute
-            assert.equals("Fireball",     _G["CouchPotatoDirectPAD4"]:GetAttribute("spell"), "PAD4 button spell")
-            assert.equals("Pyroblast",    _G["CouchPotatoDirectPAD2"]:GetAttribute("spell"), "PAD2 button spell")
-            assert.equals("Fire Blast",   _G["CouchPotatoDirectPAD1"]:GetAttribute("spell"), "PAD1 button spell")
-            assert.equals("Counterspell", _G["CouchPotatoDirectPAD3"]:GetAttribute("spell"), "PAD3 button spell")
-        end)
-
         it("does NOT call SaveBindings (override bindings are session-only)", function()
             C_GamePad._SimulateConnect(1)
             local before = _G._GetSaveBindingsCalls()
             Bindings:ApplyControllerBindings()
             assert.equals(before, _G._GetSaveBindingsCalls(),
                 "SaveBindings must NOT be called — override bindings need no persistence")
-        end)
-        
-        it("does not bind RT/LT (Radial owns them)", function()
-            C_GamePad._SimulateConnect(1)
-            Bindings:ApplyControllerBindings()
-
-            local permanent = _G._GetPermanentBindings()
-            local override  = _G._GetOverrideBindings(Bindings.ownerFrame)
-            assert.is_nil(permanent["PADRTRIGGER"], "RT must not be in permanent bindings")
-            assert.is_nil(permanent["PADLTRIGGER"], "LT must not be in permanent bindings")
-            assert.is_nil(override["PADRTRIGGER"],  "RT must not be in override bindings")
-            assert.is_nil(override["PADLTRIGGER"],  "LT must not be in override bindings")
         end)
         
         it("queues apply during combat — no override set", function()
@@ -139,30 +114,33 @@ describe("Bindings Module", function()
             helpers.fireEvent("PLAYER_REGEN_ENABLED")
             
             assert.is_false(Bindings.pendingApply)
-            -- Override bindings should now be set
+            -- Only trigger binding should be set
             local override = _G._GetOverrideBindings(Bindings.ownerFrame)
-            assert.is_not_nil(override["PAD4"], "PAD4 should be bound after combat ends")
+            assert.is_not_nil(override["PADRTRIGGER"], "PADRTRIGGER should be bound after combat ends")
+            assert.is_nil(override["PAD4"], "PAD4 should NOT be bound (WoW handles it)")
         end)
     end)
     
     describe("ApplyWheelBindings (wheel mode — transient overrides)", function()
-        it("binds face buttons to radial slot click targets", function()
+        it("binds bumpers and trigger in wheel mode (no face buttons)", function()
             Bindings:ApplyWheelBindings(1)
 
             local bindings = _G._GetOverrideBindings(Bindings.ownerFrame)
-            -- PAD4 (Y/top) → slot 1
-            assert.is_not_nil(bindings["PAD4"], "PAD4 should be bound in wheel mode")
-            assert.is_truthy(bindings["PAD4"]:find("CouchPotatoWheel1Slot1"),
-                "PAD4 should click Wheel1Slot1, got: " .. tostring(bindings["PAD4"]))
-            -- PAD2 (B/right) → slot 4
-            assert.is_truthy(bindings["PAD2"]:find("CouchPotatoWheel1Slot4"),
-                "PAD2 should click Wheel1Slot4")
-            -- PAD1 (A/bottom) → slot 7
-            assert.is_truthy(bindings["PAD1"]:find("CouchPotatoWheel1Slot7"),
-                "PAD1 should click Wheel1Slot7")
-            -- PAD3 (X/left) → slot 10
-            assert.is_truthy(bindings["PAD3"]:find("CouchPotatoWheel1Slot10"),
-                "PAD3 should click Wheel1Slot10")
+            -- Face buttons are NO LONGER bound (stick controls selection now)
+            assert.is_nil(bindings["PAD4"], "PAD4 should NOT be bound in wheel mode")
+            assert.is_nil(bindings["PAD2"], "PAD2 should NOT be bound in wheel mode")
+            assert.is_nil(bindings["PAD1"], "PAD1 should NOT be bound in wheel mode")
+            assert.is_nil(bindings["PAD3"], "PAD3 should NOT be bound in wheel mode")
+            
+            -- Bumpers should be bound for wheel cycling
+            assert.is_truthy(bindings["PADLSHOULDER"]:find("CouchPotatoLSBtn"),
+                "PADLSHOULDER should cycle wheels")
+            assert.is_truthy(bindings["PADRSHOULDER"]:find("CouchPotatoRSBtn"),
+                "PADRSHOULDER should cycle wheels")
+            
+            -- Trigger should still be bound
+            assert.is_truthy(bindings["PADRTRIGGER"]:find("CouchPotatoTriggerBtn"),
+                "PADRTRIGGER should be bound")
         end)
 
         it("sets wheelOpen flag", function()
@@ -177,7 +155,7 @@ describe("Bindings Module", function()
             assert.is_false(Bindings.wheelOpen)
         end)
 
-        it("RestoreDirectBindings clears wheel overrides and re-applies direct overrides", function()
+        it("RestoreDirectBindings clears wheel overrides and re-applies trigger only", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyWheelBindings(1)
             assert.is_true(Bindings.wheelOpen)
@@ -185,59 +163,69 @@ describe("Bindings Module", function()
             Bindings:RestoreDirectBindings()
             assert.is_false(Bindings.wheelOpen)
 
-            -- Wheel-mode CLICK overrides are cleared; direct-mode CLICK overrides are back.
-            -- Direct mode uses SetOverrideBindingClick (not Spell) → binding starts with "CLICK ".
+            -- Wheel-mode bindings are cleared; only trigger is re-bound.
             local override = _G._GetOverrideBindings(Bindings.ownerFrame)
-            assert.is_not_nil(override["PAD4"], "PAD4 should still have a binding after restore")
-            assert.is_truthy(override["PAD4"]:find("^CLICK "),
-                "PAD4 binding should be CLICK after restore, got: " .. tostring(override["PAD4"]))
-            -- The binding must point to CouchPotatoDirectPAD4, not a wheel slot button
-            assert.is_truthy(override["PAD4"]:find("CouchPotatoDirectPAD4"),
-                "PAD4 should click CouchPotatoDirectPAD4 (not a wheel slot) after restore")
+            assert.is_not_nil(override["PADRTRIGGER"], "PADRTRIGGER should still be bound after restore")
+            
+            -- PAD1-4 should NOT be bound — WoW handles them normally
+            assert.is_nil(override["PAD1"], "PAD1 should NOT be bound after restore")
+            assert.is_nil(override["PAD2"], "PAD2 should NOT be bound after restore")
+            assert.is_nil(override["PAD3"], "PAD3 should NOT be bound after restore")
+            assert.is_nil(override["PAD4"], "PAD4 should NOT be bound after restore")
         end)
     end)
 
     describe("GetBindingAction reflects binding layers", function()
-        it("override layer has CLICK binding after ApplyDirectBindings", function()
+        it("override layer has ONLY trigger binding after ApplyTriggerBinding", function()
             C_GamePad._SimulateConnect(1)
-            Bindings:ApplyDirectBindings()
+            Bindings:ApplyTriggerBinding()
 
-            -- Direct mode: SetOverrideBindingClick → CLICK format, not SPELL
-            local binding = GetBindingAction("PAD4", true)
-            assert.is_not_nil(binding, "PAD4 should have an override binding")
-            assert.is_truthy(binding:find("^CLICK "),
-                "PAD4 override should be CLICK binding, got: " .. tostring(binding))
-            -- Spell is on the SecureActionButton attribute
-            assert.equals("Fireball", _G["CouchPotatoDirectPAD4"]:GetAttribute("spell"))
+            -- Only PADRTRIGGER should be bound
+            local triggerBinding = GetBindingAction("PADRTRIGGER", true)
+            assert.is_not_nil(triggerBinding, "PADRTRIGGER should have an override binding")
+            assert.is_truthy(triggerBinding:find("^CLICK "),
+                "PADRTRIGGER override should be CLICK binding")
+            
+            -- PAD1-4 should NOT be bound
+            assert.is_nil(GetBindingAction("PAD4", true), "PAD4 should NOT have override binding")
+            assert.is_nil(GetBindingAction("PAD1", true), "PAD1 should NOT have override binding")
         end)
 
-        it("permanent layer is NOT set after ApplyDirectBindings", function()
+        it("permanent layer is NOT set after ApplyTriggerBinding", function()
             C_GamePad._SimulateConnect(1)
-            Bindings:ApplyDirectBindings()
+            Bindings:ApplyTriggerBinding()
 
             -- No permanent binding should exist (we use override, not SetBinding)
-            local binding = GetBindingAction("PAD4", false)
+            local binding = GetBindingAction("PADRTRIGGER", false)
             assert.is_nil(binding,
-                "PAD4 must NOT be in the permanent layer — override layer only")
+                "PADRTRIGGER must NOT be in the permanent layer — override layer only")
         end)
 
-        it("override layer has CLICK binding after ApplyWheelBindings", function()
+        it("override layer has bumper bindings after ApplyWheelBindings (no face buttons)", function()
             Bindings:ApplyWheelBindings(1)
 
-            -- Wheel mode uses transient override — checkOverride=true required
-            local binding = GetBindingAction("PAD4", true)
-            assert.is_not_nil(binding)
-            assert.is_truthy(binding:find("^CLICK "),
-                "PAD4 in wheel mode should be a CLICK binding")
+            -- Wheel mode no longer binds face buttons (stick controls selection)
+            -- Bumpers and trigger should be bound
+            local lsBinding = GetBindingAction("PADLSHOULDER", true)
+            assert.is_not_nil(lsBinding, "PADLSHOULDER should be bound")
+            assert.is_truthy(lsBinding:find("^CLICK "),
+                "PADLSHOULDER in wheel mode should be a CLICK binding")
+                
+            local rsBinding = GetBindingAction("PADRSHOULDER", true)
+            assert.is_not_nil(rsBinding, "PADRSHOULDER should be bound")
         end)
 
-        it("override layer is nil after ClearControllerBindings", function()
+        it("override layer has only trigger after ClearControllerBindings from wheel mode", function()
             C_GamePad._SimulateConnect(1)
-            Bindings:ApplyDirectBindings()
-            Bindings:ClearControllerBindings()
+            Bindings:ApplyWheelBindings(1)
+            Bindings:RestoreDirectBindings()  -- This clears and re-applies trigger
 
+            -- Trigger should be bound
+            assert.is_not_nil(GetBindingAction("PADRTRIGGER", true),
+                "PADRTRIGGER should be bound after restore")
+            -- Face buttons should NOT be bound
             assert.is_nil(GetBindingAction("PAD4", true),
-                "PAD4 override should be nil after ClearControllerBindings")
+                "PAD4 override should be nil after RestoreDirectBindings")
         end)
     end)
 
@@ -305,7 +293,7 @@ describe("Bindings Module", function()
             assert.is_not_nil(Bindings._applyTimer, "A debounce timer should be pending")
         end)
 
-        it("applies override bindings when the timer fires", function()
+        it("applies trigger binding when the timer fires", function()
             C_GamePad._SimulateConnect(1)
             helpers.fireEvent("UPDATE_BINDINGS")
 
@@ -313,7 +301,8 @@ describe("Bindings Module", function()
             C_Timer._FireAll()
 
             local override = _G._GetOverrideBindings(Bindings.ownerFrame)
-            assert.is_not_nil(override["PAD4"], "PAD4 should be bound after debounce fires")
+            assert.is_not_nil(override["PADRTRIGGER"], "PADRTRIGGER should be bound after debounce fires")
+            assert.is_nil(override["PAD4"], "PAD4 should NOT be bound (WoW handles it)")
             assert.is_nil(Bindings._applyTimer, "Timer handle should be cleared after firing")
         end)
 

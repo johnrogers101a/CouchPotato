@@ -257,7 +257,7 @@ local defaults = {
         radialAlpha        = 0.9,
         vibrationEnabled   = true,
         ledEnabled         = true,
-        hideBlizzardFrames = true,
+        hideBlizzardFrames = false,
         peekThreshold      = 0.35,
         lockThreshold      = 0.75,
     },

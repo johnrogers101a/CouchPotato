@@ -10,12 +10,14 @@ local Radial = CP:NewModule("Radial")
 
 local MAX_WHEELS = 8
 local MAX_SLOTS = 12
-local BUTTON_RADIUS = 120         -- distance from wheel center to button center (pixels)
+local BUTTON_RADIUS = 200         -- distance from wheel center to button center (pixels) — was 120
 local PEEK_THRESHOLD = 0.35       -- trigger axis 0-1, shows wheel briefly
 local LOCK_THRESHOLD = 0.75       -- trigger axis 0-1, locks wheel open
 local PEEK_TIMEOUT = 2.0          -- seconds before peek auto-hides
-local ICON_SIZE = 52              -- button icon size in pixels
+local ICON_SIZE = 64              -- button icon size in pixels — was 52
 local WHEEL_FADE_TIME = 0.15      -- fade in/out time
+local STICK_DEAD_ZONE = 0.25      -- stick magnitude threshold for selection
+local STICK_INDEX = 1             -- 1=left stick, 2=right stick
 
 Radial.wheels = {}          -- [1..MAX_WHEELS] = wheel container frames
 Radial.wheelButtons = {}    -- [wheelIdx][slotIdx] = button frame
@@ -24,6 +26,56 @@ Radial.isVisible = false
 Radial.isLocked = false
 Radial.peekTimer = nil
 Radial.centerFrame = nil    -- the anchor frame (center of screen)
+Radial.highlightedSlot = nil -- currently highlighted slot index (nil = none)
+
+-- ── Interface Panel Layouts ───────────────────────────────────────────────────
+-- Wheels 1-2 are fixed interface-toggle wheels (map, character pane, etc.).
+-- Macros use /click on Blizzard's micro bar buttons — no event interception.
+-- Button names are correct for Interface 120001 (TWW). Cardinal slots (face btns):
+--   slot 1 = Y/△ (top), slot 4 = B/○ (right), slot 7 = A/✕ (bottom), slot 10 = X/□ (left)
+
+-- Helper: creates an execute function that clicks a named Blizzard button
+local function btnClick(name)
+    return function()
+        local b = _G[name]
+        if b and b.Click then b:Click() end
+    end
+end
+
+local INTERFACE_WHEEL_LAYOUTS = {
+    [1] = {
+        name = "Interface",
+        slots = {
+            [1]  = { name="Character",    macro="/click CharacterMicroButton",      icon="Interface\\Buttons\\UI-MicroButton-Character-Up", execute=btnClick("CharacterMicroButton") },
+            [2]  = { name="Spellbook",    macro="/click SpellbookMicroButton",      icon="Interface\\Buttons\\UI-MicroButton-Spellbook-Up", execute=btnClick("SpellbookMicroButton") },
+            [3]  = { name="Talents",      macro="/click TalentMicroButton",         icon="Interface\\Buttons\\UI-MicroButton-Talent-Up", execute=btnClick("TalentMicroButton") },
+            [4]  = { name="Map",          macro="/click WorldMapMicroButton",       icon="Interface\\Buttons\\UI-MicroButton-WorldMap-Up", execute=btnClick("WorldMapMicroButton") },
+            [5]  = { name="Quests",       macro="/click QuestLogMicroButton",       icon="Interface\\Buttons\\UI-MicroButton-Quest-Up", execute=btnClick("QuestLogMicroButton") },
+            [6]  = { name="Achievements", macro="/click AchievementMicroButton",    icon="Interface\\Buttons\\UI-MicroButton-Achievement-Up", execute=btnClick("AchievementMicroButton") },
+            [7]  = { name="Bags",         macro="/click MainMenuBarBackpackButton", icon="Interface\\Buttons\\Button-Backpack-Up", execute=btnClick("MainMenuBarBackpackButton") },
+            [8]  = { name="Collections",  macro="/click CollectionsMicroButton",    icon="Interface\\Buttons\\UI-MicroButton-Collections-Up", execute=btnClick("CollectionsMicroButton") },
+            [9]  = { name="Social",       macro="/click SocialsMicroButton",        icon="Interface\\Buttons\\UI-MicroButton-Socials-Up", execute=btnClick("SocialsMicroButton") },
+            [10] = { name="Journal",      macro="/click EJMicroButton",             icon="Interface\\Buttons\\UI-MicroButton-EJ-Up", execute=btnClick("EJMicroButton") },
+            [11] = { name="Guild",        macro="/click GuildMicroButton",          icon="Interface\\Buttons\\UI-MicroButton-Guild-Up", execute=btnClick("GuildMicroButton") },
+            [12] = { name="Group",        macro="/click GroupFinderMicroButton",    icon="Interface\\Buttons\\UI-MicroButton-GroupFinder-Up", execute=btnClick("GroupFinderMicroButton") },
+        },
+    },
+    [2] = {
+        name = "System",
+        slots = {
+            [1]  = { name="PvP",         macro="/click PVPMicroButton",            icon="Interface\\Buttons\\UI-MicroButton-PVP-Up", execute=btnClick("PVPMicroButton") },
+            [2]  = { name="Store",       macro="/click StoreMicroButton",          icon="Interface\\Buttons\\UI-MicroButton-Store-Up", execute=btnClick("StoreMicroButton") },
+            [3]  = { name="Help",        macro="/click HelpMicroButton",           icon="Interface\\Buttons\\UI-MicroButton-Help-Up", execute=btnClick("HelpMicroButton") },
+            [4]  = { name="Main Menu",   macro="/click MainMenuMicroButton",       icon="Interface\\Buttons\\UI-MicroButton-MainMenu-Up", execute=btnClick("MainMenuMicroButton") },
+            [5]  = { name="Calendar",    macro="/click GameTimeFrame",             icon="Interface\\Icons\\INV_Misc_SunCalendar", execute=btnClick("GameTimeFrame") },
+            [6]  = { name="Screenshot",  macro="/screenshot",                      icon="Interface\\Icons\\INV_Misc_Camera_01", execute=function() Screenshot() end },
+            [7]  = { name="Professions", macro="/click ProfessionMicroButton",     icon="Interface\\Buttons\\UI-MicroButton-Spellbook-Up", execute=btnClick("ProfessionMicroButton") },
+            [8]  = { name="World Map",   macro="/click MapMicroButton",            icon="Interface\\Buttons\\UI-MicroButton-WorldMap-Up", execute=btnClick("WorldMapMicroButton") },
+            [9]  = { name="LFD",         macro="/click LFDMicroButton",            icon="Interface\\Buttons\\UI-MicroButton-GroupFinder-Up", execute=btnClick("LFDMicroButton") },
+            [10] = { name="Mounts",      macro="/click CollectionsMicroButton",    icon="Interface\\Icons\\INV_Mount_DragonTurtle_Blue", execute=btnClick("CollectionsMicroButton") },
+        },
+    },
+}
 
 -- Slot positions in a circle (12 slots, 30° apart, starting from top = 90°)
 local function GetSlotPosition(slotIndex, radius)
@@ -49,13 +101,13 @@ function Radial:CreateWheelFrames()
     for wheelIdx = 1, MAX_WHEELS do
         -- Wheel container: regular Frame, can show/hide freely
         local wheel = CreateFrame("Frame", "CouchPotatoWheel"..wheelIdx, UIParent)
-        wheel:SetSize(BUTTON_RADIUS * 2 + ICON_SIZE + 20, BUTTON_RADIUS * 2 + ICON_SIZE + 20)
+        wheel:SetSize(BUTTON_RADIUS * 2 + ICON_SIZE + 40, BUTTON_RADIUS * 2 + ICON_SIZE + 40)
         wheel:SetPoint("CENTER", self.centerFrame, "CENTER", 0, 0)
         wheel:Hide()  -- start hidden
         
         -- Wheel background ring texture
         local bg = wheel:CreateTexture(nil, "BACKGROUND")
-        bg:SetSize(BUTTON_RADIUS * 2 + ICON_SIZE, BUTTON_RADIUS * 2 + ICON_SIZE)
+        bg:SetSize(BUTTON_RADIUS * 2 + ICON_SIZE + 20, BUTTON_RADIUS * 2 + ICON_SIZE + 20)
         bg:SetPoint("CENTER", wheel, "CENTER", 0, 0)
         bg:SetTexture("Interface\\Addons\\CouchPotato\\textures\\wheel_ring")
         bg:SetAlpha(0.6)
@@ -69,6 +121,13 @@ function Radial:CreateWheelFrames()
         label:SetPoint("TOP", wheel, "TOP", 0, -8)
         label:SetText("Wheel " .. wheelIdx)
         wheel.label = label
+        
+        -- Center selection label — shows the name of the currently highlighted slot
+        local selLabel = wheel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        selLabel:SetPoint("CENTER", wheel, "CENTER", 0, 0)
+        selLabel:SetText("")
+        selLabel:SetTextColor(1, 0.9, 0.6)
+        wheel.selLabel = selLabel
         
         -- Wheel indicator dots (show which wheel we're on)
         self:CreateWheelDots(wheel, wheelIdx)
@@ -100,7 +159,7 @@ function Radial:CreateWheelFrames()
             
             -- Slot border/highlight
             local border = btn:CreateTexture(nil, "OVERLAY")
-            border:SetSize(ICON_SIZE + 4, ICON_SIZE + 4)
+            border:SetSize(ICON_SIZE + 12, ICON_SIZE + 12)
             border:SetPoint("CENTER", btn, "CENTER", 0, 0)
             border:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
             border:Hide()
@@ -119,6 +178,15 @@ function Radial:CreateWheelFrames()
             slotNum:SetText(tostring(slotIdx))
             slotNum:SetTextColor(0.7, 0.7, 0.7)
             btn.slotNum = slotNum
+
+            -- Named slot label (shown below icon when slot has an explicit name)
+            local nameLabel = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            nameLabel:SetPoint("TOP", btn, "BOTTOM", 0, 0)
+            nameLabel:SetWidth(64)
+            nameLabel:SetJustifyH("CENTER")
+            nameLabel:SetTextColor(1, 0.9, 0.6)
+            nameLabel:SetText("")
+            btn.nameLabel = nameLabel
             
             -- Cooldown frame
             local cooldown = CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
@@ -134,6 +202,8 @@ function Radial:CreateWheelFrames()
                     GameTooltip:SetSpellByID(self:GetAttribute("spell") or 0)
                 elseif self:GetAttribute("item") then
                     GameTooltip:SetItemByID(self:GetAttribute("item") or 0)
+                elseif self.tooltipName then
+                    GameTooltip:SetText(self.tooltipName)
                 end
                 GameTooltip:Show()
             end)
@@ -144,13 +214,11 @@ function Radial:CreateWheelFrames()
             
             self.wheelButtons[wheelIdx][slotIdx] = btn
         end
-        
-        -- Center slot visual (shows current wheel name/icon in the middle)
-        local centerIcon = wheel:CreateTexture(nil, "ARTWORK")
-        centerIcon:SetSize(32, 32)
-        centerIcon:SetPoint("CENTER", wheel, "CENTER", 0, 0)
-        centerIcon:SetTexture("Interface\\Icons\\Ability_Warrior_Shieldmastery")
-        wheel.centerIcon = centerIcon
+    end
+    
+    -- Single poll frame for stick input (created once, shared across all wheels)
+    if not self.pollFrame then
+        self.pollFrame = CreateFrame("Frame", "CouchPotatoPollFrame", UIParent)
     end
 end
 
@@ -174,9 +242,131 @@ function Radial:CreateWheelDots(wheel, currentWheelIdx)
     end
 end
 
+-- ── Stick-based slot selection ────────────────────────────────────────────────
+
+-- Returns stick angle in degrees (math convention: 0=right, 90=up), or nil if in dead zone
+function Radial:GetStickAngle()
+    local ms = C_GamePad.GetDeviceMappedState()
+    if not ms or not ms.sticks then return nil end
+    local stick = ms.sticks[STICK_INDEX]
+    if not stick or (stick.len or 0) < STICK_DEAD_ZONE then return nil end
+    return math.deg(math.atan2(stick.y, stick.x))
+end
+
+-- Maps an angle (degrees) to a slot index (1-MAX_SLOTS)
+-- Slots start at top (90°) and go clockwise, 30° apart
+function Radial:AngleToSlot(angleDeg)
+    return math.floor(((90 - angleDeg) * MAX_SLOTS / 360 + 0.5) % MAX_SLOTS) + 1
+end
+
+-- Shows/hides the selection highlight on a specific slot
+function Radial:SetSlotHighlight(wheelIdx, slotIdx, state)
+    if not slotIdx then return end
+    local btn = self.wheelButtons[wheelIdx] and self.wheelButtons[wheelIdx][slotIdx]
+    if not btn then return end
+    if state then
+        btn.border:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+        btn.border:SetVertexColor(1, 0.85, 0, 1)
+        btn.border:SetSize(ICON_SIZE + 12, ICON_SIZE + 12)
+        btn.border:Show()
+        btn:SetScale(1.3)
+    else
+        btn.border:Hide()
+        btn:SetScale(1.0)
+    end
+end
+
+-- Updates the center label to show the highlighted slot's name
+function Radial:UpdateSelectionLabel()
+    local wheel = self.wheels[self.currentWheel]
+    if not wheel or not wheel.selLabel then return end
+    
+    local slot = self.highlightedSlot
+    if slot then
+        local wheelDef = INTERFACE_WHEEL_LAYOUTS[self.currentWheel]
+        local slotDef = wheelDef and wheelDef.slots[slot]
+        local name = slotDef and slotDef.name
+        if not name then
+            local btn = self.wheelButtons[self.currentWheel] and self.wheelButtons[self.currentWheel][slot]
+            name = btn and btn.tooltipName
+        end
+        wheel.selLabel:SetText(name or ("Slot " .. slot))
+    else
+        wheel.selLabel:SetText("")
+    end
+end
+
+-- Called every frame while wheel is open — polls stick and updates selection
+function Radial:UpdateStickSelection()
+    if not self.isVisible then return end
+    local angle = self:GetStickAngle()
+    if angle == nil then return end  -- dead zone: keep current selection
+    
+    local newSlot = self:AngleToSlot(angle)
+    if newSlot == self.highlightedSlot then return end
+    
+    self:SetSlotHighlight(self.currentWheel, self.highlightedSlot, false)
+    self.highlightedSlot = newSlot
+    self:SetSlotHighlight(self.currentWheel, newSlot, true)
+    self:UpdateSelectionLabel()
+end
+
+-- Starts the per-frame stick polling loop
+function Radial:StartStickPolling()
+    if not self.pollFrame then return end
+    self.pollFrame:SetScript("OnUpdate", function()
+        Radial:UpdateStickSelection()
+    end)
+end
+
+-- Stops the per-frame stick polling loop and clears any active selection highlight
+function Radial:StopStickPolling()
+    if not self.pollFrame then return end
+    self.pollFrame:SetScript("OnUpdate", nil)
+    if self.currentWheel and self.highlightedSlot then
+        self:SetSlotHighlight(self.currentWheel, self.highlightedSlot, false)
+    end
+    self.highlightedSlot = nil
+    self:UpdateSelectionLabel()
+end
+
+-- Opens the wheel (called on trigger press)
+function Radial:OpenWheel()
+    if self.isVisible then return end
+    self.highlightedSlot = nil
+    self:ShowCurrentWheel()
+    self:StartStickPolling()
+end
+
+-- Confirms the current selection and closes the wheel (called on trigger release)
+function Radial:ConfirmAndClose()
+    if not self.isVisible then return end
+    
+    local slot = self.highlightedSlot
+    if slot then
+        local wheelDef = INTERFACE_WHEEL_LAYOUTS[self.currentWheel]
+        local slotDef = wheelDef and wheelDef.slots[slot]
+        if slotDef and slotDef.execute then
+            local ok, err = pcall(slotDef.execute)
+            if not ok then CP:Print("CouchPotato: " .. tostring(err)) end
+        elseif not InCombatLockdown() then
+            -- User-configured wheels (3+): click the SecureActionButton directly
+            local btn = self.wheelButtons[self.currentWheel] and self.wheelButtons[self.currentWheel][slot]
+            if btn then btn:Click("LeftButton") end
+        end
+    end
+    
+    self:HideCurrentWheel()
+end
+
 function Radial:ShowCurrentWheel()
     local wheel = self.wheels[self.currentWheel]
     if not wheel then return end
+
+    -- Reset selection state for the new wheel
+    self.highlightedSlot = nil
+    local prevWheel = self.wheels[self.currentWheel]
+    if prevWheel and prevWheel.selLabel then prevWheel.selLabel:SetText("") end
 
     for i = 1, MAX_WHEELS do
         if i ~= self.currentWheel and self.wheels[i] then
@@ -201,6 +391,7 @@ function Radial:ShowCurrentWheel()
 end
 
 function Radial:HideCurrentWheel()
+    self:StopStickPolling()
     for i = 1, MAX_WHEELS do
         if self.wheels[i] then self.wheels[i]:Hide() end
     end
@@ -213,6 +404,10 @@ function Radial:HideCurrentWheel()
 end
 
 function Radial:CycleWheelNext()
+    if self.isVisible then
+        self:SetSlotHighlight(self.currentWheel, self.highlightedSlot, false)
+        self.highlightedSlot = nil
+    end
     self.currentWheel = self.currentWheel % MAX_WHEELS + 1
     self:UpdateWheelDots()
     if self.isVisible then
@@ -221,6 +416,10 @@ function Radial:CycleWheelNext()
 end
 
 function Radial:CycleWheelPrev()
+    if self.isVisible then
+        self:SetSlotHighlight(self.currentWheel, self.highlightedSlot, false)
+        self.highlightedSlot = nil
+    end
     self.currentWheel = (self.currentWheel - 2) % MAX_WHEELS + 1
     self:UpdateWheelDots()
     if self.isVisible then
@@ -256,32 +455,37 @@ function Radial:InitTriggerDetection()
 end
 
 function Radial:InitGamePadButtonHandling()
-    -- Guard: prevent duplicate frame creation (OnEnable can be called multiple times)
     if self.buttonFrame then return end
     
-    self.buttonFrame = CreateFrame("Frame", "CouchPotatoRadialInput", UIParent)
-    self.buttonFrame:EnableGamePadButton(true)
-
-    self.buttonFrame:SetScript("OnGamePadButtonDown", function(self_frame, button)
-        if button == "PADRTRIGGER" then
-            -- RT down: open and lock the wheel
-            Radial:LockWheel()
-        elseif button == "PADLSHOULDER" then
-            Radial:CycleWheelPrev()
-        elseif button == "PADRSHOULDER" then
-            Radial:CycleWheelNext()
+    -- PADRTRIGGER: AnyDown = open wheel, AnyUp = confirm selection + close
+    self.triggerBtn = CreateFrame("Button", "CouchPotatoTriggerBtn", UIParent)
+    self.triggerBtn:RegisterForClicks("AnyDown", "AnyUp")
+    self.triggerBtn:SetScript("OnClick", function(self, mouseButton, down)
+        if down then
+            Radial:OpenWheel()
+        else
+            Radial:ConfirmAndClose()
         end
     end)
-
-    self.buttonFrame:SetScript("OnGamePadButtonUp", function(self_frame, button)
-        if button == "PADRTRIGGER" then
-            -- RT released: hide wheel (short delay so you can see what you selected)
-            Radial:UnlockWheel()
-        end
+    
+    -- PADLSHOULDER → cycle wheel left
+    self.lsBtn = CreateFrame("Button", "CouchPotatoLSBtn", UIParent)
+    self.lsBtn:RegisterForClicks("AnyDown")
+    self.lsBtn:SetScript("OnClick", function()
+        Radial:CycleWheelPrev()
     end)
+    
+    -- PADRSHOULDER → cycle wheel right
+    self.rsBtn = CreateFrame("Button", "CouchPotatoRSBtn", UIParent)
+    self.rsBtn:RegisterForClicks("AnyDown")
+    self.rsBtn:SetScript("OnClick", function()
+        Radial:CycleWheelNext()
+    end)
+    
+    self.buttonFrame = self.triggerBtn
 end
 
-function Radial:SetSlot(wheelIdx, slotIdx, actionType, actionValue)
+function Radial:SetSlot(wheelIdx, slotIdx, actionType, actionValue, iconPath, slotName)
     if InCombatLockdown() then
         CP:Print("Cannot modify radial slots during combat.")
         return false
@@ -294,7 +498,6 @@ function Radial:SetSlot(wheelIdx, slotIdx, actionType, actionValue)
     
     if actionType == "spell" then
         btn:SetAttribute("spell", actionValue)
-        -- Update icon (C_Spell.GetSpellInfo replaces GetSpellInfo in Patch 10.2+)
         local spellInfo = C_Spell.GetSpellInfo(actionValue)
         local iconID = spellInfo and spellInfo.iconID
         btn.icon:SetTexture(iconID or "Interface\\Icons\\INV_Misc_QuestionMark")
@@ -305,8 +508,16 @@ function Radial:SetSlot(wheelIdx, slotIdx, actionType, actionValue)
         btn.icon:SetTexture(itemTexture or "Interface\\Icons\\INV_Misc_QuestionMark")
     elseif actionType == "macro" then
         btn:SetAttribute("macro", actionValue)
+        btn.icon:SetTexture(iconPath or "Interface\\Icons\\INV_Misc_QuestionMark")
     elseif actionType == "empty" then
         btn.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+    end
+
+    -- Named label (hides slot number when a name is provided)
+    if slotName then
+        btn.tooltipName = slotName
+        if btn.nameLabel then btn.nameLabel:SetText(slotName) end
+        if btn.slotNum    then btn.slotNum:Hide() end
     end
     
     -- Save to character DB
@@ -332,9 +543,34 @@ function Radial:LoadLayoutsFromDB()
     if not layouts then return end
     
     for wheelIdx, slots in pairs(layouts) do
-        for slotIdx, slotData in pairs(slots) do
-            if slotData.type and slotData.value then
-                self:SetSlot(wheelIdx, slotIdx, slotData.type, slotData.value)
+        -- Wheels 1-2 are always the interface panel — never load from DB
+        if wheelIdx > 2 then
+            for slotIdx, slotData in pairs(slots) do
+                if slotData.type and slotData.value then
+                    self:SetSlot(wheelIdx, slotIdx, slotData.type, slotData.value)
+                end
+            end
+        end
+    end
+end
+
+-- Populates wheels 1-2 with fixed interface-panel toggles.
+-- Called last so it always wins over any DB data for those wheels.
+function Radial:LoadInterfaceLayouts()
+    for wheelIdx, wheelDef in pairs(INTERFACE_WHEEL_LAYOUTS) do
+        local wheel = self.wheels[wheelIdx]
+        if wheel and wheel.label then
+            wheel.label:SetText(wheelDef.name)
+        end
+        for slotIdx, slotDef in pairs(wheelDef.slots) do
+            local btn = self.wheelButtons[wheelIdx] and self.wheelButtons[wheelIdx][slotIdx]
+            if btn and not InCombatLockdown() then
+                btn:SetAttribute("type", "macro")
+                btn:SetAttribute("macro", slotDef.macro)
+                btn.icon:SetTexture(slotDef.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+                btn.tooltipName = slotDef.name
+                if btn.nameLabel then btn.nameLabel:SetText(slotDef.name) end
+                if btn.slotNum    then btn.slotNum:Hide() end
             end
         end
     end
@@ -378,18 +614,24 @@ function Radial:OnEnable()
     self:InitTriggerDetection()
     self:InitGamePadButtonHandling()
     
-    -- Load saved layouts first, then defaults for empty slots
+    -- Load DB-saved layouts for wheels 3+, then apply fixed interface layouts for wheels 1-2
     self:LoadLayoutsFromDB()
-    self:LoadDefaultLayouts()
+    self:LoadInterfaceLayouts()
     
     -- Register events
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
 end
 
 function Radial:OnSpecChanged()
-    -- Reload default layouts when spec changes
-    self:LoadDefaultLayouts()
+    -- Spec changes no longer affect radial — wheels 1-2 are fixed interface panels,
+    -- wheels 3+ use DB-saved player layouts.
+end
+
+function Radial:OnEnteringWorld()
+    -- Re-apply interface layouts in case Blizzard frames were recreated
+    if not InCombatLockdown() then
+        self:LoadInterfaceLayouts()
+    end
 end
 
 function Radial:OnCombatStart()
