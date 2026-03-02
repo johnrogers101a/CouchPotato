@@ -3,7 +3,7 @@
 -- Players can customize these via the settings UI; these are the defaults.
 
 local CP = CouchPotato
-local Specs = CP:NewModule("Specs", "AceEvent-3.0")
+local Specs = CP:NewModule("Specs")
 
 -- specLayouts[classID][specIndex] = layout table
 local specLayouts = {}

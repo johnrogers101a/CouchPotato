@@ -3,38 +3,28 @@
 
 local helpers = {}
 
--- Simulate firing a WoW event to all registered AceEvent handlers
+-- Fire a WoW event to all registered CP module handlers.
+-- Uses CouchPotato._FireEvent — works after dofile("CouchPotato/CouchPotato.lua").
 function helpers.fireEvent(event, ...)
-    -- Fire via AceEvent mock
-    if _G.LibStub then
-        local AceEvent = _G.LibStub("AceEvent-3.0", true)
-        if AceEvent and AceEvent._FireEvent then
-            AceEvent._FireEvent(event, ...)
-        end
-    end
-    
-    -- Also fire on CreateFrame-based listeners
-    -- (The Loader uses a raw CreateFrame frame, not AceEvent)
-    if _G._rawEventListeners and _G._rawEventListeners[event] then
-        for _, listener in pairs(_G._rawEventListeners[event]) do
-            listener(event, ...)
-        end
+    if _G.CouchPotato and _G.CouchPotato._FireEvent then
+        _G.CouchPotato._FireEvent(event, ...)
     end
 end
 
 -- Reset all mock state between tests
 function helpers.resetMocks()
-    C_GamePad._enabled = false
+    C_GamePad._enabled        = false
     C_GamePad._activeDeviceID = nil
-    C_GamePad._ledColor = nil
-    C_GamePad._vibrating = false
-    C_GamePad._lastVibration = nil
-    C_GamePad._devices = {}
-    
+    C_GamePad._ledColor       = nil
+    C_GamePad._vibrating      = false
+    C_GamePad._lastVibration  = nil
+    C_GamePad._devices        = {}
+
     C_AddOns._Reset()
     C_Timer._Reset()
     _G._SetCombatState(false)
     _G._ResetBindings()
+    _G._rawEventListeners = {}
 end
 
 -- Simulate controller connect

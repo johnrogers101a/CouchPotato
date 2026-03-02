@@ -4,7 +4,7 @@
 -- Patch 12.0.1 (Interface 120001)
 
 local CP = CouchPotato
-local Bindings = CP:NewModule("Bindings", "AceEvent-3.0")
+local Bindings = CP:NewModule("Bindings")
 
 -- State
 Bindings.ownerFrame = nil

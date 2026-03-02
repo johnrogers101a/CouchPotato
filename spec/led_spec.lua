@@ -9,14 +9,15 @@ describe("LED Module", function()
     
     before_each(function()
         helpers.resetMocks()
-        C_GamePad._SimulateConnect(1)  -- controller needed for LED
-        
-        CP = LibStub("AceAddon-3.0"):NewAddon("CouchPotato", "AceConsole-3.0", "AceEvent-3.0")
-        _G["CouchPotato"] = CP
-        CP.db = LibStub("AceDB-3.0"):New("CouchPotatoDB", {
-            profile = { ledEnabled = true }
-        })
-        
+        C_GamePad._SimulateConnect(1)
+
+        dofile("CouchPotato/CouchPotato.lua")
+        CP = CouchPotato
+        CP.db = {
+            profile = { ledEnabled = true },
+            char    = {},
+        }
+
         dofile("CouchPotato/Core/LED.lua")
         LED = CP:GetModule("LED")
         LED:Enable()

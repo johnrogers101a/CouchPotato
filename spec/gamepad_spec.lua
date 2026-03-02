@@ -10,20 +10,19 @@ describe("GamePad Module", function()
     
     before_each(function()
         helpers.resetMocks()
-        
-        -- Bootstrap CouchPotato addon
-        CP = LibStub("AceAddon-3.0"):NewAddon("CouchPotato", "AceConsole-3.0", "AceEvent-3.0")
-        _G["CouchPotato"] = CP
-        CP.db = LibStub("AceDB-3.0"):New("CouchPotatoDB", {
+
+        dofile("CouchPotato/CouchPotato.lua")
+        CP = CouchPotato
+        CP.db = {
             profile = {
                 vibrationEnabled = true,
-                ledEnabled = true,
-                peekThreshold = 0.35,
-                lockThreshold = 0.75,
-            }
-        })
-        
-        -- Load the GamePad module
+                ledEnabled       = true,
+                peekThreshold    = 0.35,
+                lockThreshold    = 0.75,
+            },
+            char = { currentWheel = 1, wheelLayouts = {} },
+        }
+
         dofile("CouchPotato/Core/GamePad.lua")
         GamePad = CP:GetModule("GamePad")
         GamePad:Enable()
@@ -52,13 +51,13 @@ describe("GamePad Module", function()
     
     describe("GAME_PAD_ACTIVE_CHANGED event", function()
         it("activates when controller becomes active", function()
-            LibStub("AceEvent-3.0")._FireEvent("GAME_PAD_ACTIVE_CHANGED", true)
+            helpers.fireEvent("GAME_PAD_ACTIVE_CHANGED", true)
             assert.is_true(GamePad.isActive)
         end)
         
         it("deactivates when controller becomes inactive", function()
             GamePad.isActive = true
-            LibStub("AceEvent-3.0")._FireEvent("GAME_PAD_ACTIVE_CHANGED", false)
+            helpers.fireEvent("GAME_PAD_ACTIVE_CHANGED", false)
             assert.is_false(GamePad.isActive)
         end)
     end)

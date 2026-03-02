@@ -3,7 +3,7 @@
 -- Patch 12.0.1 (Interface 120001)
 
 local CP = CouchPotato
-local GamePad = CP:NewModule("GamePad", "AceEvent-3.0", "AceTimer-3.0")
+local GamePad = CP:NewModule("GamePad")
 
 -- State tracking
 GamePad.isActive = false

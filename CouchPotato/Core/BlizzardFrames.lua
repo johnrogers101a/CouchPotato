@@ -5,7 +5,7 @@
 -- Patch 12.0.1 (Interface 120001)
 
 local CP = CouchPotato
-local BlizzardFrames = CP:NewModule("BlizzardFrames", "AceEvent-3.0")
+local BlizzardFrames = CP:NewModule("BlizzardFrames")
 
 -- Frames to suppress, with their event re-show handlers to also suppress
 local MANAGED_FRAMES = {

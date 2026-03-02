@@ -11,27 +11,26 @@ describe("Radial Module", function()
     
     before_each(function()
         helpers.resetMocks()
-        
-        CP = LibStub("AceAddon-3.0"):NewAddon("CouchPotato", "AceConsole-3.0", "AceEvent-3.0")
-        _G["CouchPotato"] = CP
-        CP.db = LibStub("AceDB-3.0"):New("CouchPotatoDB", {
+
+        dofile("CouchPotato/CouchPotato.lua")
+        CP = CouchPotato
+        CP.db = {
             profile = {
-                radialAlpha = 0.9,
-                peekThreshold = 0.35,
-                lockThreshold = 0.75,
+                radialAlpha      = 0.9,
+                peekThreshold    = 0.35,
+                lockThreshold    = 0.75,
                 vibrationEnabled = true,
             },
             char = {
                 currentWheel = 1,
                 wheelLayouts = {},
-            }
-        })
-        
-        -- Load dependencies
+            },
+        }
+
         dofile("CouchPotato/Core/GamePad.lua")
         dofile("CouchPotato/Core/Specs.lua")
         dofile("CouchPotato/UI/Radial.lua")
-        
+
         CP:GetModule("GamePad"):Enable()
         CP:GetModule("Specs"):Enable()
         Radial = CP:GetModule("Radial")

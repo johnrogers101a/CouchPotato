@@ -4,7 +4,7 @@
 -- Patch 12.0.1 (Interface 120001)
 
 local CP = CouchPotato
-local HUD = CP:NewModule("HUD", "AceEvent-3.0", "AceTimer-3.0")
+local HUD = CP:NewModule("HUD")
 
 HUD.frames = {}   -- all created frames
 
