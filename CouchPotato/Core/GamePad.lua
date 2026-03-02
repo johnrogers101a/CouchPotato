@@ -70,9 +70,9 @@ function GamePad:OnGamePadActiveChanged(event, isActive)
             LED:UpdateForCurrentSpec()
         end
         
-        -- Reapply bindings
+        -- Reapply bindings (only if wheel is not open)
         local Bindings = CP:GetModule("Bindings", true)
-        if Bindings then
+        if Bindings and not Bindings.wheelOpen then
             Bindings:ApplyControllerBindings()
         end
     else
