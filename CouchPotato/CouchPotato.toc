@@ -18,6 +18,8 @@ Core\Specs.lua
 Core\BlizzardFrames.lua
 Core\Diagnostics.lua
 
+UI\ConfigWindow.lua
+UI\DiagnosticsWindow.lua
 UI\Radial.lua
 UI\HUD.lua
 UI\VirtualCursor.lua
