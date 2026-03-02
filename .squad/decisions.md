@@ -330,3 +330,50 @@ end
 - Frame rendering and visual appearance
 - SavedVariables persistence across sessions
 - Multiple controller edge cases
+
+## Frameworkless Migration Decisions
+
+**Date:** 2026-03-02  
+**Status:** Complete & Approved
+
+### 2026-03-02: Frameworkless Core Implementation (consolidated)
+
+**By:** Wash, Kaylee, Zoe, Mal
+
+**What:**
+Replaced all Ace3 and LibStub dependencies with a hand-rolled frameworkless core. Core framework rewritten as 477 lines of pure Lua. All module files updated to remove mixin arguments from `CP:NewModule()` calls. UI layer, test layer, and spec files migrated to use new frameworkless API. All 16 changed files reviewed and approved.
+
+**Why:**
+- Eliminates ~50KB of external library code (Ace3 libraries)
+- Gives full control over event dispatch, timer, and module systems
+- Simplifies deployment (no .pkgmeta externals, no stub management)
+- Preserves 100% of production API surface — all existing module code works unchanged
+- Enables faster unit testing via `CP._FireEvent()` helper
+- All 7 critical combat safety guards verified intact
+- SecureActionButtonTemplate preserved for all 96 radial buttons
+
+**Implementation:**
+- **CouchPotato/CouchPotato.lua** — Complete rewrite with single event frame, API injection pattern, deepMerge for SavedVariables
+- **Core modules** — GamePad, Bindings, Specs, BlizzardFrames: removed mixin args (1-line changes each)
+- **UI modules** — Radial, HUD, VirtualCursor, HealMode: removed mixin args (1-line changes each)
+- **TOC** — Removed all libs\ entries and embeds.xml line
+- **Test layer** — spec/wow_mock.lua: removed ~200 lines of Ace3 mocks. spec/helpers.lua: rewrote to use CP._FireEvent(). All spec files updated with new bootstrap pattern.
+- **Files deleted** — CouchPotato/libs/ and CouchPotato/embeds.xml
+
+**Key design:**
+- Single `CP._mainFrame` handles all event registration
+- `_injectEventAPI()`, `_injectTimerAPI()`, `_injectPrintAPI()` apply to all modules
+- Timer return values: `{Cancel(), IsCancelled()}` for safe cancellation
+- CP._FireEvent() for test dispatch (snapshot iteration pattern)
+- Event callbacks stored as `[{obj, fn}, ...]` arrays per event name
+
+**Validation:**
+- ✅ All InCombatLockdown() guards intact (7/7 critical functions)
+- ✅ Event dispatch correctness verified
+- ✅ Timer cancellation mechanics verified
+- ✅ Module lifecycle flow correct
+- ✅ TOC file ordering correct
+- ✅ Zero Ace3 references remaining
+- ✅ All 70 tests passing
+
+**Verdict:** APPROVED — Ship it.

@@ -59,3 +59,5 @@ All 39 specs defined with 13 binding slots: primary/secondary/tertiary (face but
 
 **API Surface Preserved:**
 All production code unchanged — `CP:NewModule(name)`, `mod:RegisterEvent(event, handler)`, `mod:ScheduleTimer(fn, delay)`, `mod:Print(...)` work identically.
+
+📌 Team update (2026-03-02T01:45:35Z): Frameworkless migration complete. All Core, UI, and spec files migrated. Mal's review approved. 70/70 tests passing. Decision consolidated into decisions.md. — consolidated by Scribe

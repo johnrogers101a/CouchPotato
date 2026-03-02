@@ -75,3 +75,5 @@
 - Deleted entire CouchPotato/libs/ directory
 - Deleted CouchPotato/embeds.xml file
 - UI modules now have zero external library dependencies at declaration time
+
+📌 Team update (2026-03-02T01:45:35Z): Frameworkless migration complete. All Core, UI, and spec files migrated. Mal's review approved. 70/70 tests passing. Decision consolidated into decisions.md. — consolidated by Scribe

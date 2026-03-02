@@ -51,3 +51,5 @@
 - **Mock Cleanup**: Removed ~200 lines of LibStub/AceAddon/AceDB/AceEvent/AceConsole/AceTimer mocks from `spec/wow_mock.lua`; retained WoW API mocks (C_GamePad, C_AddOns, CreateFrame, etc.)
 - **Test Independence**: `loader_spec.lua` required zero changes as it never used AceAddon—only raw WoW APIs
 - **Global Additions**: Added `ReloadUI`, `SlashCmdList`, and `PowerBarColor` to wow_mock.lua for HUD.lua compatibility
+
+📌 Team update (2026-03-02T01:45:35Z): Frameworkless migration complete. All Core, UI, and spec files migrated. Mal's review approved. 70/70 tests passing. Decision consolidated into decisions.md. — consolidated by Scribe
