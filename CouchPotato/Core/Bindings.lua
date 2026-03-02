@@ -101,8 +101,12 @@ function Bindings:ApplyWheelBindings(wheelIdx)
     SetOverrideBindingClick(owner, true, "PADLSHOULDER", "CouchPotatoLSBtn", "LeftButton")
     SetOverrideBindingClick(owner, true, "PADRSHOULDER", "CouchPotatoRSBtn", "LeftButton")
 
-    -- Keep trigger bound (AnyDown opens, AnyUp confirms+closes)
+    -- Keep trigger bound (AnyDown opens, AnyUp cancels without executing)
     SetOverrideBindingClick(owner, true, "PADRTRIGGER", "CouchPotatoTriggerBtn", "LeftButton")
+
+    -- A (PAD1): confirm/execute selected slot; B (PAD2): cancel/close without executing
+    SetOverrideBindingClick(owner, true, "PAD1", "CouchPotatoConfirmBtn", "LeftButton")
+    SetOverrideBindingClick(owner, true, "PAD2", "CouchPotatoCloseBtn", "LeftButton")
 end
 
 -- Called by Radial when the wheel closes.

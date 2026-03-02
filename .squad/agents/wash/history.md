@@ -149,3 +149,22 @@ All production code unchanged — `CP:NewModule(name)`, `mod:RegisterEvent(event
 - **Bigger wheel:** 200px radius (was 120), 64px icons (was 52) — readable from couch distance
 - **Proven UX:** OPie's pattern battle-tested over 10+ years in WoW community
 
+### 2026-03-04: Universal A/B Button Semantics
+
+**What Changed:**
+- `PAD1` (A button) now maps to `CouchPotatoConfirmBtn` when wheel is open → executes the highlighted slot + closes wheel (`ConfirmAndClose()`).
+- `PAD2` (B button) now maps to `CouchPotatoCloseBtn` when wheel is open → cancels/closes without executing (`CloseWheel()`).
+- Right trigger **release** (`AnyUp`) now calls `CloseWheel()` instead of `ConfirmAndClose()`. Release = cancel, A press = confirm.
+- Added `Radial:CloseWheel()` — thin wrapper around `HideCurrentWheel()`, cancels without executing.
+- `CouchPotatoConfirmBtn` and `CouchPotatoCloseBtn` are created in `InitGamePadButtonHandling()` as plain Buttons with `RegisterForClicks("AnyDown")`.
+- `Bindings:ApplyWheelBindings()` now calls `SetOverrideBindingClick` for PAD1 and PAD2 (added alongside existing bumper and trigger overrides).
+- `ClearOverrideBindings` in `RestoreDirectBindings` already clears all overrides including PAD1/PAD2 — no extra code needed.
+- PAD3 and PAD4 remain unbound during wheel mode; stick still controls selection.
+
+**Key Design Points:**
+- PAD1/PAD2 are ONLY bound inside `ApplyWheelBindings` (called from `OpenWheel` → `ShowCurrentWheel`). They are never bound when wheel is closed — WoW's normal bindings take over.
+- `ClearOverrideBindings` on the owner frame clears PAD1 + PAD2 overrides automatically on both confirm and close paths (both call `HideCurrentWheel` → `RestoreDirectBindings`).
+- Trigger release no longer executes — this prevents accidental execution when releasing after deciding to cancel.
+
+**Test Results:** 94/94 tests passing (5 new tests added, 1 test description + 2 assertions updated).
+

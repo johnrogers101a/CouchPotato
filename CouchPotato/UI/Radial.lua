@@ -338,7 +338,13 @@ function Radial:OpenWheel()
     self:StartStickPolling()
 end
 
--- Confirms the current selection and closes the wheel (called on trigger release)
+-- Closes the wheel WITHOUT executing the highlighted slot (cancel — B button or trigger release)
+function Radial:CloseWheel()
+    if not self.isVisible then return end
+    self:HideCurrentWheel()
+end
+
+-- Confirms the current selection and closes the wheel (called by A button)
 function Radial:ConfirmAndClose()
     if not self.isVisible then return end
     
@@ -457,17 +463,31 @@ end
 function Radial:InitGamePadButtonHandling()
     if self.buttonFrame then return end
     
-    -- PADRTRIGGER: AnyDown = open wheel, AnyUp = confirm selection + close
+    -- PADRTRIGGER: AnyDown = open wheel, AnyUp = cancel/close without executing
     self.triggerBtn = CreateFrame("Button", "CouchPotatoTriggerBtn", UIParent)
     self.triggerBtn:RegisterForClicks("AnyDown", "AnyUp")
     self.triggerBtn:SetScript("OnClick", function(self, mouseButton, down)
         if down then
             Radial:OpenWheel()
         else
-            Radial:ConfirmAndClose()
+            Radial:CloseWheel()
         end
     end)
-    
+
+    -- PAD1 (A button): confirm/execute highlighted slot + close (bound only when wheel is open)
+    self.confirmBtn = CreateFrame("Button", "CouchPotatoConfirmBtn", UIParent)
+    self.confirmBtn:RegisterForClicks("AnyDown")
+    self.confirmBtn:SetScript("OnClick", function()
+        Radial:ConfirmAndClose()
+    end)
+
+    -- PAD2 (B button): cancel/close without executing (bound only when wheel is open)
+    self.closeBtn = CreateFrame("Button", "CouchPotatoCloseBtn", UIParent)
+    self.closeBtn:RegisterForClicks("AnyDown")
+    self.closeBtn:SetScript("OnClick", function()
+        Radial:CloseWheel()
+    end)
+
     -- PADLSHOULDER → cycle wheel left
     self.lsBtn = CreateFrame("Button", "CouchPotatoLSBtn", UIParent)
     self.lsBtn:RegisterForClicks("AnyDown")
