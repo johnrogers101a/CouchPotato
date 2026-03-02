@@ -168,6 +168,28 @@ frame:RegisterEvent("CVAR_UPDATE")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("ADDON_LOADED")
 
+-- Slash command: /cp  (always available — force-loads main addon if needed)
+SLASH_CP1 = "/cp"
+SLASH_CP2 = "/couchpotato"
+SlashCmdList["CP"] = function(msg)
+    msg = strtrim(strlower(msg or ""))
+
+    -- Force-load the main addon regardless of controller state
+    if not C_AddOns.IsAddOnLoaded(MAIN_ADDON) then
+        C_AddOns.EnableAddOn(MAIN_ADDON)
+        C_AddOns.LoadAddOn(MAIN_ADDON)
+    end
+
+    -- Delegate everything to the main addon's handler if it loaded
+    if CouchPotato and CouchPotato.ChatCommand then
+        -- Default: open config window
+        if msg == "" then msg = "config" end
+        CouchPotato:ChatCommand(msg)
+    else
+        print("|cffff6600CouchPotato:|r Failed to load main addon.")
+    end
+end
+
 -- Slash command: /cpload
 SLASH_CPLOAD1 = "/cpload"
 SlashCmdList["CPLOAD"] = function(msg)
