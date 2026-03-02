@@ -66,7 +66,17 @@ function helpers.assertNoBindings(owner)
     local count = 0
     for _ in pairs(bindings) do count = count + 1 end
     if count ~= 0 then
-        error("Expected no bindings but found " .. count, 2)
+        error("Expected no override bindings but found " .. count, 2)
+    end
+end
+
+-- Assert no permanent bindings exist (SetBinding layer)
+function helpers.assertNoPermanentBindings()
+    local bindings = _G._GetPermanentBindings()
+    local count = 0
+    for _ in pairs(bindings) do count = count + 1 end
+    if count ~= 0 then
+        error("Expected no permanent bindings but found " .. count, 2)
     end
 end
 
