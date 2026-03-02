@@ -341,20 +341,26 @@ function Radial:LoadDefaultLayouts()
     local layout = Specs:GetCurrentLayout()
     if not layout then return end
     
-    -- Map spec abilities to wheel 1 slots
+    -- Map spec abilities to wheel 1 cardinal + supporting slots.
+    -- Slots 1/4/7/10 are the four cardinal positions bound to face buttons:
+    --   slot 1  = PAD4 (Y/△ top)    → primary
+    --   slot 4  = PAD2 (B/○ right)  → interrupt
+    --   slot 7  = PAD1 (A/✕ bottom) → movement
+    --   slot 10 = PAD3 (X/□ left)   → tertiary   ← was missing, X did nothing
     local slotMapping = {
-        { type = "spell", value = layout.primary },
-        { type = "spell", value = layout.secondary },
-        { type = "spell", value = layout.tertiary },
-        { type = "spell", value = layout.interrupt },
-        { type = "spell", value = layout.majorCD },
-        { type = "spell", value = layout.defensiveCD },
-        { type = "spell", value = layout.movement },
-        { type = "spell", value = layout.dpadUp },
-        { type = "spell", value = layout.dpadDown },
+        [1]  = { type = "spell", value = layout.primary },
+        [2]  = { type = "spell", value = layout.secondary },
+        [3]  = { type = "spell", value = layout.majorCD },
+        [4]  = { type = "spell", value = layout.interrupt },
+        [5]  = { type = "spell", value = layout.defensiveCD },
+        [6]  = { type = "spell", value = layout.dpadUp },
+        [7]  = { type = "spell", value = layout.movement },
+        [8]  = { type = "spell", value = layout.dpadDown },
+        [9]  = { type = "spell", value = layout.secondary },
+        [10] = { type = "spell", value = layout.tertiary },
     }
     
-    for slotIdx, slotData in ipairs(slotMapping) do
+    for slotIdx, slotData in pairs(slotMapping) do
         if slotData.value then
             self:SetSlot(1, slotIdx, slotData.type, slotData.value)
         end

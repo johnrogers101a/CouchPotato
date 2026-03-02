@@ -423,6 +423,12 @@ _G.SetOverrideBindingMacro = function(owner, isPriority, key, macroName)
     SetOverrideBinding(owner, isPriority, key, "MACRO " .. tostring(macroName))
 end
 
+_G.SetOverrideBindingClick = function(owner, isPriority, key, buttonName, mouseButton)
+    if _inCombat then error("SetOverrideBindingClick called during combat lockdown!") end
+    if not _overrideBindings[owner] then _overrideBindings[owner] = {} end
+    _overrideBindings[owner][key] = "CLICK " .. tostring(buttonName) .. ":" .. tostring(mouseButton or "LeftButton")
+end
+
 _G.ClearOverrideBindings = function(owner)
     if _inCombat then error("ClearOverrideBindings called during combat lockdown!") end
     _overrideBindings[owner] = nil
@@ -431,6 +437,15 @@ end
 -- Test helpers
 _G._GetOverrideBindings = function(owner) return _overrideBindings[owner] or {} end
 _G._ResetBindings = function() _overrideBindings = {} end
+
+-- GetBindingByKey: returns the currently active binding action for a key.
+-- Searches override bindings first (mirrors WoW behaviour).
+_G.GetBindingByKey = function(key)
+    for _, bindings in pairs(_overrideBindings) do
+        if bindings[key] then return bindings[key] end
+    end
+    return nil
+end
 
 -- Spell/item info
 _G.GetSpellInfo = function(spellIDOrName)
