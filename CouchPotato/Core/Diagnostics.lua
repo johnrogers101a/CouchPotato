@@ -64,6 +64,106 @@ function Diagnostics:RunTests()
 
     CP:Print("── In-Game Diagnostics ──")
 
+    -- ── API Compatibility ─────────────────────────────────────────────────────
+    -- Verify every WoW global/namespace the addon actually calls still exists.
+    -- After any patch, FAIL here = Blizzard removed or renamed that API.
+    CP:Print("── API Compatibility ──")
+
+    -- C_GamePad namespace (Bindings.lua, GamePad.lua, Specs.lua, CouchPotato.lua)
+    tally(check("C_GamePad (namespace)",
+        type(C_GamePad) == "table",
+        type(C_GamePad)))
+    tally(check("C_GamePad.IsEnabled",
+        type(C_GamePad and C_GamePad.IsEnabled) == "function",
+        type(C_GamePad and C_GamePad.IsEnabled)))
+    tally(check("C_GamePad.GetActiveDeviceID",
+        type(C_GamePad and C_GamePad.GetActiveDeviceID) == "function",
+        type(C_GamePad and C_GamePad.GetActiveDeviceID)))
+    tally(check("C_GamePad.GetDeviceMappedState",
+        type(C_GamePad and C_GamePad.GetDeviceMappedState) == "function",
+        type(C_GamePad and C_GamePad.GetDeviceMappedState)))
+    tally(check("C_GamePad.SetLedColor",
+        type(C_GamePad and C_GamePad.SetLedColor) == "function",
+        type(C_GamePad and C_GamePad.SetLedColor)))
+    tally(check("C_GamePad.ClearLedColor",
+        type(C_GamePad and C_GamePad.ClearLedColor) == "function",
+        type(C_GamePad and C_GamePad.ClearLedColor)))
+
+    -- C_Spell namespace (Radial.lua)
+    tally(check("C_Spell (namespace)",
+        type(C_Spell) == "table",
+        type(C_Spell)))
+    tally(check("C_Spell.GetSpellInfo",
+        type(C_Spell and C_Spell.GetSpellInfo) == "function",
+        type(C_Spell and C_Spell.GetSpellInfo)))
+
+    -- C_AddOns namespace (localized in CouchPotato.lua; used by Loader)
+    tally(check("C_AddOns (namespace)",
+        type(C_AddOns) == "table",
+        type(C_AddOns)))
+    tally(check("C_AddOns.IsAddOnLoaded",
+        type(C_AddOns and C_AddOns.IsAddOnLoaded) == "function",
+        type(C_AddOns and C_AddOns.IsAddOnLoaded)))
+
+    -- C_Timer namespace (CouchPotato.lua ScheduleTimer / ScheduleRepeatingTimer, Radial.lua)
+    tally(check("C_Timer (namespace)",
+        type(C_Timer) == "table",
+        type(C_Timer)))
+    tally(check("C_Timer.After",
+        type(C_Timer and C_Timer.After) == "function",
+        type(C_Timer and C_Timer.After)))
+    tally(check("C_Timer.NewTicker",
+        type(C_Timer and C_Timer.NewTicker) == "function",
+        type(C_Timer and C_Timer.NewTicker)))
+
+    -- C_Item namespace (Radial.lua SetSlot item type)
+    tally(check("C_Item (namespace)",
+        type(C_Item) == "table",
+        type(C_Item)))
+    tally(check("C_Item.GetItemInfo",
+        type(C_Item and C_Item.GetItemInfo) == "function",
+        type(C_Item and C_Item.GetItemInfo)))
+
+    -- Override-binding globals (Bindings.lua)
+    tally(check("SetOverrideBinding",
+        type(SetOverrideBinding) == "function",
+        type(SetOverrideBinding)))
+    tally(check("SetOverrideBindingSpell",
+        type(SetOverrideBindingSpell) == "function",
+        type(SetOverrideBindingSpell)))
+    tally(check("SetOverrideBindingClick",
+        type(SetOverrideBindingClick) == "function",
+        type(SetOverrideBindingClick)))
+    tally(check("ClearOverrideBindings",
+        type(ClearOverrideBindings) == "function",
+        type(ClearOverrideBindings)))
+    tally(check("GetBindingAction",
+        type(GetBindingAction) == "function",
+        type(GetBindingAction)))
+
+    -- Core WoW globals used throughout the addon
+    tally(check("InCombatLockdown",
+        type(InCombatLockdown) == "function",
+        type(InCombatLockdown)))
+    tally(check("CreateFrame",
+        type(CreateFrame) == "function",
+        type(CreateFrame)))
+    tally(check("CreateColor",
+        type(CreateColor) == "function",
+        type(CreateColor)))
+    tally(check("GetSpecialization",
+        type(GetSpecialization) == "function",
+        type(GetSpecialization)))
+    tally(check("UnitClass",
+        type(UnitClass) == "function",
+        type(UnitClass)))
+    tally(check("UIFrameFadeIn",
+        type(UIFrameFadeIn) == "function",
+        type(UIFrameFadeIn)))
+    tally(check("ReloadUI",
+        type(ReloadUI) == "function",
+        type(ReloadUI)))
+
     -- 1. Gamepad CVar / C_GamePad state
     local gpEnabled = C_GamePad and C_GamePad.IsEnabled and C_GamePad.IsEnabled()
     tally(check("Gamepad enabled",
@@ -171,6 +271,35 @@ function Diagnostics:RunTests()
             ok, ok and "OK" or tostring(err)))
     else
         CP:Print("|cffffff00SKIP|r  SetOverrideBindingClick test (combat or no ownerFrame)")
+    end
+
+    -- ── Spell Validity ────────────────────────────────────────────────────────
+    -- For each spell in the current spec layout, verify C_Spell.GetSpellInfo
+    -- returns non-nil. A nil result means the spell was renamed or removed.
+    CP:Print("── Spell Validity ──")
+    do
+        local specsModule = CP:GetModule("Specs", true)
+        local spellLayout = specsModule and specsModule:GetCurrentLayout()
+        if not spellLayout then
+            CP:Print("|cffffff00SKIP|r  Spell validity (no layout for current spec)")
+        elseif not (C_Spell and C_Spell.GetSpellInfo) then
+            CP:Print("|cffffff00SKIP|r  Spell validity (C_Spell.GetSpellInfo unavailable)")
+        else
+            local spellFields = {
+                "primary", "secondary", "tertiary", "interrupt",
+                "majorCD", "defensiveCD", "movement", "dpadUp", "dpadDown",
+            }
+            for _, field in ipairs(spellFields) do
+                local spellName = spellLayout[field]
+                if spellName then
+                    local info = C_Spell.GetSpellInfo(spellName)
+                    tally(check(
+                        string.format("C_Spell.GetSpellInfo(%q)", spellName),
+                        info ~= nil,
+                        info and "found" or "nil — spell renamed or removed?"))
+                end
+            end
+        end
     end
 
     -- Summary
