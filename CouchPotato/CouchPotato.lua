@@ -296,10 +296,8 @@ end
 function CP:_OnAddonLoaded()
     _initDB()
 
-    -- Slash commands
-    self:RegisterChatCommand("cp",          "ChatCommand")
-    self:RegisterChatCommand("couchpotato", "ChatCommand")
-
+    -- /cp is registered in CouchPotato_Loader so it works even without a controller.
+    -- No re-registration needed here.
     self:DebugPrint("Initialized")
 end
 
