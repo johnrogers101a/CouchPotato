@@ -362,8 +362,12 @@ function CP:PLAYER_ENTERING_WORLD(event, isLogin, isReload)
     elseif isReload then
         self:DebugPrint("UI reloaded")
     end
+    -- Always re-enable modules and reapply bindings when entering the world.
+    -- GAME_PAD_ACTIVE_CHANGED fires on every mouse move; modules can end up
+    -- disabled even while the controller is connected.  This event fires once
+    -- per zone/login and is the right place to guarantee a clean state.
     if self:IsControllerActive() then
-        self:NotifyModules("CONTROLLER_STATE_UPDATE", true)
+        self:OnControllerActivated()
     end
 end
 

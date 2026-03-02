@@ -72,12 +72,13 @@ local function RestoreKeyboardMode()
 end
 
 -- Event: GAME_PAD_ACTIVE_CHANGED (Patch 9.1.5+)
--- Most reliable event; arg1 is boolean isActive
+-- Fires whenever WoW switches between gamepad/mouse/keyboard input modes —
+-- including on every mouse move or keypress.  Only use it to *load* the addon;
+-- never call RestoreKeyboardMode() here.  Real deactivation is handled by
+-- GAME_PAD_DISCONNECTED (physical unplug) and CVAR_UPDATE (user disables it).
 local function OnGamePadActiveChanged(isActive)
     if isActive then
         LoadCouchPotato()
-    else
-        RestoreKeyboardMode()
     end
 end
 
