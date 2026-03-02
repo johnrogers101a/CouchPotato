@@ -403,7 +403,9 @@ _G.InCombatLockdown = function() return _inCombat end
 _G._SetCombatState = function(state) _inCombat = state end
 
 -- Binding functions
-local _overrideBindings = {}  -- [owner][key] = action
+local _overrideBindings  = {}  -- [owner][key] = action   (SetOverrideBinding* layer)
+local _permanentBindings = {}  -- [key] = action           (SetBinding layer — persists)
+local _saveBindingsCalls = 0   -- count of SaveBindings() calls (test assertion helper)
 
 _G.SetOverrideBinding = function(owner, isPriority, key, action)
     if _inCombat then error("SetOverrideBinding called during combat lockdown!") end
@@ -434,24 +436,47 @@ _G.ClearOverrideBindings = function(owner)
     _overrideBindings[owner] = nil
 end
 
+-- Permanent binding layer (SetBinding — survives /reload when followed by SaveBindings)
+_G.SetBinding = function(key, command)
+    if _inCombat then error("SetBinding called during combat lockdown!") end
+    if command and command ~= "" then
+        _permanentBindings[key] = command
+    else
+        _permanentBindings[key] = nil
+    end
+    return true
+end
+
+_G.SaveBindings = function(setID)
+    _saveBindingsCalls = _saveBindingsCalls + 1
+end
+
+_G.GetCurrentBindingSet = function()
+    return 1  -- 1 = account-wide bindings
+end
+
 -- Test helpers
-_G._GetOverrideBindings = function(owner) return _overrideBindings[owner] or {} end
-_G._ResetBindings = function() _overrideBindings = {} end
+_G._GetOverrideBindings  = function(owner) return _overrideBindings[owner] or {} end
+_G._GetPermanentBindings = function() return _permanentBindings end
+_G._GetSaveBindingsCalls = function() return _saveBindingsCalls end
+_G._ResetBindings = function()
+    _overrideBindings  = {}
+    _permanentBindings = {}
+    _saveBindingsCalls = 0
+end
 
 -- GetBindingAction: returns the currently active binding action for a key.
--- checkOverride: if true, override bindings are checked (mirrors the real WoW API).
--- Without checkOverride only default (SetBinding/bindings.xml) bindings are consulted —
--- which in the mock means nil, since we have no default binding table.
--- This mirrors WoW: GetBindingAction("PAD4") returns "ACTIONBUTTON2" (the default);
--- GetBindingAction("PAD4", true) returns the override set by SetOverrideBindingSpell.
+-- checkOverride: if true, override bindings are checked first (mirrors the real WoW API).
+-- Without checkOverride only the permanent (SetBinding) layer is consulted.
+-- This mirrors WoW: GetBindingAction("PAD4") returns the permanent binding;
+-- GetBindingAction("PAD4", true) returns the override if one exists, else permanent.
 _G.GetBindingAction = function(key, checkOverride)
     if checkOverride then
         for _, bindings in pairs(_overrideBindings) do
             if bindings[key] then return bindings[key] end
         end
     end
-    -- No default binding table in mock — mirrors "no normal binding set for this key"
-    return nil
+    return _permanentBindings[key]
 end
 
 -- Spell/item info
@@ -536,6 +561,11 @@ _G.RegisterStateDriver = function(frame, state, macro) end
 _G.UnregisterStateDriver = function(frame, state) end
 
 _G.print = print  -- already exists in Lua
+
+-- Lua 5.1 compat: WoW uses unpack(), Lua 5.3+ has it as table.unpack()
+if not _G.unpack then
+    _G.unpack = table.unpack
+end
 
 -- bit library (available in WoW's Lua 5.1 environment)
 if not _G.bit then
