@@ -100,10 +100,7 @@ function GamePad:OnGamePadDisconnected(event, deviceID)
     end
 end
 
--- Event: PLAYER_REGEN_DISABLED (entering combat)
 function GamePad:OnCombatEnter()
-    self:Vibrate("COMBAT_ENTER")
-    
     -- Notify Radial module
     local Radial = CP:GetModule("Radial", true)
     if Radial and Radial.OnCombatStart then
@@ -124,28 +121,11 @@ function GamePad:OnSpellCast(event, unit, castGUID, spellID)
     
     -- Update LED for spell school
     local LED = CP:GetModule("LED", true)
-    if LED then
-        LED:SetColorForSpell(spellID)
-    end
-    
-    -- Brief ability use haptic
-    self:Vibrate("ABILITY_USE")
+    if LED then LED:SetColorForSpell(spellID) end
 end
 
--- Vibration system
-function GamePad:Vibrate(patternName)
-    if not CP.db or not CP.db.profile then return end
-    if not CP.db.profile.vibrationEnabled then return end
-    if not C_GamePad.IsEnabled() then return end
-    
-    local p = VIBRATION_PATTERNS[patternName]
-    if not p then return end
-    
-    C_GamePad.SetVibration(p.vibeType, p.intensity)
-    self:ScheduleTimer(function()
-        C_GamePad.StopVibration()
-    end, p.duration)
-end
+-- Vibration disabled (saves controller battery)
+function GamePad:Vibrate(patternName) end
 
 -- Trigger axis reading
 function GamePad:GetTriggerValues()

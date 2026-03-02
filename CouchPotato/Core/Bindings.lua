@@ -1,34 +1,48 @@
 -- CouchPotato/Core/Bindings.lua
--- SetOverrideBinding system: controller layout applied non-destructively
--- Keyboard bindings are NEVER modified; override bindings are cleared on disconnect
+-- SetOverrideBinding system: controller layout applied non-destructively.
+-- Override bindings layer on TOP of existing bindings — ClearOverrideBindings
+-- restores originals automatically (WoW's built-in save/restore).
+--
+-- TWO MODES:
+--   Direct mode (wheel closed): face buttons → spells from spec layout
+--   Wheel mode  (wheel open):   face buttons → click radial slot SecureActionButtons
+--
+-- Face button → slot mapping (matches physical position on controller):
+--   PAD4 (Y/△) → slot 1  (top,    12 o'clock)
+--   PAD2 (B/○) → slot 4  (right,   3 o'clock)
+--   PAD1 (A/✕) → slot 7  (bottom,  6 o'clock)
+--   PAD3 (X/□) → slot 10 (left,    9 o'clock)
+--
 -- Patch 12.0.1 (Interface 120001)
 
 local CP = CouchPotato
 local Bindings = CP:NewModule("Bindings")
 
--- State
-Bindings.ownerFrame = nil
+Bindings.ownerFrame   = nil
 Bindings.pendingApply = false
 Bindings.pendingClear = false
-Bindings.ltHoldTimer = nil
-Bindings.ltHeld = false
+Bindings.wheelOpen    = false
+
+-- Which slot each face button maps to (by cardinal position in the 12-slot wheel)
+Bindings.FACE_TO_SLOT = {
+    PAD4 = 1,   -- Y / △ = top
+    PAD2 = 4,   -- B / ○ = right
+    PAD1 = 7,   -- A / ✕ = bottom
+    PAD3 = 10,  -- X / □ = left
+}
 
 function Bindings:OnEnable()
-    -- Create owner frame for bindings
     self.ownerFrame = CreateFrame("Frame", "CouchPotatoBindingOwner", UIParent)
-    
-    -- Register events
-    self:RegisterEvent("GAME_PAD_ACTIVE_CHANGED", "OnGamePadActiveChanged")
-    self:RegisterEvent("GAME_PAD_CONNECTED", "OnGamePadConnected")
-    self:RegisterEvent("GAME_PAD_DISCONNECTED", "OnGamePadDisconnected")
-    self:RegisterEvent("CVAR_UPDATE", "OnCVarUpdate")
-    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatLeave")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
-    
-    -- Apply bindings if controller is active
+    self:RegisterEvent("GAME_PAD_ACTIVE_CHANGED",     "OnGamePadActiveChanged")
+    self:RegisterEvent("GAME_PAD_CONNECTED",          "OnGamePadConnected")
+    self:RegisterEvent("GAME_PAD_DISCONNECTED",       "OnGamePadDisconnected")
+    self:RegisterEvent("CVAR_UPDATE",                 "OnCVarUpdate")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED",        "OnCombatLeave")
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED","OnSpecChanged")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD",       "OnEnteringWorld")
+
     if C_GamePad.IsEnabled() then
-        self:ApplyControllerBindings()
+        self:ApplyDirectBindings()
     end
 end
 
@@ -39,149 +53,115 @@ function Bindings:OnDisable()
     end
 end
 
--- Event: GAME_PAD_ACTIVE_CHANGED
+-- ── Direct mode ─────────────────────────────────────────────────────────────
+-- Face buttons cast spells directly; shoulders still cycle wheel.
+function Bindings:ApplyDirectBindings()
+    if InCombatLockdown() then
+        self.pendingApply = true
+        return
+    end
+
+    local Specs = CP:GetModule("Specs", true)
+    local layout = Specs and Specs:GetCurrentLayout()
+    local owner  = self.ownerFrame
+
+    ClearOverrideBindings(owner)
+    self.wheelOpen = false
+
+    -- Face buttons → primary abilities from spec layout
+    if layout then
+        if layout.primary   then SetOverrideBindingSpell(owner, true, "PAD4", layout.primary)   end  -- Y
+        if layout.secondary then SetOverrideBindingSpell(owner, true, "PAD2", layout.secondary)  end  -- B
+        if layout.tertiary  then SetOverrideBindingSpell(owner, true, "PAD1", layout.tertiary)   end  -- A
+        if layout.interrupt then SetOverrideBindingSpell(owner, true, "PAD3", layout.interrupt)  end  -- X
+    end
+
+    -- System defaults
+    SetOverrideBinding(owner, true, "PADLSTICK", "TOGGLEAUTORUN")
+    SetOverrideBinding(owner, true, "PADRSTICK", "TARGETNEAREST")
+    SetOverrideBinding(owner, true, "PADBACK",   "TOGGLEWORLDMAP")
+
+    if layout then
+        CP:Print(string.format("Applied %s bindings.", layout.specName or "controller"))
+    end
+end
+
+-- ── Wheel mode ───────────────────────────────────────────────────────────────
+-- Called by Radial when the wheel opens. Face buttons click the SecureActionButtons.
+function Bindings:ApplyWheelBindings(wheelIdx)
+    if InCombatLockdown() then return end
+
+    local owner = self.ownerFrame
+    ClearOverrideBindings(owner)
+    self.wheelOpen = true
+
+    -- Map face buttons to the four cardinal slot buttons on the active wheel
+    for pad, slotIdx in pairs(self.FACE_TO_SLOT) do
+        local btnName = string.format("CouchPotatoWheel%dSlot%d", wheelIdx, slotIdx)
+        SetOverrideBindingClick(owner, true, pad, btnName, "LeftButton")
+    end
+
+    -- Keep system bindings
+    SetOverrideBinding(owner, true, "PADLSTICK", "TOGGLEAUTORUN")
+    SetOverrideBinding(owner, true, "PADRSTICK", "TARGETNEAREST")
+    SetOverrideBinding(owner, true, "PADBACK",   "TOGGLEWORLDMAP")
+end
+
+-- Called by Radial when the wheel closes.
+function Bindings:RestoreDirectBindings()
+    self:ApplyDirectBindings()
+end
+
+-- ── Event handlers ───────────────────────────────────────────────────────────
 function Bindings:OnGamePadActiveChanged(event, isActive)
-    if isActive then
-        self:ApplyControllerBindings()
-    else
-        self:ClearControllerBindings()
-    end
+    if isActive then self:ApplyDirectBindings()
+    else             self:ClearControllerBindings() end
 end
 
--- Event: GAME_PAD_CONNECTED
 function Bindings:OnGamePadConnected()
-    if C_GamePad.IsEnabled() then
-        self:ApplyControllerBindings()
-    end
+    if C_GamePad.IsEnabled() then self:ApplyDirectBindings() end
 end
 
--- Event: GAME_PAD_DISCONNECTED
 function Bindings:OnGamePadDisconnected()
     self:ClearControllerBindings()
 end
 
--- Event: CVAR_UPDATE
 function Bindings:OnCVarUpdate(event, cvarName, cvarValue)
     if cvarName ~= "GamePadEnable" then return end
-    
-    if cvarValue == "1" then
-        self:ApplyControllerBindings()
-    elseif cvarValue == "0" then
-        self:ClearControllerBindings()
-    end
+    if cvarValue == "1" then self:ApplyDirectBindings()
+    else                     self:ClearControllerBindings() end
 end
 
--- Event: PLAYER_REGEN_ENABLED (leaving combat)
 function Bindings:OnCombatLeave()
     if self.pendingApply then
         self.pendingApply = false
-        self:ApplyControllerBindings()
+        self:ApplyDirectBindings()
     elseif self.pendingClear then
         self.pendingClear = false
         self:ClearControllerBindings()
     end
 end
 
--- Event: PLAYER_SPECIALIZATION_CHANGED
 function Bindings:OnSpecChanged()
-    if C_GamePad.IsEnabled() then
-        self:ApplyControllerBindings()
+    if C_GamePad.IsEnabled() and not self.wheelOpen then
+        self:ApplyDirectBindings()
     end
 end
 
--- Event: PLAYER_ENTERING_WORLD
 function Bindings:OnEnteringWorld()
-    if C_GamePad.IsEnabled() then
-        self:ApplyControllerBindings()
-    end
+    if C_GamePad.IsEnabled() then self:ApplyDirectBindings() end
 end
 
--- Apply controller bindings for current spec
-function Bindings:ApplyControllerBindings()
-    if InCombatLockdown() then
-        self.pendingApply = true
-        return
-    end
-    
-    local Specs = CP:GetModule("Specs", true)
-    if not Specs then return end
-    
-    local layout = Specs:GetCurrentLayout()
-    if not layout then return end
-    
-    local owner = self.ownerFrame
-    ClearOverrideBindings(owner)
-    
-    -- RT/LT are reserved for the Radial wheel (RT = open wheel, LT = modifier layer).
-    -- Do NOT bind PADRTRIGGER or PADLTRIGGER here — the Radial module owns those.
-    -- PADRSHOULDER / PADLSHOULDER cycle wheels while the radial is open.
-    -- Face buttons activate the highlighted radial slot.
-    -- D-pad: used for targeting / navigation (VirtualCursor module).
-    -- System bindings
-    SetOverrideBinding(owner, true, "PADLSTICK", "TOGGLEAUTORUN")
-    SetOverrideBinding(owner, true, "PADRSTICK", "TARGETNEAREST")
-    SetOverrideBinding(owner, true, "PADBACK", "TOGGLEWORLDMAP")
-    
-    CP:Print(string.format("Applied %s bindings.", layout.specName or "controller"))
-end
-
--- Clear controller bindings (restore keyboard)
 function Bindings:ClearControllerBindings()
     if InCombatLockdown() then
         self.pendingClear = true
         return
     end
-    
     if self.ownerFrame then
         ClearOverrideBindings(self.ownerFrame)
         CP:Print("Keyboard bindings restored.")
     end
 end
 
--- LT hold modifier layer
-function Bindings:OnLTDown()
-    self.ltHeld = false
-    self.ltHoldTimer = C_Timer.After(0.2, function()
-        self.ltHeld = true
-        self:ApplyModifierLayer()
-    end)
-end
-
-function Bindings:OnLTUp()
-    if not self.ltHeld then
-        -- Tap: movement spell fires via normal binding
-    else
-        self.ltHeld = false
-        self:ClearModifierLayer()
-    end
-end
-
-function Bindings:ApplyModifierLayer()
-    if InCombatLockdown() then return end
-    
-    local Specs = CP:GetModule("Specs", true)
-    if not Specs then return end
-    
-    local layout = Specs:GetCurrentLayout()
-    if not layout or not layout.modLayer then return end
-    
-    local owner = self.ownerFrame
-    if layout.modLayer.dpadUp then
-        SetOverrideBindingSpell(owner, true, "PADDUP", layout.modLayer.dpadUp)
-    end
-    if layout.modLayer.dpadDown then
-        SetOverrideBindingSpell(owner, true, "PADDDOWN", layout.modLayer.dpadDown)
-    end
-    if layout.modLayer.dpadLeft then
-        SetOverrideBindingSpell(owner, true, "PADDLEFT", layout.modLayer.dpadLeft)
-    end
-    if layout.modLayer.dpadRight then
-        SetOverrideBindingSpell(owner, true, "PADDRIGHT", layout.modLayer.dpadRight)
-    end
-end
-
-function Bindings:ClearModifierLayer()
-    if not InCombatLockdown() then
-        self:ApplyControllerBindings()
-    end
-end
+-- Legacy / compat
+function Bindings:ApplyControllerBindings() self:ApplyDirectBindings() end

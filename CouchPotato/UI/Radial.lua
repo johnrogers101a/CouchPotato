@@ -103,10 +103,11 @@ function Radial:CreateWheelFrames()
             border:Hide()
             btn.border = border
             
-            -- Keybind label (shows which key activates this slot)
+            -- Keybind label: show controller button name for the 4 cardinal slots
             local keybindText = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
             keybindText:SetPoint("TOPLEFT", btn, "TOPLEFT", 2, -2)
-            keybindText:SetText("")
+            local SLOT_LABELS = { [1]="Y", [4]="B", [7]="A", [10]="X" }
+            keybindText:SetText(SLOT_LABELS[slotIdx] or "")
             btn.keybindText = keybindText
             
             -- Slot number indicator
@@ -173,53 +174,47 @@ end
 function Radial:ShowCurrentWheel()
     local wheel = self.wheels[self.currentWheel]
     if not wheel then return end
-    
-    -- Hide other wheels
+
     for i = 1, MAX_WHEELS do
         if i ~= self.currentWheel and self.wheels[i] then
             self.wheels[i]:Hide()
         end
     end
-    
+
     wheel:Show()
     wheel:SetAlpha(0)
-    
-    -- Fade in using UIFrameFadeIn if available, else instant
     local alpha = (CP.db and CP.db.profile and CP.db.profile.radialAlpha) or 0.9
     if UIFrameFadeIn then
         UIFrameFadeIn(wheel, WHEEL_FADE_TIME, 0, alpha)
     else
         wheel:SetAlpha(alpha)
     end
-    
+
     self.isVisible = true
-    
-    -- Notify GamePad module to vibrate
-    local GamePad = CP:GetModule("GamePad")
-    if GamePad then GamePad:Vibrate("MENU_OPEN") end
+
+    -- Tell Bindings to remap face buttons to this wheel's cardinal slots
+    local Bindings = CP:GetModule("Bindings", true)
+    if Bindings then Bindings:ApplyWheelBindings(self.currentWheel) end
 end
 
 function Radial:HideCurrentWheel()
     for i = 1, MAX_WHEELS do
-        if self.wheels[i] then
-            self.wheels[i]:Hide()
-        end
+        if self.wheels[i] then self.wheels[i]:Hide() end
     end
     self.isVisible = false
-    self.isLocked = false
+    self.isLocked  = false
 
-    local GamePad = CP:GetModule("GamePad")
-    if GamePad then GamePad:Vibrate("MENU_CLOSE") end
+    -- Restore direct spell bindings on face buttons
+    local Bindings = CP:GetModule("Bindings", true)
+    if Bindings then Bindings:RestoreDirectBindings() end
 end
 
 function Radial:CycleWheelNext()
     self.currentWheel = self.currentWheel % MAX_WHEELS + 1
     self:UpdateWheelDots()
     if self.isVisible then
-        self:ShowCurrentWheel()
+        self:ShowCurrentWheel()  -- also re-applies wheel bindings for new wheel
     end
-    local GamePad = CP:GetModule("GamePad")
-    if GamePad then GamePad:Vibrate("WHEEL_CYCLE") end
 end
 
 function Radial:CycleWheelPrev()
@@ -228,50 +223,33 @@ function Radial:CycleWheelPrev()
     if self.isVisible then
         self:ShowCurrentWheel()
     end
-    local GamePad = CP:GetModule("GamePad")
-    if GamePad then GamePad:Vibrate("WHEEL_CYCLE") end
 end
 
--- Peek: show wheel briefly (light trigger pull) - kept for potential future use
+-- Peek kept for API completeness
 function Radial:PeekWheel()
     if self.isLocked then return end
     self:ShowCurrentWheel()
     C_Timer.After(PEEK_TIMEOUT, function()
-        if not Radial.isLocked then
-            Radial:HideCurrentWheel()
-        end
+        if not Radial.isLocked then Radial:HideCurrentWheel() end
     end)
-    local GamePad = CP:GetModule("GamePad")
-    if GamePad then GamePad:Vibrate("WHEEL_PEEK") end
 end
 
--- Lock: keep wheel open (hard trigger pull)
+-- Lock: keep wheel open (RT held)
 function Radial:LockWheel()
     self.isLocked = true
-    if not self.isVisible then
-        self:ShowCurrentWheel()
-    end
-    if self.peekTimer then
-        self:CancelTimer(self.peekTimer)
-        self.peekTimer = nil
-    end
-    local GamePad = CP:GetModule("GamePad")
-    if GamePad then GamePad:Vibrate("WHEEL_LOCK") end
+    if not self.isVisible then self:ShowCurrentWheel() end
 end
 
 function Radial:UnlockWheel()
     self.isLocked = false
-    C_Timer.After(0.3, function()
-        if not Radial.isLocked then
-            Radial:HideCurrentWheel()
-        end
+    -- Short delay so the spell fires before the wheel disappears
+    C_Timer.After(0.15, function()
+        if not Radial.isLocked then Radial:HideCurrentWheel() end
     end)
 end
 
 function Radial:InitTriggerDetection()
-    -- Intentionally empty: trigger open/close is handled via OnGamePadButtonDown/Up
-    -- in InitGamePadButtonHandling below, which is simpler and more reliable than
-    -- axis polling, and avoids GetDeviceMappedState field-name ambiguity.
+    -- handled in InitGamePadButtonHandling
 end
 
 function Radial:InitGamePadButtonHandling()
