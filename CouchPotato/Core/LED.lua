@@ -78,19 +78,9 @@ end
 
 -- Set color based on spell ID
 function LED:SetColorForSpell(spellID)
-    -- Try new API first (Patch 10.0+)
-    if C_Spell and C_Spell.GetSpellInfo then
-        local spellInfo = C_Spell.GetSpellInfo(spellID)
-        if spellInfo and spellInfo.schoolMask then
-            self:SetColorForSchool(spellInfo.schoolMask)
-            return
-        end
-    end
-    
-    -- Fallback to older API
-    local name, _, _, _, _, _, schoolMask = GetSpellInfo(spellID)
-    if schoolMask then
-        self:SetColorForSchool(schoolMask)
+    local spellInfo = C_Spell.GetSpellInfo(spellID)
+    if spellInfo and spellInfo.schoolMask then
+        self:SetColorForSchool(spellInfo.schoolMask)
     end
 end
 

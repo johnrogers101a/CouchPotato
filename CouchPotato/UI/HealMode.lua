@@ -216,7 +216,8 @@ function HealMode:UpdateSpellPrompts()
     for i, spellName in ipairs(prompts) do
         local prompt = self.spellPrompts[i]
         if prompt and spellName then
-            local _, _, icon = GetSpellInfo(spellName)
+            local spellInfo = C_Spell.GetSpellInfo(spellName)
+            local icon = spellInfo and spellInfo.iconID
             if icon then
                 prompt.icon:SetTexture(icon)
             end

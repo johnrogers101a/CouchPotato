@@ -347,15 +347,15 @@ function Radial:SetSlot(wheelIdx, slotIdx, actionType, actionValue)
     
     if actionType == "spell" then
         btn:SetAttribute("spell", actionValue)
-        -- Update icon
-        local spellTexture = select(3, GetSpellInfo(actionValue))
-        if spellTexture then
-            btn.icon:SetTexture(spellTexture)
-        end
+        -- Update icon (C_Spell.GetSpellInfo replaces GetSpellInfo in Patch 10.2+)
+        local spellInfo = C_Spell.GetSpellInfo(actionValue)
+        local iconID = spellInfo and spellInfo.iconID
+        btn.icon:SetTexture(iconID or "Interface\\Icons\\INV_Misc_QuestionMark")
     elseif actionType == "item" then
         btn:SetAttribute("item", actionValue)
-        local _, _, _, _, _, _, _, _, _, itemTexture = GetItemInfo(actionValue)
-        if itemTexture then btn.icon:SetTexture(itemTexture) end
+        local itemInfo = C_Item.GetItemInfo(actionValue)
+        local itemTexture = itemInfo and itemInfo.iconFileDataID
+        btn.icon:SetTexture(itemTexture or "Interface\\Icons\\INV_Misc_QuestionMark")
     elseif actionType == "macro" then
         btn:SetAttribute("macro", actionValue)
     elseif actionType == "empty" then

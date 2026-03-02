@@ -460,6 +460,12 @@ _G.GetItemInfo = function(itemID)
     return nil  -- most tests don't need item info
 end
 
+_G.C_Item = {
+    GetItemInfo = function(itemID)
+        return nil  -- most tests don't need item info
+    end,
+}
+
 _G.IsSpellKnown = function(spellID) return true end  -- assume player knows all spells in tests
 
 -- Other WoW globals
