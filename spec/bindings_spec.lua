@@ -133,13 +133,13 @@ describe("Bindings Module", function()
         end)
     end)
 
-    describe("GetBindingByKey reflects override bindings", function()
+    describe("GetBindingAction reflects override bindings", function()
         it("returns SPELL binding after ApplyDirectBindings", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyDirectBindings()
 
             -- Fire Mage primary = "Fireball"
-            local binding = GetBindingByKey("PAD4")
+            local binding = GetBindingAction("PAD4")
             assert.is_not_nil(binding, "PAD4 should have a binding")
             assert.equals("SPELL Fireball", binding)
         end)
@@ -147,7 +147,7 @@ describe("Bindings Module", function()
         it("returns CLICK binding after ApplyWheelBindings", function()
             Bindings:ApplyWheelBindings(1)
 
-            local binding = GetBindingByKey("PAD4")
+            local binding = GetBindingAction("PAD4")
             assert.is_not_nil(binding)
             assert.is_truthy(binding:find("^CLICK "),
                 "PAD4 in wheel mode should be a CLICK binding")
@@ -158,7 +158,7 @@ describe("Bindings Module", function()
             Bindings:ApplyDirectBindings()
             Bindings:ClearControllerBindings()
 
-            assert.is_nil(GetBindingByKey("PAD4"))
+            assert.is_nil(GetBindingAction("PAD4"))
         end)
     end)
 

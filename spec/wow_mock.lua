@@ -438,9 +438,10 @@ end
 _G._GetOverrideBindings = function(owner) return _overrideBindings[owner] or {} end
 _G._ResetBindings = function() _overrideBindings = {} end
 
--- GetBindingByKey: returns the currently active binding action for a key.
+-- GetBindingAction: returns the currently active binding action for a key.
 -- Searches override bindings first (mirrors WoW behaviour).
-_G.GetBindingByKey = function(key)
+-- This is the real WoW API; GetBindingByKey does NOT exist in the game client.
+_G.GetBindingAction = function(key)
     for _, bindings in pairs(_overrideBindings) do
         if bindings[key] then return bindings[key] end
     end

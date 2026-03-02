@@ -93,7 +93,7 @@ function Diagnostics:RunTests()
         layout and layout.specName or "nil — no spec / layout undefined"))
 
     -- 6–9. What WoW ACTUALLY has bound after SetOverrideBindingSpell
-    --      GetBindingByKey is the ground truth: if it's wrong, bindings won't fire.
+    --      GetBindingAction is the ground truth: if it's wrong, bindings won't fire.
     if layout then
         local faceMap = {
             { pad = "PAD4", field = "primary",   spell = layout.primary   },
@@ -102,10 +102,10 @@ function Diagnostics:RunTests()
             { pad = "PAD3", field = "interrupt",  spell = layout.interrupt },
         }
         for _, entry in ipairs(faceMap) do
-            local actual   = GetBindingByKey(entry.pad)
+            local actual   = GetBindingAction(entry.pad)
             local expected = entry.spell and ("SPELL " .. entry.spell)
             local detail   = string.format(
-                "GetBindingByKey=%q  expected=%q",
+                "GetBindingAction=%q  expected=%q",
                 tostring(actual), tostring(expected))
             tally(check(
                 string.format("%s (%s) → %q",
@@ -190,9 +190,9 @@ function Diagnostics:DumpDebug()
                  C_GamePad.GetActiveDeviceID())))
 
     -- What WoW actually has bound for every PAD key
-    CP:Print("PAD key bindings (GetBindingByKey):")
+    CP:Print("PAD key bindings (GetBindingAction):")
     for _, key in ipairs(ALL_PAD_KEYS) do
-        local b = GetBindingByKey(key)
+        local b = GetBindingAction(key)
         if b then
             CP:Print(string.format("  %-18s = %s", key, b))
         end
