@@ -1,14 +1,18 @@
 -- CouchPotato/Core/Bindings.lua
--- Persistent binding system using SetBinding+SaveBindings (ConsolePort pattern).
--- Override bindings are ONLY used for the transient wheel-open state.
+-- Override-binding system for gamepad face buttons.
+-- Uses SetOverrideBindingSpell (not SetBinding) for direct mode.
+--
+-- WHY NOT SetBinding + SaveBindings?
+--   WoW's built-in gamepad preset system fires UPDATE_BINDINGS on every login
+--   and re-applies its preset, overwriting any SetBinding calls for PAD keys.
+--   SetOverrideBindingSpell sits in the OVERRIDE layer which has higher priority
+--   than the preset / permanent layer and is never clobbered by presets.
+--   Bindings are session-only but reapplied on every PLAYER_ENTERING_WORLD,
+--   GAME_PAD_ACTIVE_CHANGED, etc. — so they are always in effect when needed.
 --
 -- TWO MODES:
---   Direct mode (wheel closed): face buttons → permanent SetBinding spells
---   Wheel mode  (wheel open):   face buttons → transient SetOverrideBindingClick
---
--- Why SetBinding instead of SetOverrideBindingSpell for direct mode:
---   SetOverrideBindingSpell is session-only; bindings vanish on /reload.
---   SetBinding + SaveBindings writes to disk and survives reloads and restarts.
+--   Direct mode (wheel closed): face buttons → SetOverrideBindingSpell
+--   Wheel mode  (wheel open):   face buttons → SetOverrideBindingClick → SecureActionButton
 --
 -- Face button → slot mapping (matches physical position on controller):
 --   PAD4 (Y/△) → slot 1  (top,    12 o'clock)
@@ -25,11 +29,7 @@ Bindings.ownerFrame     = nil
 Bindings.pendingApply   = false
 Bindings.pendingClear   = false
 Bindings.wheelOpen      = false
-Bindings._savedBindings = {}   -- PAD1-4 permanent bindings captured before first apply
 Bindings._applyTimer    = nil  -- debounce handle for UPDATE_BINDINGS
-
--- Face buttons managed via permanent SetBinding (direct mode only)
-local DIRECT_PADS = { "PAD4", "PAD2", "PAD1", "PAD3" }
 
 -- Which slot each face button maps to (by cardinal position in the 12-slot wheel)
 Bindings.FACE_TO_SLOT = {
@@ -63,15 +63,6 @@ end
 function Bindings:OnDisable()
     self:UnregisterAllEvents()
     if not InCombatLockdown() then
-        -- Restore original permanent bindings before we leave
-        if next(self._savedBindings) then
-            for _, pad in ipairs(DIRECT_PADS) do
-                local action = self._savedBindings[pad]
-                SetBinding(pad, (action and action ~= "") and action or nil)
-            end
-            SaveBindings(GetCurrentBindingSet())
-            self._savedBindings = {}
-        end
         if self.ownerFrame then
             ClearOverrideBindings(self.ownerFrame)
         end
@@ -79,7 +70,9 @@ function Bindings:OnDisable()
 end
 
 -- ── Direct mode ──────────────────────────────────────────────────────────────
--- Face buttons cast spells via permanent SetBinding; system keys via overrides.
+-- Face buttons cast spells via SetOverrideBindingSpell.
+-- Override bindings have higher priority than WoW's gamepad preset and are
+-- never clobbered when UPDATE_BINDINGS fires on login or preset change.
 function Bindings:ApplyDirectBindings()
     if InCombatLockdown() then
         self.pendingApply = true
@@ -89,27 +82,30 @@ function Bindings:ApplyDirectBindings()
     local Specs  = CP:GetModule("Specs", true)
     local layout = Specs and Specs:GetCurrentLayout()
 
-    -- Snapshot originals once, before we overwrite anything
-    if not next(self._savedBindings) then
-        for _, pad in ipairs(DIRECT_PADS) do
-            self._savedBindings[pad] = GetBindingAction(pad, false)  -- permanent layer only
-        end
-    end
-
-    -- Clear any transient wheel-mode overrides
+    -- Clear any existing overrides (wheel-mode click bindings or a previous
+    -- direct-mode call) so we start from a clean state.
     ClearOverrideBindings(self.ownerFrame)
     self.wheelOpen = false
 
-    -- Face buttons → spec spells via permanent bindings (survive /reload)
+    -- Face buttons → spec spells via override bindings.
+    -- isPriority=false: wheel-mode uses isPriority=true and takes precedence
+    -- when the wheel is open, then direct-mode re-applies here on wheel close.
     if layout then
-        if layout.primary   then SetBinding("PAD4", "SPELL " .. layout.primary)   end  -- Y
-        if layout.secondary then SetBinding("PAD2", "SPELL " .. layout.secondary) end  -- B
-        if layout.tertiary  then SetBinding("PAD1", "SPELL " .. layout.tertiary)  end  -- A
-        if layout.interrupt then SetBinding("PAD3", "SPELL " .. layout.interrupt) end  -- X
-        SaveBindings(GetCurrentBindingSet())
+        if layout.primary   then
+            SetOverrideBindingSpell(self.ownerFrame, false, "PAD4", layout.primary)   -- Y / △
+        end
+        if layout.secondary then
+            SetOverrideBindingSpell(self.ownerFrame, false, "PAD2", layout.secondary) -- B / ○
+        end
+        if layout.tertiary  then
+            SetOverrideBindingSpell(self.ownerFrame, false, "PAD1", layout.tertiary)  -- A / ✕
+        end
+        if layout.interrupt then
+            SetOverrideBindingSpell(self.ownerFrame, false, "PAD3", layout.interrupt) -- X / □
+        end
     end
 
-    -- System defaults stay as transient overrides (WoW already has sane defaults here)
+    -- System defaults as transient overrides (WoW already has sane defaults here)
     SetOverrideBinding(self.ownerFrame, true, "PADLSTICK", "TOGGLEAUTORUN")
     SetOverrideBinding(self.ownerFrame, true, "PADRSTICK", "TARGETNEAREST")
     SetOverrideBinding(self.ownerFrame, true, "PADBACK",   "TOGGLEWORLDMAP")
@@ -195,13 +191,8 @@ function Bindings:ClearControllerBindings()
         self.pendingClear = true
         return
     end
-    -- Restore whatever WoW had in the permanent layer before we touched it
-    for _, pad in ipairs(DIRECT_PADS) do
-        local action = self._savedBindings[pad]
-        SetBinding(pad, (action and action ~= "") and action or nil)
-    end
-    SaveBindings(GetCurrentBindingSet())
-    self._savedBindings = {}
+    -- Clear all override bindings set by this frame (both direct and wheel mode).
+    -- The permanent-layer bindings (WoW's gamepad preset) are untouched.
     if self.ownerFrame then
         ClearOverrideBindings(self.ownerFrame)
     end
