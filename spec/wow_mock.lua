@@ -57,10 +57,13 @@ local function createMockFrame(frameType, name, parent, template)
     function frame:IsVisible() return self._shown end
     function frame:SetAlpha(a) self._alpha = a end
     function frame:GetAlpha() return self._alpha end
+    function frame:SetScale(s) self._scale = s end
+    function frame:GetScale() return self._scale or 1.0 end
     function frame:SetFrameStrata(s) self._strata = s end
     function frame:SetFrameLevel(l) self._level = l end
     function frame:EnableGamePadButton(e) self._gpEnabled = e end
     function frame:EnableGamePadStick(e) self._stickEnabled = e end
+    function frame:SetPropagateKeyboardInput(p) self._propagateKeyboard = p end
     function frame:RegisterForClicks(...) end
     function frame:GetName() return self._name end
     
@@ -136,6 +139,8 @@ local function createMockFrame(frameType, name, parent, template)
         function fs:GetText() return self._text end
         function fs:SetTextColor(r,g,b,a) end
         function fs:SetFont(font, size, flags) end
+        function fs:SetWidth(w) self._width = w end
+        function fs:SetJustifyH(j) end
         function fs:Show() self._shown = true end
         function fs:Hide() self._shown = false end
         function fs:IsShown() return self._shown end

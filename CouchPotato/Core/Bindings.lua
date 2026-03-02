@@ -1,18 +1,21 @@
 -- CouchPotato/Core/Bindings.lua
--- Override-binding system for gamepad face buttons.
--- Uses SetOverrideBindingSpell (not SetBinding) for direct mode.
+-- Minimal override-binding system for CouchPotato wheel trigger.
 --
--- WHY NOT SetBinding + SaveBindings?
---   WoW's built-in gamepad preset system fires UPDATE_BINDINGS on every login
---   and re-applies its preset, overwriting any SetBinding calls for PAD keys.
---   SetOverrideBindingSpell sits in the OVERRIDE layer which has higher priority
---   than the preset / permanent layer and is never clobbered by presets.
---   Bindings are session-only but reapplied on every PLAYER_ENTERING_WORLD,
---   GAME_PAD_ACTIVE_CHANGED, etc. — so they are always in effect when needed.
+-- ARCHITECTURE:
+--   When wheel is CLOSED (normal play):
+--     - CouchPotato binds ONLY PADRTRIGGER → CouchPotatoTriggerBtn (opens wheel)
+--     - PAD1-4 (face buttons): WoW handles normally (action bars, etc.)
+--     - All other buttons: WoW handles normally
+--     - CouchPotato stays out of the way — no interception, no overrides
 --
--- TWO MODES:
---   Direct mode (wheel closed): face buttons → SetOverrideBindingSpell
---   Wheel mode  (wheel open):   face buttons → SetOverrideBindingClick → SecureActionButton
+--   When wheel is OPEN:
+--     - CouchPotato overrides PAD1-4 → wheel slot SecureActionButtons
+--     - CouchPotato overrides PADLSHOULDER/PADRSHOULDER → cycle buttons
+--     - PADRTRIGGER stays bound (now closes the wheel)
+--
+--   When wheel CLOSES:
+--     - ClearOverrideBindings restores ALL of WoW's normal bindings
+--     - Re-apply ONLY the PADRTRIGGER binding (so user can reopen wheel)
 --
 -- Face button → slot mapping (matches physical position on controller):
 --   PAD4 (Y/△) → slot 1  (top,    12 o'clock)
@@ -30,7 +33,6 @@ Bindings.pendingApply   = false
 Bindings.pendingClear   = false
 Bindings.wheelOpen      = false
 Bindings._applyTimer    = nil  -- debounce handle for UPDATE_BINDINGS
-Bindings.directButtons  = {}   -- [padKey] = hidden SecureActionButtonTemplate frame, one per face button
 
 -- Which slot each face button maps to (by cardinal position in the 12-slot wheel)
 Bindings.FACE_TO_SLOT = {
@@ -48,38 +50,16 @@ function Bindings:OnEnable()
             "SecureHandlerStateTemplate")
     end
 
-    -- Create (or reuse) the four hidden SecureActionButton frames for direct mode.
-    -- These are permanent globals — they survive Disable/Enable cycles.
-    -- Pattern mirrors ConsolePort (Input.lua): always route through
-    -- SetOverrideBindingClick → SecureActionButtonTemplate, never SetOverrideBindingSpell.
-    local FACE_KEYS = { "PAD4", "PAD2", "PAD1", "PAD3" }
-    for _, padKey in ipairs(FACE_KEYS) do
-        local btnName = "CouchPotatoDirect" .. padKey
-        local btn = _G[btnName] or
-            CreateFrame("Button", btnName, UIParent, "SecureActionButtonTemplate")
-        -- Must NOT be Hidden — hidden frames cannot receive override binding clicks.
-        -- Make it 1×1, fully transparent, and parked off-screen instead.
-        btn:SetSize(1, 1)
-        btn:SetAlpha(0)
-        btn:ClearAllPoints()
-        btn:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", -100, -100)
-        btn:Show()
-        btn:RegisterForClicks("AnyUp")
-        btn:SetAttribute("type", "spell")
-        self.directButtons[padKey] = btn
-    end
-
     self:RegisterEvent("GAME_PAD_ACTIVE_CHANGED",      "OnGamePadActiveChanged")
     self:RegisterEvent("GAME_PAD_CONNECTED",           "OnGamePadConnected")
     self:RegisterEvent("GAME_PAD_DISCONNECTED",        "OnGamePadDisconnected")
     self:RegisterEvent("CVAR_UPDATE",                  "OnCVarUpdate")
     self:RegisterEvent("PLAYER_REGEN_ENABLED",         "OnCombatLeave")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED","OnSpecChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD",        "OnEnteringWorld")
     self:RegisterEvent("UPDATE_BINDINGS",              "OnUpdateBindings")
 
     if C_GamePad.IsEnabled() and not self.wheelOpen then
-        self:ApplyDirectBindings()
+        self:ApplyTriggerBinding()
     end
 end
 
@@ -92,58 +72,24 @@ function Bindings:OnDisable()
     end
 end
 
--- ── Direct mode ──────────────────────────────────────────────────────────────
--- Face buttons cast spells via SetOverrideBindingClick → hidden SecureActionButton.
---
--- WHY NOT SetOverrideBindingSpell(isPriority=false)?
---   Blizzard_GamePad preset applies its own override bindings for PAD* keys,
---   typically with isPriority=true. Our isPriority=false binding loses to theirs,
---   so pressing Y fires Blizzard's action button — NOT our spell. The binding IS
---   registered (GetBindingAction returns it), but the preset's priority binding
---   wins at input time.
---
--- THE FIX (from ConsolePort/Controller/Input.lua):
---   ALWAYS use SetOverrideBindingClick(isPriority=TRUE) → hidden
---   SecureActionButtonTemplate. isPriority=true beats the preset. The hidden
---   button carries the spell via SetAttribute("spell", ...). This is the only
---   reliable pattern for gamepad face buttons on Retail.
-function Bindings:ApplyDirectBindings()
+-- ── Trigger binding ──────────────────────────────────────────────────────────
+-- Sets ONLY the wheel-open trigger. Called on enable and after wheel closes.
+-- We do NOT touch PAD1-4 or any other buttons — WoW handles those normally.
+function Bindings:ApplyTriggerBinding()
     if InCombatLockdown() then
         self.pendingApply = true
         return
     end
-
-    local Specs  = CP:GetModule("Specs", true)
-    local layout = Specs and Specs:GetCurrentLayout()
-
-    -- Clear any existing overrides (wheel-mode click bindings or a previous
-    -- direct-mode call) so we start from a clean state.
+    
     ClearOverrideBindings(self.ownerFrame)
     self.wheelOpen = false
-
-    if layout then
-        local function bindFace(padKey, spellName)
-            if not spellName then return end
-            local btn = self.directButtons[padKey]
-            if not btn then return end
-            btn:SetAttribute("spell", spellName)
-            SetOverrideBindingClick(self.ownerFrame, true, padKey, btn:GetName(), "LeftButton")
-        end
-        bindFace("PAD4", layout.primary)    -- Y / △
-        bindFace("PAD2", layout.secondary)  -- B / ○
-        bindFace("PAD1", layout.tertiary)   -- A / ✕
-        bindFace("PAD3", layout.interrupt)  -- X / □
-    end
-
-    -- System defaults as transient overrides (WoW already has sane defaults here)
-    SetOverrideBinding(self.ownerFrame, true, "PADLSTICK", "TOGGLEAUTORUN")
-    SetOverrideBinding(self.ownerFrame, true, "PADRSTICK", "TARGETNEAREST")
-    SetOverrideBinding(self.ownerFrame, true, "PADBACK",   "TOGGLEWORLDMAP")
+    
+    -- Only bind the trigger. Everything else is WoW's to manage.
+    SetOverrideBindingClick(self.ownerFrame, true, "PADRTRIGGER", "CouchPotatoTriggerBtn", "LeftButton")
 end
 
 -- ── Wheel mode ───────────────────────────────────────────────────────────────
--- Called by Radial when the wheel opens. Face buttons click the SecureActionButtons.
--- Transient override layer sits on top of the permanent spell bindings.
+-- Called by Radial when the wheel opens. Only bumpers + trigger needed now.
 function Bindings:ApplyWheelBindings(wheelIdx)
     if InCombatLockdown() then return end
 
@@ -151,22 +97,26 @@ function Bindings:ApplyWheelBindings(wheelIdx)
     ClearOverrideBindings(owner)
     self.wheelOpen = true
 
-    -- Map face buttons to the four cardinal slot buttons on the active wheel
-    for pad, slotIdx in pairs(self.FACE_TO_SLOT) do
-        local btnName = string.format("CouchPotatoWheel%dSlot%d", wheelIdx, slotIdx)
-        SetOverrideBindingClick(owner, true, pad, btnName, "LeftButton")
-    end
+    -- Bumpers cycle wheels while open
+    SetOverrideBindingClick(owner, true, "PADLSHOULDER", "CouchPotatoLSBtn", "LeftButton")
+    SetOverrideBindingClick(owner, true, "PADRSHOULDER", "CouchPotatoRSBtn", "LeftButton")
+
+    -- Keep trigger bound (AnyDown opens, AnyUp confirms+closes)
+    SetOverrideBindingClick(owner, true, "PADRTRIGGER", "CouchPotatoTriggerBtn", "LeftButton")
 end
 
 -- Called by Radial when the wheel closes.
 function Bindings:RestoreDirectBindings()
-    self:ApplyDirectBindings()
+    if InCombatLockdown() then return end
+    ClearOverrideBindings(self.ownerFrame)
+    self.wheelOpen = false
+    self:ApplyTriggerBinding()
 end
 
 -- ── Event handlers ───────────────────────────────────────────────────────────
 function Bindings:OnGamePadActiveChanged(event, isActive)
     if isActive and not self.wheelOpen then
-        self:ApplyDirectBindings()
+        self:ApplyTriggerBinding()
     end
     -- Bug fix: Do NOT clear bindings on isActive=false. GAME_PAD_ACTIVE_CHANGED
     -- fires on every input-source switch (including mouse move/keypress).
@@ -175,7 +125,7 @@ end
 
 function Bindings:OnGamePadConnected()
     if C_GamePad.IsEnabled() and not self.wheelOpen then
-        self:ApplyDirectBindings()
+        self:ApplyTriggerBinding()
     end
 end
 
@@ -186,7 +136,7 @@ end
 function Bindings:OnCVarUpdate(event, cvarName, cvarValue)
     if cvarName ~= "GamePadEnable" then return end
     if cvarValue == "1" and not self.wheelOpen then
-        self:ApplyDirectBindings()
+        self:ApplyTriggerBinding()
     elseif cvarValue == "0" then
         self:ClearControllerBindings()
     end
@@ -195,22 +145,16 @@ end
 function Bindings:OnCombatLeave()
     if self.pendingApply then
         self.pendingApply = false
-        self:ApplyDirectBindings()
+        self:ApplyTriggerBinding()
     elseif self.pendingClear then
         self.pendingClear = false
         self:ClearControllerBindings()
     end
 end
 
-function Bindings:OnSpecChanged()
-    if C_GamePad.IsEnabled() and not self.wheelOpen then
-        self:ApplyDirectBindings()
-    end
-end
-
 function Bindings:OnEnteringWorld()
     if C_GamePad.IsEnabled() and not self.wheelOpen then
-        self:ApplyDirectBindings()
+        self:ApplyTriggerBinding()
     end
 end
 
@@ -222,7 +166,7 @@ function Bindings:OnUpdateBindings()
     self._applyTimer = self:ScheduleTimer(function()
         self._applyTimer = nil
         if C_GamePad.IsEnabled() and not self.wheelOpen then
-            self:ApplyDirectBindings()
+            self:ApplyTriggerBinding()
         end
     end, 0.5)
 end
@@ -240,4 +184,4 @@ function Bindings:ClearControllerBindings()
 end
 
 -- Legacy / compat
-function Bindings:ApplyControllerBindings() self:ApplyDirectBindings() end
+function Bindings:ApplyControllerBindings() self:ApplyTriggerBinding() end
