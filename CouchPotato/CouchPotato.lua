@@ -124,7 +124,7 @@ local function _injectTimerAPI(obj)
             fn = function() if self[methodName] then self[methodName](self) end end
         end
         C_Timer.After(delay, function()
-            if not cancelled then fn(table.unpack(args)) end
+            if not cancelled then fn(unpack(args)) end
         end)
         return {
             Cancel      = function() cancelled = true end,
