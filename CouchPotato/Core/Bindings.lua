@@ -112,45 +112,11 @@ function Bindings:ApplyControllerBindings()
     local owner = self.ownerFrame
     ClearOverrideBindings(owner)
     
-    -- Face buttons (A is jump, always fixed by WoW)
-    if layout.primary then
-        SetOverrideBindingSpell(owner, true, "PAD2", layout.primary)
-    end
-    if layout.secondary then
-        SetOverrideBindingSpell(owner, true, "PAD3", layout.secondary)
-    end
-    if layout.tertiary then
-        SetOverrideBindingSpell(owner, true, "PAD4", layout.tertiary)
-    end
-    
-    -- Shoulder/trigger combat abilities
-    if layout.interrupt then
-        SetOverrideBindingSpell(owner, true, "PADRSHOULDER", layout.interrupt)
-    end
-    if layout.majorCD then
-        SetOverrideBindingSpell(owner, true, "PADRTRIGGER", layout.majorCD)
-    end
-    if layout.defensiveCD then
-        SetOverrideBindingSpell(owner, true, "PADLSHOULDER", layout.defensiveCD)
-    end
-    if layout.movement then
-        SetOverrideBindingSpell(owner, true, "PADLTRIGGER", layout.movement)
-    end
-    
-    -- D-pad abilities
-    if layout.dpadUp then
-        SetOverrideBindingSpell(owner, true, "PADDUP", layout.dpadUp)
-    end
-    if layout.dpadDown then
-        SetOverrideBindingSpell(owner, true, "PADDDOWN", layout.dpadDown)
-    end
-    if layout.dpadLeft then
-        SetOverrideBindingSpell(owner, true, "PADDLEFT", layout.dpadLeft)
-    end
-    if layout.dpadRight then
-        SetOverrideBindingSpell(owner, true, "PADDRIGHT", layout.dpadRight)
-    end
-    
+    -- RT/LT are reserved for the Radial wheel (RT = open wheel, LT = modifier layer).
+    -- Do NOT bind PADRTRIGGER or PADLTRIGGER here — the Radial module owns those.
+    -- PADRSHOULDER / PADLSHOULDER cycle wheels while the radial is open.
+    -- Face buttons activate the highlighted radial slot.
+    -- D-pad: used for targeting / navigation (VirtualCursor module).
     -- System bindings
     SetOverrideBinding(owner, true, "PADLSTICK", "TOGGLEAUTORUN")
     SetOverrideBinding(owner, true, "PADRSTICK", "TARGETNEAREST")

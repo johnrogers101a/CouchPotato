@@ -53,14 +53,14 @@ describe("Bindings Module", function()
             assert.is_true(count > 0, "Should have applied at least one binding")
         end)
         
-        it("includes primary spell binding for current spec", function()
+        it("does not bind face buttons (radial wheel owns them)", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyControllerBindings()
-            
+
             local bindings = _G._GetOverrideBindings(Bindings.ownerFrame)
-            -- Fire Mage primary = Fireball, bound to PAD2 (B button)
-            assert.is_not_nil(bindings["PAD2"] or bindings["PAD1"],
-                "Should have a face button binding for primary spell")
+            -- RT/LT and face buttons are reserved for the Radial module
+            assert.is_nil(bindings["PADRTRIGGER"], "RT must not be bound (Radial owns it)")
+            assert.is_nil(bindings["PADLTRIGGER"], "LT must not be bound (Radial owns it)")
         end)
         
         it("queues apply during combat", function()

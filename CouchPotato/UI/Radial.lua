@@ -207,12 +207,7 @@ function Radial:HideCurrentWheel()
     end
     self.isVisible = false
     self.isLocked = false
-    
-    if self.peekTimer then
-        self:CancelTimer(self.peekTimer)
-        self.peekTimer = nil
-    end
-    
+
     local GamePad = CP:GetModule("GamePad")
     if GamePad then GamePad:Vibrate("MENU_CLOSE") end
 end
@@ -237,20 +232,15 @@ function Radial:CycleWheelPrev()
     if GamePad then GamePad:Vibrate("WHEEL_CYCLE") end
 end
 
--- Peek: show wheel briefly (light trigger pull)
+-- Peek: show wheel briefly (light trigger pull) - kept for potential future use
 function Radial:PeekWheel()
     if self.isLocked then return end
     self:ShowCurrentWheel()
-    
-    -- Auto-hide after timeout unless locked
-    if self.peekTimer then self:CancelTimer(self.peekTimer) end
-    self.peekTimer = self:ScheduleTimer(function()
-        if not self.isLocked then
-            self:HideCurrentWheel()
+    C_Timer.After(PEEK_TIMEOUT, function()
+        if not Radial.isLocked then
+            Radial:HideCurrentWheel()
         end
-        self.peekTimer = nil
-    end, PEEK_TIMEOUT)
-    
+    end)
     local GamePad = CP:GetModule("GamePad")
     if GamePad then GamePad:Vibrate("WHEEL_PEEK") end
 end
@@ -271,71 +261,38 @@ end
 
 function Radial:UnlockWheel()
     self.isLocked = false
-    -- Start peek timer now
-    if self.isVisible then
-        if self.peekTimer then self:CancelTimer(self.peekTimer) end
-        self.peekTimer = self:ScheduleTimer(function()
-            self:HideCurrentWheel()
-            self.peekTimer = nil
-        end, 0.5)  -- short delay before hiding
-    end
-end
-
--- We use an OnUpdate frame to continuously read trigger axis values
--- and determine peek vs lock state
-function Radial:InitTriggerDetection()
-    self.triggerFrame = CreateFrame("Frame")
-    self.triggerFrame.elapsed = 0
-    self.triggerFrame.lastRT = 0
-    
-    self.triggerFrame:SetScript("OnUpdate", function(self_frame, elapsed)
-        self_frame.elapsed = self_frame.elapsed + elapsed
-        if self_frame.elapsed < 0.05 then return end  -- poll at ~20Hz
-        self_frame.elapsed = 0
-
-        -- Guard: db not ready yet (can happen if OnUpdate fires before init completes)
-        if not CP.db or not CP.db.profile then return end
-
-        local GamePad = CP:GetModule("GamePad")
-        if not GamePad then return end
-
-        local ok, err = pcall(function()
-            local lt, rt = GamePad:GetTriggerValues()
-            local prevRT = self_frame.lastRT
-            self_frame.lastRT = rt
-
-            local peek = CP.db.profile.peekThreshold or PEEK_THRESHOLD
-            local lock = CP.db.profile.lockThreshold or LOCK_THRESHOLD
-
-            if rt >= lock and prevRT < lock then
-                Radial:LockWheel()
-            elseif rt >= peek and prevRT < peek then
-                Radial:PeekWheel()
-            elseif rt < peek and prevRT >= peek then
-                if Radial.isLocked then
-                    Radial:UnlockWheel()
-                else
-                    Radial:HideCurrentWheel()
-                end
-            end
-        end)
-        if not ok then
-            -- Stop the poller on error to prevent log spam; report once
-            self_frame:SetScript("OnUpdate", nil)
-            CP:Print("|cffff0000Radial trigger error (poller stopped):|r " .. tostring(err))
+    C_Timer.After(0.3, function()
+        if not Radial.isLocked then
+            Radial:HideCurrentWheel()
         end
     end)
+end
+
+function Radial:InitTriggerDetection()
+    -- Intentionally empty: trigger open/close is handled via OnGamePadButtonDown/Up
+    -- in InitGamePadButtonHandling below, which is simpler and more reliable than
+    -- axis polling, and avoids GetDeviceMappedState field-name ambiguity.
 end
 
 function Radial:InitGamePadButtonHandling()
     self.buttonFrame = CreateFrame("Frame", "CouchPotatoRadialInput", UIParent)
     self.buttonFrame:EnableGamePadButton(true)
-    
+
     self.buttonFrame:SetScript("OnGamePadButtonDown", function(self_frame, button)
-        if button == "PADLSHOULDER" then
+        if button == "PADRTRIGGER" then
+            -- RT down: open and lock the wheel
+            Radial:LockWheel()
+        elseif button == "PADLSHOULDER" then
             Radial:CycleWheelPrev()
         elseif button == "PADRSHOULDER" then
             Radial:CycleWheelNext()
+        end
+    end)
+
+    self.buttonFrame:SetScript("OnGamePadButtonUp", function(self_frame, button)
+        if button == "PADRTRIGGER" then
+            -- RT released: hide wheel (short delay so you can see what you selected)
+            Radial:UnlockWheel()
         end
     end)
 end
