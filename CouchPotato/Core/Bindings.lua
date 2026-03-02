@@ -107,7 +107,6 @@ function Bindings:ApplyDirectBindings()
         if layout.tertiary  then SetBinding("PAD1", "SPELL " .. layout.tertiary)  end  -- A
         if layout.interrupt then SetBinding("PAD3", "SPELL " .. layout.interrupt) end  -- X
         SaveBindings(GetCurrentBindingSet())
-        CP:Print(string.format("Applied %s bindings.", layout.specName or "controller"))
     end
 
     -- System defaults stay as transient overrides (WoW already has sane defaults here)
@@ -206,7 +205,6 @@ function Bindings:ClearControllerBindings()
     if self.ownerFrame then
         ClearOverrideBindings(self.ownerFrame)
     end
-    CP:Print("Keyboard bindings restored.")
 end
 
 -- Legacy / compat
