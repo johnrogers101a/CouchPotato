@@ -279,6 +279,7 @@ local function _initDB()
     CouchPotatoDB          = CouchPotatoDB          or {}
     CouchPotatoDB.profile  = CouchPotatoDB.profile  or {}
     CouchPotatoDB.char     = CouchPotatoDB.char     or {}
+    CouchPotatoDB.global   = CouchPotatoDB.global   or {}
     deepMerge(CouchPotatoDB.profile, defaults.profile)
     deepMerge(CouchPotatoDB.char,    defaults.char)
     CP.db = CouchPotatoDB
@@ -397,7 +398,11 @@ function CP:ChatCommand(input)
         ReloadUI()
 
     elseif cmd == "config" or cmd == "options" then
-        self:Print("Configuration panel not yet implemented")
+        if CP.ConfigWindow then
+            CP.ConfigWindow.Show()
+        else
+            self:Print("Config window not available")
+        end
 
     elseif cmd == "reset" then
         self.db:ResetProfile()
@@ -428,17 +433,23 @@ function CP:ChatCommand(input)
         self:PrintStatus()
 
     else
-        self:Print("CouchPotato v" .. self.version)
-        self:Print("Commands:")
-        self:Print("  /cp show      - Show radial UI")
-        self:Print("  /cp hide      - Hide radial UI")
-        self:Print("  /cp reload    - Reload UI")
-        self:Print("  /cp config    - Open configuration")
-        self:Print("  /cp reset     - Reset profile to defaults")
-        self:Print("  /cp status    - Show addon status")
-        self:Print("  /cp test      - Run in-game diagnostics")
-        self:Print("  /cp debug     - Dump binding/module/DB state")
-        self:Print("  /cp debugmode - Toggle verbose debug logging")
+        -- No arguments: open the config window
+        if CP.ConfigWindow then
+            CP.ConfigWindow.Show()
+        else
+            -- Fallback during early load before UI files are ready
+            self:Print("CouchPotato v" .. self.version)
+            self:Print("Commands:")
+            self:Print("  /cp show      - Show radial UI")
+            self:Print("  /cp hide      - Hide radial UI")
+            self:Print("  /cp reload    - Reload UI")
+            self:Print("  /cp config    - Open configuration")
+            self:Print("  /cp reset     - Reset profile to defaults")
+            self:Print("  /cp status    - Show addon status")
+            self:Print("  /cp test      - Run in-game diagnostics")
+            self:Print("  /cp debug     - Dump binding/module/DB state")
+            self:Print("  /cp debugmode - Toggle verbose debug logging")
+        end
     end
 end
 

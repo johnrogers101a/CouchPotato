@@ -33,16 +33,31 @@ end
 
 -- ── Helpers ─────────────────────────────────────────────────────────────────
 
+local function stripColors(s)
+    return s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+end
+
+-- Buffer for the current run; set at start of RunTests/DumpDebug, nil otherwise.
+local _currentLines = nil
+
+-- Print to chat AND collect plain text into the run buffer.
+local function output(msg)
+    CP:Print(msg)
+    if _currentLines then
+        table.insert(_currentLines, stripColors(msg))
+    end
+end
+
 local function pass(label, detail)
     local msg = "|cff00ff00PASS|r " .. tostring(label)
     if detail ~= nil then msg = msg .. " (" .. tostring(detail) .. ")" end
-    CP:Print(msg)
+    output(msg)
 end
 
 local function fail(label, detail)
     local msg = "|cffff4444FAIL|r " .. tostring(label)
-    if detail ~= nil then msg = msg .. " — " .. tostring(detail) .. "" end
-    CP:Print(msg)
+    if detail ~= nil then msg = msg .. " — " .. tostring(detail) end
+    output(msg)
 end
 
 -- Returns (passed, failed) incremented appropriately.
@@ -56,18 +71,35 @@ local function check(label, ok, detail)
     end
 end
 
+-- Persist buffer to SavedVars, open the output window, then clear the buffer.
+local function _finalizeRun()
+    if not _currentLines then return end
+    local plainText = table.concat(_currentLines, "\n")
+    if CP.db then
+        CP.db.global = CP.db.global or {}
+        CP.db.global.lastTestOutput = plainText
+        CP.db.global.lastTestTime   = time()
+    end
+    -- DiagnosticsWindow is created by UI/DiagnosticsWindow.lua (loaded after Core/)
+    if CP.DiagnosticsWindow then
+        CP.DiagnosticsWindow.Show(_currentLines)
+    end
+    _currentLines = nil
+end
+
 -- ── /cp test ─────────────────────────────────────────────────────────────────
 
 function Diagnostics:RunTests()
+    _currentLines = {}
     local passed, failed = 0, 0
     local function tally(p, f) passed = passed + p; failed = failed + f end
 
-    CP:Print("── In-Game Diagnostics ──")
+    output("── In-Game Diagnostics ──")
 
     -- ── API Compatibility ─────────────────────────────────────────────────────
     -- Verify every WoW global/namespace the addon actually calls still exists.
     -- After any patch, FAIL here = Blizzard removed or renamed that API.
-    CP:Print("── API Compatibility ──")
+    output("── API Compatibility ──")
 
     -- C_GamePad namespace (Bindings.lua, GamePad.lua, Specs.lua, CouchPotato.lua)
     tally(check("C_GamePad (namespace)",
@@ -214,7 +246,7 @@ function Diagnostics:RunTests()
                 actual == expected, detail))
         end
     else
-        CP:Print("|cffffff00SKIP|r  Face-button binding checks (no layout)")
+        output("|cffffff00SKIP|r  Face-button binding checks (no layout)")
     end
 
     -- 10. Cardinal wheel-slot buttons exist (created by Radial at load time)
@@ -270,20 +302,20 @@ function Diagnostics:RunTests()
         tally(check("SetOverrideBindingClick fires without error",
             ok, ok and "OK" or tostring(err)))
     else
-        CP:Print("|cffffff00SKIP|r  SetOverrideBindingClick test (combat or no ownerFrame)")
+        output("|cffffff00SKIP|r  SetOverrideBindingClick test (combat or no ownerFrame)")
     end
 
     -- ── Spell Validity ────────────────────────────────────────────────────────
     -- For each spell in the current spec layout, verify C_Spell.GetSpellInfo
     -- returns non-nil. A nil result means the spell was renamed or removed.
-    CP:Print("── Spell Validity ──")
+    output("── Spell Validity ──")
     do
         local specsModule = CP:GetModule("Specs", true)
         local spellLayout = specsModule and specsModule:GetCurrentLayout()
         if not spellLayout then
-            CP:Print("|cffffff00SKIP|r  Spell validity (no layout for current spec)")
+            output("|cffffff00SKIP|r  Spell validity (no layout for current spec)")
         elseif not (C_Spell and C_Spell.GetSpellInfo) then
-            CP:Print("|cffffff00SKIP|r  Spell validity (C_Spell.GetSpellInfo unavailable)")
+            output("|cffffff00SKIP|r  Spell validity (C_Spell.GetSpellInfo unavailable)")
         else
             local spellFields = {
                 "primary", "secondary", "tertiary", "interrupt",
@@ -303,62 +335,68 @@ function Diagnostics:RunTests()
     end
 
     -- Summary
-    CP:Print(string.format("── %d passed, %d failed ──", passed, failed))
+    output(string.format("── %d passed, %d failed ──", passed, failed))
+    _finalizeRun()
 end
 
 -- ── /cp debug ────────────────────────────────────────────────────────────────
 
 function Diagnostics:DumpDebug()
-    CP:Print("── Debug Dump ──")
+    _currentLines = {}
+    output("── Debug Dump ──")
 
     -- Gamepad state
-    CP:Print(string.format("C_GamePad.IsEnabled()       = %s",
+    output(string.format("C_GamePad.IsEnabled()       = %s",
         tostring(C_GamePad and C_GamePad.IsEnabled and C_GamePad.IsEnabled())))
-    CP:Print(string.format("C_GamePad.GetActiveDeviceID = %s",
+    output(string.format("C_GamePad.GetActiveDeviceID = %s",
         tostring(C_GamePad and C_GamePad.GetActiveDeviceID and
                  C_GamePad.GetActiveDeviceID())))
 
     -- What WoW actually has bound for every PAD key
-    CP:Print("PAD key bindings (GetBindingAction):")
+    output("PAD key bindings (GetBindingAction):")
     for _, key in ipairs(ALL_PAD_KEYS) do
         local b = GetBindingAction(key)
         if b then
-            CP:Print(string.format("  %-18s = %s", key, b))
+            output(string.format("  %-18s = %s", key, b))
         end
     end
 
     -- Module enable states
-    CP:Print("Module states:")
+    output("Module states:")
     for name, mod in CP:IterateModules() do
-        CP:Print(string.format("  %-20s %s",
-            name, mod:IsEnabled() and "|cff00ff00enabled|r" or "|cffaaaaaaaadisabled|r"))
+        output(string.format("  %-20s %s",
+            name, mod:IsEnabled() and "|cff00ff00enabled|r" or "|cffaaaaaaadisabled|r"))
     end
 
     -- Bindings internal state
     local Bindings = CP:GetModule("Bindings", true)
     if Bindings then
-        CP:Print(string.format("Bindings.wheelOpen    = %s", tostring(Bindings.wheelOpen)))
-        CP:Print(string.format("Bindings.pendingApply = %s", tostring(Bindings.pendingApply)))
-        CP:Print(string.format("Bindings.pendingClear = %s", tostring(Bindings.pendingClear)))
-        CP:Print(string.format("Bindings.ownerFrame   = %s",
+        output(string.format("Bindings.wheelOpen    = %s", tostring(Bindings.wheelOpen)))
+        output(string.format("Bindings.pendingApply = %s", tostring(Bindings.pendingApply)))
+        output(string.format("Bindings.pendingClear = %s", tostring(Bindings.pendingClear)))
+        output(string.format("Bindings.ownerFrame   = %s",
             Bindings.ownerFrame and "exists" or "nil"))
     end
 
     -- DB snapshot
     if CP.db then
-        CP:Print("CP.db.profile:")
+        output("CP.db.profile:")
         for k, v in pairs(CP.db.profile) do
             if type(v) ~= "function" then
-                CP:Print(string.format("  %-24s = %s", k, tostring(v)))
+                output(string.format("  %-24s = %s", k, tostring(v)))
             end
         end
-        CP:Print(string.format("CP.db.char.currentWheel = %s",
+        output(string.format("CP.db.char.currentWheel = %s",
             tostring(CP.db.char and CP.db.char.currentWheel)))
-        CP:Print(string.format("CP.db.char.healerMode   = %s",
+        output(string.format("CP.db.char.healerMode   = %s",
             tostring(CP.db.char and CP.db.char.healerMode)))
     else
-        CP:Print("|cffff4444CP.db is nil — ADDON_LOADED never fired?|r")
+        output("|cffff4444CP.db is nil — ADDON_LOADED never fired?|r")
     end
 
-    CP:Print("── End Dump ──")
+    output("── End Dump ──")
+    _finalizeRun()
 end
+
+-- ShowOutputWindow is now handled by UI/DiagnosticsWindow.lua via CP.DiagnosticsWindow.
+-- The stub below is kept so any direct callers (e.g. dev /run snippets) still work.
