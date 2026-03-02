@@ -32,7 +32,11 @@ Bindings.FACE_TO_SLOT = {
 }
 
 function Bindings:OnEnable()
-    self.ownerFrame = CreateFrame("Frame", "CouchPotatoBindingOwner", UIParent)
+    -- Guard: reuse the existing ownerFrame if we've been through a Disable/Enable
+    -- cycle. Creating a second frame with the same global name throws a Lua error in WoW.
+    if not self.ownerFrame then
+        self.ownerFrame = CreateFrame("Frame", "CouchPotatoBindingOwner", UIParent)
+    end
     self:RegisterEvent("GAME_PAD_ACTIVE_CHANGED",     "OnGamePadActiveChanged")
     self:RegisterEvent("GAME_PAD_CONNECTED",          "OnGamePadConnected")
     self:RegisterEvent("GAME_PAD_DISCONNECTED",       "OnGamePadDisconnected")

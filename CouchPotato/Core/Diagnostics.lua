@@ -260,19 +260,31 @@ function Diagnostics:RunTests()
 
     -- 12. SetOverrideBindingClick can be called without error
     if owner and not InCombatLockdown() then
-        -- Create a temporary secure button for the click-binding probe
+        -- Use a SEPARATE anonymous owner so the probe never touches Bindings.ownerFrame.
+        -- This is the critical fix for the PAD4 leak: the probe binding lives on probeOwner,
+        -- not on owner, so clearing it is always safe regardless of Bindings state.
+        local probeOwner = CreateFrame("Frame", nil, UIParent)
         local testName = "CouchPotatoDiagProbeBtn"
-        local probe = CreateFrame("Button", testName, UIParent,
-                                  "SecureActionButtonTemplate")
+        -- Reuse the frame if it already exists (avoids "name already in use" error
+        -- if /cp test is run more than once in the same session).
+        local probe = _G[testName] or CreateFrame("Button", testName, UIParent,
+                                                  "SecureActionButtonTemplate")
         probe:RegisterForClicks("AnyDown", "AnyUp")
         probe:SetAttribute("type", "spell")
         probe:SetAttribute("spell", layout and layout.primary or "Fireball")
 
         local ok, err = pcall(function()
-            SetOverrideBindingClick(owner, true, "PAD4", testName, "LeftButton")
+            SetOverrideBindingClick(probeOwner, true, "PAD4", testName, "LeftButton")
         end)
-        -- Restore direct bindings so we don't leave the probe binding active
-        if Bindings and Bindings:IsEnabled() and not Bindings.wheelOpen then
+
+        -- ALWAYS clear the probe owner — do NOT gate on Bindings:IsEnabled().
+        -- IsEnabled() can be falsely false even when bindings CAN be restored
+        -- (e.g. after an OnControllerDeactivated / OnControllerActivated cycle).
+        ClearOverrideBindings(probeOwner)
+
+        -- Re-apply Bindings.ownerFrame's direct bindings if the frame exists.
+        -- Use ownerFrame presence, not IsEnabled() — they can diverge.
+        if Bindings and Bindings.ownerFrame and not Bindings.wheelOpen then
             Bindings:ApplyDirectBindings()
         end
         tally(check("SetOverrideBindingClick fires without error",
@@ -356,7 +368,7 @@ function Diagnostics:DumpDebug()
     out("Module states:")
     for name, mod in CP:IterateModules() do
         out(string.format("  %-20s %s",
-            name, mod:IsEnabled() and "|cff00ff00enabled|r" or "|cffaaaaaaadisabled|r"))
+            name, mod:IsEnabled() and "|cff00ff00enabled|r" or "|cffaaaaaadisabled|r"))
     end
 
     -- Bindings internal state

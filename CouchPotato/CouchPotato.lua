@@ -184,6 +184,8 @@ function CP:NewModule(name)
     _injectPrintAPI(mod)
 
     function mod:Enable()
+        if self._enabled then return end  -- guard: prevent double-enable (would re-run
+        -- OnEnable, re-calling CreateFrame with the same global name → Lua error in WoW)
         self._enabled = true
         if self.OnEnable then self:OnEnable() end
     end
