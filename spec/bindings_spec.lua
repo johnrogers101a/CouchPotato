@@ -62,7 +62,7 @@ describe("Bindings Module", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyControllerBindings()
             
-            -- Direct mode now uses SetOverrideBindingSpell — override layer, NOT permanent
+            -- Direct mode now uses SetOverrideBindingClick — CLICK format, NOT SPELL
             local override = _G._GetOverrideBindings(Bindings.ownerFrame)
             local count = 0
             for _ in pairs(override) do count = count + 1 end
@@ -81,11 +81,22 @@ describe("Bindings Module", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyControllerBindings()
 
+            -- Direct mode: SetOverrideBindingClick → CLICK binding to hidden SecureActionButton.
+            -- The spell lives on the button's attribute, NOT embedded in the binding string.
             local override = _G._GetOverrideBindings(Bindings.ownerFrame)
-            assert.equals("SPELL Fireball",    override["PAD4"], "PAD4 (Y) should be primary spell")
-            assert.equals("SPELL Pyroblast",   override["PAD2"], "PAD2 (B) should be secondary spell")
-            assert.equals("SPELL Fire Blast",  override["PAD1"], "PAD1 (A) should be tertiary spell")
-            assert.equals("SPELL Counterspell",override["PAD3"], "PAD3 (X) should be interrupt")
+            assert.is_truthy(override["PAD4"] and override["PAD4"]:find("CouchPotatoDirectPAD4"),
+                "PAD4 should CLICK CouchPotatoDirectPAD4, got: " .. tostring(override["PAD4"]))
+            assert.is_truthy(override["PAD2"] and override["PAD2"]:find("CouchPotatoDirectPAD2"),
+                "PAD2 should CLICK CouchPotatoDirectPAD2, got: " .. tostring(override["PAD2"]))
+            assert.is_truthy(override["PAD1"] and override["PAD1"]:find("CouchPotatoDirectPAD1"),
+                "PAD1 should CLICK CouchPotatoDirectPAD1, got: " .. tostring(override["PAD1"]))
+            assert.is_truthy(override["PAD3"] and override["PAD3"]:find("CouchPotatoDirectPAD3"),
+                "PAD3 should CLICK CouchPotatoDirectPAD3, got: " .. tostring(override["PAD3"]))
+            -- Spell must be on the SecureActionButton attribute
+            assert.equals("Fireball",     _G["CouchPotatoDirectPAD4"]:GetAttribute("spell"), "PAD4 button spell")
+            assert.equals("Pyroblast",    _G["CouchPotatoDirectPAD2"]:GetAttribute("spell"), "PAD2 button spell")
+            assert.equals("Fire Blast",   _G["CouchPotatoDirectPAD1"]:GetAttribute("spell"), "PAD1 button spell")
+            assert.equals("Counterspell", _G["CouchPotatoDirectPAD3"]:GetAttribute("spell"), "PAD3 button spell")
         end)
 
         it("does NOT call SaveBindings (override bindings are session-only)", function()
@@ -166,7 +177,7 @@ describe("Bindings Module", function()
             assert.is_false(Bindings.wheelOpen)
         end)
 
-        it("RestoreDirectBindings clears wheel overrides and re-applies spell overrides", function()
+        it("RestoreDirectBindings clears wheel overrides and re-applies direct overrides", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyWheelBindings(1)
             assert.is_true(Bindings.wheelOpen)
@@ -174,24 +185,30 @@ describe("Bindings Module", function()
             Bindings:RestoreDirectBindings()
             assert.is_false(Bindings.wheelOpen)
 
-            -- Wheel-mode CLICK overrides are cleared; spell overrides are back
+            -- Wheel-mode CLICK overrides are cleared; direct-mode CLICK overrides are back.
+            -- Direct mode uses SetOverrideBindingClick (not Spell) → binding starts with "CLICK ".
             local override = _G._GetOverrideBindings(Bindings.ownerFrame)
-            -- PAD4 should now have a SPELL override, not a CLICK override
             assert.is_not_nil(override["PAD4"], "PAD4 should still have a binding after restore")
-            assert.is_truthy(override["PAD4"]:find("^SPELL "),
-                "PAD4 binding should be SPELL after restore, got: " .. tostring(override["PAD4"]))
+            assert.is_truthy(override["PAD4"]:find("^CLICK "),
+                "PAD4 binding should be CLICK after restore, got: " .. tostring(override["PAD4"]))
+            -- The binding must point to CouchPotatoDirectPAD4, not a wheel slot button
+            assert.is_truthy(override["PAD4"]:find("CouchPotatoDirectPAD4"),
+                "PAD4 should click CouchPotatoDirectPAD4 (not a wheel slot) after restore")
         end)
     end)
 
     describe("GetBindingAction reflects binding layers", function()
-        it("override layer has SPELL binding after ApplyDirectBindings", function()
+        it("override layer has CLICK binding after ApplyDirectBindings", function()
             C_GamePad._SimulateConnect(1)
             Bindings:ApplyDirectBindings()
 
-            -- Direct bindings are in the override layer — checkOverride=true required
+            -- Direct mode: SetOverrideBindingClick → CLICK format, not SPELL
             local binding = GetBindingAction("PAD4", true)
             assert.is_not_nil(binding, "PAD4 should have an override binding")
-            assert.equals("SPELL Fireball", binding)
+            assert.is_truthy(binding:find("^CLICK "),
+                "PAD4 override should be CLICK binding, got: " .. tostring(binding))
+            -- Spell is on the SecureActionButton attribute
+            assert.equals("Fireball", _G["CouchPotatoDirectPAD4"]:GetAttribute("spell"))
         end)
 
         it("permanent layer is NOT set after ApplyDirectBindings", function()
@@ -329,15 +346,17 @@ describe("Bindings Module", function()
     end)
     
     describe("combat safety — CRITICAL", function()
-        it("NEVER calls SetOverrideBindingSpell during combat", function()
+        it("NEVER calls SetOverrideBindingClick during combat", function()
+            -- Direct mode now uses SetOverrideBindingClick(isPriority=true).
+            -- It must still be gated on InCombatLockdown().
             local combatCallDetected = false
-            local originalSOBS = _G.SetOverrideBindingSpell
-            _G.SetOverrideBindingSpell = function(owner, isPriority, key, spell)
+            local originalSOBC = _G.SetOverrideBindingClick
+            _G.SetOverrideBindingClick = function(owner, isPriority, key, buttonName, mouseButton)
                 if InCombatLockdown() then
                     combatCallDetected = true
-                    error("TAINT: SetOverrideBindingSpell called during combat!")
+                    error("TAINT: SetOverrideBindingClick called during combat!")
                 end
-                return originalSOBS(owner, isPriority, key, spell)
+                return originalSOBC(owner, isPriority, key, buttonName, mouseButton)
             end
             
             _G._SetCombatState(true)
@@ -347,7 +366,29 @@ describe("Bindings Module", function()
                 Bindings:ApplyControllerBindings()
             end)
             assert.is_false(combatCallDetected,
-                "SetOverrideBindingSpell was called during combat — taint risk!")
+                "SetOverrideBindingClick was called during combat — taint risk!")
+            
+            _G.SetOverrideBindingClick = originalSOBC
+        end)
+
+        it("NEVER calls SetOverrideBindingSpell during combat (SetOverrideBindingSpell unused in direct mode)", function()
+            -- SetOverrideBindingSpell is no longer used in direct mode.
+            -- This test confirms it is never called at all (not just not during combat).
+            local spellBindingCallDetected = false
+            local originalSOBS = _G.SetOverrideBindingSpell
+            _G.SetOverrideBindingSpell = function(owner, isPriority, key, spell)
+                spellBindingCallDetected = true
+                return originalSOBS(owner, isPriority, key, spell)
+            end
+            
+            _G._SetCombatState(true)
+            C_GamePad._SimulateConnect(1)
+            
+            assert.has_no.errors(function()
+                Bindings:ApplyControllerBindings()
+            end)
+            assert.is_false(spellBindingCallDetected,
+                "SetOverrideBindingSpell was called — direct mode must use SetOverrideBindingClick!")
             
             _G.SetOverrideBindingSpell = originalSOBS
         end)

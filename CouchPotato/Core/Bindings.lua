@@ -30,6 +30,7 @@ Bindings.pendingApply   = false
 Bindings.pendingClear   = false
 Bindings.wheelOpen      = false
 Bindings._applyTimer    = nil  -- debounce handle for UPDATE_BINDINGS
+Bindings.directButtons  = {}   -- [padKey] = hidden SecureActionButtonTemplate frame, one per face button
 
 -- Which slot each face button maps to (by cardinal position in the 12-slot wheel)
 Bindings.FACE_TO_SLOT = {
@@ -40,12 +41,28 @@ Bindings.FACE_TO_SLOT = {
 }
 
 function Bindings:OnEnable()
-    -- Guard: reuse the existing ownerFrame if we've been through a Disable/Enable
-    -- cycle. Creating a second frame with the same global name throws a Lua error in WoW.
+    -- Reuse existing ownerFrame if we've been through a Disable/Enable cycle.
+    -- CreateFrame with the same global name throws a Lua error in WoW.
     if not self.ownerFrame then
         self.ownerFrame = CreateFrame("Frame", "CouchPotatoBindingOwner", UIParent,
             "SecureHandlerStateTemplate")
     end
+
+    -- Create (or reuse) the four hidden SecureActionButton frames for direct mode.
+    -- These are permanent globals — they survive Disable/Enable cycles.
+    -- Pattern mirrors ConsolePort (Input.lua): always route through
+    -- SetOverrideBindingClick → SecureActionButtonTemplate, never SetOverrideBindingSpell.
+    local FACE_KEYS = { "PAD4", "PAD2", "PAD1", "PAD3" }
+    for _, padKey in ipairs(FACE_KEYS) do
+        local btnName = "CouchPotatoDirect" .. padKey
+        local btn = _G[btnName] or
+            CreateFrame("Button", btnName, UIParent, "SecureActionButtonTemplate")
+        btn:Hide()
+        btn:RegisterForClicks("AnyDown", "AnyUp")
+        btn:SetAttribute("type", "spell")
+        self.directButtons[padKey] = btn
+    end
+
     self:RegisterEvent("GAME_PAD_ACTIVE_CHANGED",      "OnGamePadActiveChanged")
     self:RegisterEvent("GAME_PAD_CONNECTED",           "OnGamePadConnected")
     self:RegisterEvent("GAME_PAD_DISCONNECTED",        "OnGamePadDisconnected")
@@ -70,9 +87,20 @@ function Bindings:OnDisable()
 end
 
 -- ── Direct mode ──────────────────────────────────────────────────────────────
--- Face buttons cast spells via SetOverrideBindingSpell.
--- Override bindings have higher priority than WoW's gamepad preset and are
--- never clobbered when UPDATE_BINDINGS fires on login or preset change.
+-- Face buttons cast spells via SetOverrideBindingClick → hidden SecureActionButton.
+--
+-- WHY NOT SetOverrideBindingSpell(isPriority=false)?
+--   Blizzard_GamePad preset applies its own override bindings for PAD* keys,
+--   typically with isPriority=true. Our isPriority=false binding loses to theirs,
+--   so pressing Y fires Blizzard's action button — NOT our spell. The binding IS
+--   registered (GetBindingAction returns it), but the preset's priority binding
+--   wins at input time.
+--
+-- THE FIX (from ConsolePort/Controller/Input.lua):
+--   ALWAYS use SetOverrideBindingClick(isPriority=TRUE) → hidden
+--   SecureActionButtonTemplate. isPriority=true beats the preset. The hidden
+--   button carries the spell via SetAttribute("spell", ...). This is the only
+--   reliable pattern for gamepad face buttons on Retail.
 function Bindings:ApplyDirectBindings()
     if InCombatLockdown() then
         self.pendingApply = true
@@ -87,22 +115,18 @@ function Bindings:ApplyDirectBindings()
     ClearOverrideBindings(self.ownerFrame)
     self.wheelOpen = false
 
-    -- Face buttons → spec spells via override bindings.
-    -- isPriority=false: wheel-mode uses isPriority=true and takes precedence
-    -- when the wheel is open, then direct-mode re-applies here on wheel close.
     if layout then
-        if layout.primary   then
-            SetOverrideBindingSpell(self.ownerFrame, false, "PAD4", layout.primary)   -- Y / △
+        local function bindFace(padKey, spellName)
+            if not spellName then return end
+            local btn = self.directButtons[padKey]
+            if not btn then return end
+            btn:SetAttribute("spell", spellName)
+            SetOverrideBindingClick(self.ownerFrame, true, padKey, btn:GetName(), "LeftButton")
         end
-        if layout.secondary then
-            SetOverrideBindingSpell(self.ownerFrame, false, "PAD2", layout.secondary) -- B / ○
-        end
-        if layout.tertiary  then
-            SetOverrideBindingSpell(self.ownerFrame, false, "PAD1", layout.tertiary)  -- A / ✕
-        end
-        if layout.interrupt then
-            SetOverrideBindingSpell(self.ownerFrame, false, "PAD3", layout.interrupt) -- X / □
-        end
+        bindFace("PAD4", layout.primary)    -- Y / △
+        bindFace("PAD2", layout.secondary)  -- B / ○
+        bindFace("PAD1", layout.tertiary)   -- A / ✕
+        bindFace("PAD3", layout.interrupt)  -- X / □
     end
 
     -- System defaults as transient overrides (WoW already has sane defaults here)

@@ -25,6 +25,16 @@ function helpers.resetMocks()
     _G._SetCombatState(false)
     _G._ResetBindings()
     _G._rawEventListeners = {}
+
+    -- Clear CouchPotato named frames so each test's dofile() creates fresh ones.
+    -- Without this, frames from a previous test's dofile() persist in _G and
+    -- the `_G[name] or CreateFrame(...)` guard in OnEnable() reuses stale state.
+    local cpFrames = {
+        "CouchPotatoBindingOwner",
+        "CouchPotatoDirectPAD4", "CouchPotatoDirectPAD2",
+        "CouchPotatoDirectPAD1", "CouchPotatoDirectPAD3",
+    }
+    for _, name in ipairs(cpFrames) do _G[name] = nil end
 end
 
 -- Simulate controller connect

@@ -184,8 +184,10 @@ function CP:NewModule(name)
     _injectPrintAPI(mod)
 
     function mod:Enable()
-        if self._enabled then return end  -- guard: prevent double-enable (would re-run
-        -- OnEnable, re-calling CreateFrame with the same global name → Lua error in WoW)
+        -- No guard: each OnEnable() is idempotent (e.g. Bindings guards its
+        -- own CreateFrame with `if not self.ownerFrame then`). Removing the
+        -- outer guard lets OnControllerActivated() re-run OnEnable() after any
+        -- Deactivated/Activated cycle without a separate ForceEnable() path.
         self._enabled = true
         if self.OnEnable then self:OnEnable() end
     end
@@ -481,7 +483,15 @@ function CP:OnControllerActivated()
     if not self.db then _initDB() end
     self:NotifyModules("CONTROLLER_ACTIVATED")
     for name, mod in self:IterateModules() do
-        if mod.Enable and not mod._enabled then mod:Enable() end
+        -- Always call Enable() — do NOT guard on mod._enabled here.
+        -- The guard in the old code (`not mod._enabled`) caused a silent bug:
+        -- if OnControllerActivated fired while modules were already enabled at
+        -- login, it skipped the enable loop. Then OnControllerDeactivated fired
+        -- and disabled them. No subsequent Activated re-enabled them → modules
+        -- stuck as "disabled" while their override bindings persisted.
+        -- Enable() itself is now guard-free; OnEnable() implementations are
+        -- idempotent and safe to re-run on every controller activation.
+        if mod.Enable then mod:Enable() end
     end
 end
 
