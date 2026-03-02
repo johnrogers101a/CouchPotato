@@ -61,3 +61,27 @@ All 39 specs defined with 13 binding slots: primary/secondary/tertiary (face but
 All production code unchanged — `CP:NewModule(name)`, `mod:RegisterEvent(event, handler)`, `mod:ScheduleTimer(fn, delay)`, `mod:Print(...)` work identically.
 
 📌 Team update (2026-03-02T01:45:35Z): Frameworkless migration complete. All Core, UI, and spec files migrated. Mal's review approved. 70/70 tests passing. Decision consolidated into decisions.md. — consolidated by Scribe
+
+### 2026-03-02: Controller Button Fix (GAME_PAD_ACTIVE_CHANGED Race Condition)
+
+**Problem:** Face buttons (A/B/X/Y) stopped working after controller enabled. Right trigger opened menu and sticks worked, but face buttons did nothing.
+
+**Root Causes:**
+1. **Bug #1 (Primary)**: `Bindings:OnGamePadActiveChanged` cleared all face button bindings on `isActive=false`. The `GAME_PAD_ACTIVE_CHANGED` event fires on *every* input-source switch — including mouse moves and keypresses. So any mouse movement cleared the controller bindings, making face buttons unresponsive until the next `isActive=true` cycle.
+
+2. **Bug #2 (Secondary)**: Multiple event handlers called `ApplyDirectBindings()` without checking `wheelOpen` flag. When the wheel was open, subsequent controller button presses triggered `GAME_PAD_ACTIVE_CHANGED(true)`, which overwrote wheel slot bindings with direct-mode spell bindings. This caused face buttons to fire spells directly (or do nothing if out of range) instead of clicking wheel slots.
+
+3. **Bug #3 (Idempotency)**: `Radial:OnEnable()` was not idempotent. `OnControllerActivated()` called `mod:Enable()` on every `GAME_PAD_ACTIVE_CHANGED(true)`, which re-called `CreateWheelFrames()` and `InitGamePadButtonHandling()`. These created globally-named frames, causing Lua errors on duplicate names and corrupting setup.
+
+**Fixes Applied:**
+- **Bug #1**: Removed `else` branch from `OnGamePadActiveChanged`. Only `ApplyDirectBindings()` on `isActive=true` (with `wheelOpen` guard). Real deactivation is covered by `OnCVarUpdate(GamePadEnable=0)` and `OnGamePadDisconnected`.
+- **Bug #2**: Added `if not self.wheelOpen then` guard before all `ApplyDirectBindings()` calls in 7 event handler locations: `OnGamePadActiveChanged`, `OnEnable`, `OnGamePadConnected`, `OnEnteringWorld`, `OnCVarUpdate`, `OnSpecChanged`, and `GamePad:OnGamePadActiveChanged`.
+- **Bug #3**: Added idempotency guards to `CreateWheelFrames()` (`if self.centerFrame then return end`) and `InitGamePadButtonHandling()` (`if self.buttonFrame then return end`), matching the pattern used in `Bindings:OnEnable()`.
+
+**Key Learnings:**
+- **NEVER** perform state-clearing operations on `GAME_PAD_ACTIVE_CHANGED(isActive=false)`. This event fires on every mouse move/keypress (as documented in Loader.lua). Only use it to *activate* controller features, never to *deactivate*.
+- **ALWAYS** check `wheelOpen` flag before calling `ApplyDirectBindings()` in event handlers. The wheel's transient bindings must not be clobbered by direct-mode reapplications.
+- **Frame creation** in `OnEnable()` must be idempotent. Use existence checks (`if not self.frame then`) for all globally-named frames to prevent duplicate creation errors when `OnEnable()` is called multiple times.
+- Combat lockdown and binding layer architecture remained untouched — all changes were event-handler-level guards.
+
+**Test Results:** 91/91 tests passing after fixes.

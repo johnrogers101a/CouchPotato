@@ -38,6 +38,9 @@ local function GetSlotPosition(slotIndex, radius)
 end
 
 function Radial:CreateWheelFrames()
+    -- Guard: prevent duplicate frame creation (OnEnable can be called multiple times)
+    if self.centerFrame then return end
+    
     -- Center anchor frame
     self.centerFrame = CreateFrame("Frame", "CouchPotatoRadialCenter", UIParent)
     self.centerFrame:SetSize(1, 1)
@@ -253,6 +256,9 @@ function Radial:InitTriggerDetection()
 end
 
 function Radial:InitGamePadButtonHandling()
+    -- Guard: prevent duplicate frame creation (OnEnable can be called multiple times)
+    if self.buttonFrame then return end
+    
     self.buttonFrame = CreateFrame("Frame", "CouchPotatoRadialInput", UIParent)
     self.buttonFrame:EnableGamePadButton(true)
 

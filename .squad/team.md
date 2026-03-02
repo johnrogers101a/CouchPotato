@@ -16,6 +16,7 @@
 | Wash | Lua Developer | `.squad/agents/wash/charter.md` | ✅ Active |
 | Kaylee | UI Developer | `.squad/agents/kaylee/charter.md` | ✅ Active |
 | Zoe | Tester/QA | `.squad/agents/zoe/charter.md` | ✅ Active |
+| Bob | Acceptance Validator | `.squad/agents/bob/charter.md` | ✅ Active — **Required done gate** |
 | Scribe | Session Logger | `.squad/agents/scribe/charter.md` | 📋 Silent |
 | Ralph | Work Monitor | — | 🔄 Monitor |
 

@@ -78,7 +78,7 @@ function Bindings:OnEnable()
     self:RegisterEvent("PLAYER_ENTERING_WORLD",        "OnEnteringWorld")
     self:RegisterEvent("UPDATE_BINDINGS",              "OnUpdateBindings")
 
-    if C_GamePad.IsEnabled() then
+    if C_GamePad.IsEnabled() and not self.wheelOpen then
         self:ApplyDirectBindings()
     end
 end
@@ -165,12 +165,18 @@ end
 
 -- ── Event handlers ───────────────────────────────────────────────────────────
 function Bindings:OnGamePadActiveChanged(event, isActive)
-    if isActive then self:ApplyDirectBindings()
-    else             self:ClearControllerBindings() end
+    if isActive and not self.wheelOpen then
+        self:ApplyDirectBindings()
+    end
+    -- Bug fix: Do NOT clear bindings on isActive=false. GAME_PAD_ACTIVE_CHANGED
+    -- fires on every input-source switch (including mouse move/keypress).
+    -- Real deactivation is covered by OnCVarUpdate(GamePadEnable=0) and OnGamePadDisconnected.
 end
 
 function Bindings:OnGamePadConnected()
-    if C_GamePad.IsEnabled() then self:ApplyDirectBindings() end
+    if C_GamePad.IsEnabled() and not self.wheelOpen then
+        self:ApplyDirectBindings()
+    end
 end
 
 function Bindings:OnGamePadDisconnected()
@@ -179,8 +185,11 @@ end
 
 function Bindings:OnCVarUpdate(event, cvarName, cvarValue)
     if cvarName ~= "GamePadEnable" then return end
-    if cvarValue == "1" then self:ApplyDirectBindings()
-    else                     self:ClearControllerBindings() end
+    if cvarValue == "1" and not self.wheelOpen then
+        self:ApplyDirectBindings()
+    elseif cvarValue == "0" then
+        self:ClearControllerBindings()
+    end
 end
 
 function Bindings:OnCombatLeave()
@@ -200,7 +209,9 @@ function Bindings:OnSpecChanged()
 end
 
 function Bindings:OnEnteringWorld()
-    if C_GamePad.IsEnabled() then self:ApplyDirectBindings() end
+    if C_GamePad.IsEnabled() and not self.wheelOpen then
+        self:ApplyDirectBindings()
+    end
 end
 
 -- UPDATE_BINDINGS: debounced reapply — batch all calls within a 0.5 s window
