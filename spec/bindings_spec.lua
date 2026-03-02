@@ -139,7 +139,9 @@ describe("Bindings Module", function()
             Bindings:ApplyDirectBindings()
 
             -- Fire Mage primary = "Fireball"
-            local binding = GetBindingAction("PAD4")
+            -- checkOverride=true required — without it WoW (and the mock) return the
+            -- *default* binding (e.g. ACTIONBUTTON2), not the override we just set.
+            local binding = GetBindingAction("PAD4", true)
             assert.is_not_nil(binding, "PAD4 should have a binding")
             assert.equals("SPELL Fireball", binding)
         end)
@@ -147,7 +149,8 @@ describe("Bindings Module", function()
         it("returns CLICK binding after ApplyWheelBindings", function()
             Bindings:ApplyWheelBindings(1)
 
-            local binding = GetBindingAction("PAD4")
+            -- checkOverride=true required to see the override layer
+            local binding = GetBindingAction("PAD4", true)
             assert.is_not_nil(binding)
             assert.is_truthy(binding:find("^CLICK "),
                 "PAD4 in wheel mode should be a CLICK binding")
@@ -158,7 +161,8 @@ describe("Bindings Module", function()
             Bindings:ApplyDirectBindings()
             Bindings:ClearControllerBindings()
 
-            assert.is_nil(GetBindingAction("PAD4"))
+            -- checkOverride=true: override layer must be empty after clear
+            assert.is_nil(GetBindingAction("PAD4", true))
         end)
     end)
 

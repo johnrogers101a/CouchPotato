@@ -207,7 +207,10 @@ function Diagnostics:RunTests()
             { pad = "PAD3", field = "interrupt",  spell = layout.interrupt },
         }
         for _, entry in ipairs(faceMap) do
-            local actual   = GetBindingAction(entry.pad)
+            -- checkOverride=true: we need to see the override layer set by
+            -- SetOverrideBindingSpell.  Without this flag WoW returns the default
+            -- binding (e.g. "ACTIONBUTTON2") even when our override is active.
+            local actual   = GetBindingAction(entry.pad, true)
             local expected = entry.spell and ("SPELL " .. entry.spell)
             local detail   = string.format(
                 "GetBindingAction=%q  expected=%q",
@@ -337,10 +340,13 @@ function Diagnostics:DumpDebug()
         tostring(C_GamePad and C_GamePad.GetActiveDeviceID and
                  C_GamePad.GetActiveDeviceID())))
 
-    -- What WoW actually has bound for every PAD key
-    out("PAD key bindings (GetBindingAction):")
+    -- What WoW actually has bound for every PAD key (override layer only)
+    out("PAD key bindings (GetBindingAction, override layer):")
     for _, key in ipairs(ALL_PAD_KEYS) do
-        local b = GetBindingAction(key)
+        -- checkOverride=true to see the bindings we set via SetOverrideBinding*.
+        -- Without this flag WoW returns the *default* binding (e.g. "ACTIONBUTTON2"),
+        -- which makes it appear that SetOverrideBindingSpell had no effect.
+        local b = GetBindingAction(key, true)
         if b then
             out(string.format("  %-18s = %s", key, b))
         end

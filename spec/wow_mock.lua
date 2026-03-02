@@ -439,12 +439,18 @@ _G._GetOverrideBindings = function(owner) return _overrideBindings[owner] or {} 
 _G._ResetBindings = function() _overrideBindings = {} end
 
 -- GetBindingAction: returns the currently active binding action for a key.
--- Searches override bindings first (mirrors WoW behaviour).
--- This is the real WoW API; GetBindingByKey does NOT exist in the game client.
-_G.GetBindingAction = function(key)
-    for _, bindings in pairs(_overrideBindings) do
-        if bindings[key] then return bindings[key] end
+-- checkOverride: if true, override bindings are checked (mirrors the real WoW API).
+-- Without checkOverride only default (SetBinding/bindings.xml) bindings are consulted —
+-- which in the mock means nil, since we have no default binding table.
+-- This mirrors WoW: GetBindingAction("PAD4") returns "ACTIONBUTTON2" (the default);
+-- GetBindingAction("PAD4", true) returns the override set by SetOverrideBindingSpell.
+_G.GetBindingAction = function(key, checkOverride)
+    if checkOverride then
+        for _, bindings in pairs(_overrideBindings) do
+            if bindings[key] then return bindings[key] end
+        end
     end
+    -- No default binding table in mock — mirrors "no normal binding set for this key"
     return nil
 end
 
