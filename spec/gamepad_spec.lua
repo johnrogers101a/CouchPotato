@@ -63,38 +63,24 @@ describe("GamePad Module", function()
     end)
     
     describe("Vibrate", function()
-        it("fires vibration for valid pattern", function()
+        it("is a no-op (vibration disabled to preserve battery)", function()
             C_GamePad._SimulateConnect(1)
             GamePad.isActive = true
-            
-            GamePad:Vibrate("MENU_OPEN")
-            
-            assert.is_true(C_GamePad._vibrating)
-            assert.is_not_nil(C_GamePad._lastVibration)
-            assert.equals("Low", C_GamePad._lastVibration.type)
+            -- Should never error and should never vibrate
+            assert.has_no.errors(function() GamePad:Vibrate("MENU_OPEN") end)
+            assert.is_false(C_GamePad._vibrating)
         end)
-        
-        it("does not vibrate when vibration disabled", function()
-            CP.db.profile.vibrationEnabled = false
+
+        it("does not vibrate for any pattern", function()
             C_GamePad._SimulateConnect(1)
             GamePad.isActive = true
-            
-            GamePad:Vibrate("MENU_OPEN")
-            
+            GamePad:Vibrate("COMBAT_ENTER")
+            GamePad:Vibrate("ABILITY_USE")
+            GamePad:Vibrate("WHEEL_CYCLE")
             assert.is_false(C_GamePad._vibrating)
         end)
-        
-        it("does not vibrate when no controller connected", function()
-            -- C_GamePad not enabled
-            GamePad:Vibrate("MENU_OPEN")
-            assert.is_false(C_GamePad._vibrating)
-        end)
-        
+
         it("ignores unknown pattern names", function()
-            C_GamePad._SimulateConnect(1)
-            GamePad.isActive = true
-            
-            -- Should not error
             assert.has_no.errors(function()
                 GamePad:Vibrate("NONEXISTENT_PATTERN")
             end)
