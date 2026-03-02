@@ -57,8 +57,14 @@ function Bindings:OnEnable()
         local btnName = "CouchPotatoDirect" .. padKey
         local btn = _G[btnName] or
             CreateFrame("Button", btnName, UIParent, "SecureActionButtonTemplate")
-        btn:Hide()
-        btn:RegisterForClicks("AnyDown", "AnyUp")
+        -- Must NOT be Hidden — hidden frames cannot receive override binding clicks.
+        -- Make it 1×1, fully transparent, and parked off-screen instead.
+        btn:SetSize(1, 1)
+        btn:SetAlpha(0)
+        btn:ClearAllPoints()
+        btn:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", -100, -100)
+        btn:Show()
+        btn:RegisterForClicks("AnyUp")
         btn:SetAttribute("type", "spell")
         self.directButtons[padKey] = btn
     end
