@@ -1,5 +1,5 @@
 -- spec/radial_spec.lua
--- Tests for Radial wheel system: frame creation, slot management, cycling
+-- Tests for Radial list menu: frame creation, navigation, slot management, cycling
 
 require("spec/wow_mock")
 local helpers = require("spec/helpers")
@@ -38,110 +38,198 @@ describe("Radial Module", function()
     end)
     
     describe("initialization", function()
-        it("creates wheel frames for all wheels", function()
+        it("creates page frames for all wheels", function()
             for i = 1, MAX_WHEELS do
                 assert.is_not_nil(Radial.wheels[i],
-                    "Wheel " .. i .. " should exist")
+                    "Page " .. i .. " should exist")
             end
         end)
         
-        it("creates correct number of slots per wheel", function()
+        it("creates correct number of rows per page", function()
             for wheelIdx = 1, MAX_WHEELS do
                 assert.is_not_nil(Radial.wheelButtons[wheelIdx])
                 for slotIdx = 1, MAX_SLOTS do
                     assert.is_not_nil(Radial.wheelButtons[wheelIdx][slotIdx],
-                        string.format("Wheel %d slot %d should exist", wheelIdx, slotIdx))
+                        string.format("Page %d row %d should exist", wheelIdx, slotIdx))
                 end
             end
         end)
         
-        it("starts with all wheels hidden", function()
+        it("creates the outer list window frame", function()
+            assert.is_not_nil(Radial.listWindow)
+            assert.is_not_nil(_G["CouchPotatoListWindow"])
+        end)
+        
+        it("starts with all page frames hidden", function()
             for i = 1, MAX_WHEELS do
                 assert.is_false(Radial.wheels[i]:IsShown(),
-                    "Wheel " .. i .. " should start hidden")
+                    "Page " .. i .. " should start hidden")
             end
+        end)
+
+        it("starts with list window hidden", function()
+            assert.is_false(Radial.listWindow:IsShown())
         end)
         
         it("starts on wheel 1", function()
             assert.equals(1, Radial.currentWheel)
         end)
         
-        it("slot buttons default to type 'empty'", function()
-            -- Wheel 8, slot 12 is never populated by default spec layouts
-            local btn = Radial.wheelButtons[8][12]
-            assert.equals("empty", btn:GetAttribute("type"))
+        it("row buttons default to type 'empty'", function()
+            -- Page 8, row 12 is never populated by default spec layouts
+            local row = Radial.wheelButtons[8][12]
+            assert.equals("empty", row:GetAttribute("type"))
         end)
         
-        it("slot buttons use SecureActionButtonTemplate", function()
-            -- In mock, we verify SetAttribute works (it does in our mock)
-            local btn = Radial.wheelButtons[1][1]
-            btn:SetAttribute("type", "spell")
-            btn:SetAttribute("spell", "Fireball")
-            assert.equals("spell", btn:GetAttribute("type"))
-            assert.equals("Fireball", btn:GetAttribute("spell"))
+        it("row buttons use SecureActionButtonTemplate", function()
+            local row = Radial.wheelButtons[1][1]
+            row:SetAttribute("type", "spell")
+            row:SetAttribute("spell", "Fireball")
+            assert.equals("spell", row:GetAttribute("type"))
+            assert.equals("Fireball", row:GetAttribute("spell"))
         end)
     end)
     
     describe("visibility", function()
-        it("ShowCurrentWheel shows wheel 1", function()
+        it("ShowCurrentWheel shows page 1 and the list window", function()
             Radial:ShowCurrentWheel()
             assert.is_true(Radial.isVisible)
             assert.is_true(Radial.wheels[1]:IsShown())
+            assert.is_true(Radial.listWindow:IsShown())
         end)
         
-        it("ShowCurrentWheel hides other wheels", function()
+        it("ShowCurrentWheel hides other page frames", function()
             Radial:ShowCurrentWheel()
             for i = 2, MAX_WHEELS do
                 assert.is_false(Radial.wheels[i]:IsShown(),
-                    "Wheel " .. i .. " should be hidden when wheel 1 is shown")
+                    "Page " .. i .. " should be hidden when page 1 is shown")
             end
         end)
         
-        it("HideCurrentWheel hides all wheels", function()
+        it("HideCurrentWheel hides all pages and the window", function()
             Radial:ShowCurrentWheel()
             Radial:HideCurrentWheel()
             
             assert.is_false(Radial.isVisible)
+            assert.is_false(Radial.listWindow:IsShown())
             for i = 1, MAX_WHEELS do
                 assert.is_false(Radial.wheels[i]:IsShown())
             end
         end)
+
+        it("HideCurrentWheel clears selectedIndex", function()
+            Radial:ShowCurrentWheel()
+            Radial.selectedIndex = 3
+            Radial:HideCurrentWheel()
+            assert.is_nil(Radial.selectedIndex)
+        end)
     end)
     
     describe("wheel cycling", function()
-        it("CycleWheelNext advances to wheel 2", function()
+        it("CycleWheelNext advances to page 2", function()
             assert.equals(1, Radial.currentWheel)
             Radial:CycleWheelNext()
             assert.equals(2, Radial.currentWheel)
         end)
         
-        it("CycleWheelNext wraps from wheel 8 to wheel 1", function()
+        it("CycleWheelNext wraps from page 8 to page 1", function()
             Radial.currentWheel = MAX_WHEELS
             Radial:CycleWheelNext()
             assert.equals(1, Radial.currentWheel)
         end)
         
-        it("CycleWheelPrev goes to previous wheel", function()
+        it("CycleWheelPrev goes to previous page", function()
             Radial.currentWheel = 3
             Radial:CycleWheelPrev()
             assert.equals(2, Radial.currentWheel)
         end)
         
-        it("CycleWheelPrev wraps from wheel 1 to wheel 8", function()
+        it("CycleWheelPrev wraps from page 1 to page 8", function()
             Radial.currentWheel = 1
             Radial:CycleWheelPrev()
             assert.equals(MAX_WHEELS, Radial.currentWheel)
         end)
     end)
+
+    describe("D-pad navigation", function()
+        it("CouchPotatoNavUpBtn frame is created on init", function()
+            assert.is_not_nil(_G["CouchPotatoNavUpBtn"])
+        end)
+
+        it("CouchPotatoNavDownBtn frame is created on init", function()
+            assert.is_not_nil(_G["CouchPotatoNavDownBtn"])
+        end)
+
+        it("OpenWheel auto-selects the first visible slot", function()
+            Radial:OpenWheel()
+            -- Page 1 (Interface) has slot 1 = Character as first item
+            assert.equals(1, Radial.selectedIndex)
+        end)
+
+        it("NavigateList(1) moves selection to next slot", function()
+            Radial:OpenWheel()
+            assert.equals(1, Radial.selectedIndex)
+            Radial:NavigateList(1)
+            assert.equals(2, Radial.selectedIndex)
+        end)
+
+        it("NavigateList(-1) moves selection to previous slot", function()
+            Radial:OpenWheel()
+            Radial.selectedIndex = 3
+            Radial:NavigateList(-1)
+            assert.equals(2, Radial.selectedIndex)
+        end)
+
+        it("NavigateList(1) wraps from last slot to first", function()
+            Radial:OpenWheel()
+            -- Page 1 has 12 slots; move to last
+            local visible = Radial:GetVisibleSlots(1)
+            Radial.selectedIndex = visible[#visible]
+            Radial:NavigateList(1)
+            assert.equals(visible[1], Radial.selectedIndex)
+        end)
+
+        it("NavigateList(-1) wraps from first slot to last", function()
+            Radial:OpenWheel()
+            local visible = Radial:GetVisibleSlots(1)
+            Radial.selectedIndex = visible[1]
+            Radial:NavigateList(-1)
+            assert.equals(visible[#visible], Radial.selectedIndex)
+        end)
+
+        it("GetVisibleSlots returns 12 slots for interface page 1", function()
+            local visible = Radial:GetVisibleSlots(1)
+            assert.equals(12, #visible)
+        end)
+
+        it("GetVisibleSlots returns 10 slots for system page 2", function()
+            local visible = Radial:GetVisibleSlots(2)
+            assert.equals(10, #visible)
+        end)
+
+        it("GetVisibleSlots returns empty list for blank user page", function()
+            local visible = Radial:GetVisibleSlots(8)
+            assert.equals(0, #visible)
+        end)
+
+        it("CycleWheelNext auto-selects first slot when menu is open", function()
+            Radial:OpenWheel()
+            Radial.currentWheel = 1
+            Radial:CycleWheelNext()
+            -- Now on page 2; should select first visible slot (slot 1)
+            assert.equals(2, Radial.currentWheel)
+            assert.equals(1, Radial.selectedIndex)
+        end)
+    end)
     
-    describe("peek vs lock", function()
-        it("PeekWheel shows wheel and sets peek timer", function()
+    describe("peek vs lock (compat stubs)", function()
+        it("PeekWheel shows list", function()
             Radial:PeekWheel()
             assert.is_true(Radial.isVisible)
             assert.is_false(Radial.isLocked)
         end)
         
-        it("LockWheel shows wheel and sets locked state", function()
+        it("LockWheel shows list and sets locked state", function()
             Radial:LockWheel()
             assert.is_true(Radial.isVisible)
             assert.is_true(Radial.isLocked)
@@ -156,7 +244,7 @@ describe("Radial Module", function()
         it("PeekWheel does nothing when already locked", function()
             Radial:LockWheel()
             Radial.isLocked = true
-            Radial:PeekWheel()  -- should not reset locked state
+            Radial:PeekWheel()
             assert.is_true(Radial.isLocked)
         end)
     end)
@@ -165,9 +253,9 @@ describe("Radial Module", function()
         it("SetSlot assigns spell type and value", function()
             local ok = Radial:SetSlot(1, 1, "spell", "Fireball")
             assert.is_true(ok)
-            local btn = Radial.wheelButtons[1][1]
-            assert.equals("spell", btn:GetAttribute("type"))
-            assert.equals("Fireball", btn:GetAttribute("spell"))
+            local row = Radial.wheelButtons[1][1]
+            assert.equals("spell", row:GetAttribute("type"))
+            assert.equals("Fireball", row:GetAttribute("spell"))
         end)
         
         it("SetSlot persists to char DB", function()
@@ -215,10 +303,10 @@ describe("Radial Module", function()
                 "PAD2 permanent binding should target CouchPotatoGlobalCloseBtn")
         end)
 
-        it("CloseWheel hides the wheel without executing the highlighted slot", function()
+        it("CloseWheel hides the list without executing the selected item", function()
             local executed = false
             Radial:ShowCurrentWheel()
-            Radial.highlightedSlot = 1
+            Radial.selectedIndex = 1
 
             local orig = Radial.ConfirmAndClose
             Radial.ConfirmAndClose = function(self)
@@ -229,12 +317,12 @@ describe("Radial Module", function()
             Radial:CloseWheel()
 
             assert.is_false(executed, "CloseWheel must NOT call ConfirmAndClose")
-            assert.is_false(Radial.isVisible, "wheel should be hidden after CloseWheel")
+            assert.is_false(Radial.isVisible, "list should be hidden after CloseWheel")
 
             Radial.ConfirmAndClose = orig
         end)
 
-        it("CloseWheel does nothing when wheel is already closed", function()
+        it("CloseWheel does nothing when list is already closed", function()
             assert.is_false(Radial.isVisible)
             assert.has_no.errors(function() Radial:CloseWheel() end)
             assert.is_false(Radial.isVisible)
@@ -249,29 +337,29 @@ describe("Radial Module", function()
     end)
 
     describe("execute functions use direct WoW API", function()
-        it("wheel 1 Map slot toggles WorldMapFrame", function()
+        it("page 1 Map slot toggles WorldMapFrame", function()
             _G.WorldMapFrame._shown = false
             Radial:ShowCurrentWheel()
-            Radial.highlightedSlot = 4  -- Map is slot 4
+            Radial.selectedIndex = 4  -- Map is slot 4 on Interface page
             Radial:ConfirmAndClose()
             assert.is_true(_G.WorldMapFrame._shown, "Map slot should show WorldMapFrame")
         end)
 
-        it("wheel 1 Bags slot calls ToggleAllBags", function()
+        it("page 1 Bags slot calls ToggleAllBags", function()
             local called = false
             _G.ToggleAllBags = function() called = true end
             Radial:ShowCurrentWheel()
-            Radial.highlightedSlot = 7  -- Bags is slot 7
+            Radial.selectedIndex = 7  -- Bags is slot 7 on Interface page
             Radial:ConfirmAndClose()
             assert.is_true(called, "Bags slot should call ToggleAllBags()")
         end)
 
-        it("wheel 2 Mounts slot calls ToggleCollectionsJournal(2)", function()
+        it("page 2 Mounts slot calls ToggleCollectionsJournal(2)", function()
             local tabArg = nil
             _G.ToggleCollectionsJournal = function(tab) tabArg = tab end
             Radial.currentWheel = 2
             Radial:ShowCurrentWheel()
-            Radial.highlightedSlot = 10  -- Mounts is slot 10 on wheel 2
+            Radial.selectedIndex = 10  -- Mounts is slot 10 on System page
             Radial:ConfirmAndClose()
             assert.equals(2, tabArg, "Mounts should open Collections tab 2")
         end)
