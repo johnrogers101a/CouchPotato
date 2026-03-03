@@ -487,8 +487,10 @@ function Radial:InitGamePadButtonHandling()
     -- Uses a regular click binding (priority 1 = addon layer). When the wheel opens,
     -- SetOverrideBindingClick for PAD2 → CouchPotatoCloseBtn takes precedence; when the
     -- wheel closes and overrides are cleared, PAD2 falls back to this binding.
-    self.globalCloseBtn = CreateFrame("Button", "CouchPotatoGlobalCloseBtn", UIParent,
-        "SecureActionButtonTemplate")
+    -- Plain button — CloseAllWindows() is not a protected action; using
+    -- SecureActionButtonTemplate here and then overriding its OnClick with
+    -- insecure Lua would taint the button and defeat the purpose.
+    self.globalCloseBtn = CreateFrame("Button", "CouchPotatoGlobalCloseBtn", UIParent)
     self.globalCloseBtn:RegisterForClicks("AnyDown")
     self.globalCloseBtn:SetScript("OnClick", function() CloseAllWindows() end)
     SetBindingClick("PAD2", "CouchPotatoGlobalCloseBtn", "LeftButton")

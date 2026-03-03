@@ -607,8 +607,14 @@ _G.WorldMapFrame = {
 
 _G.GetTime = function() return os.time() end
 
-_G.RegisterStateDriver = function(frame, state, macro) end
-_G.UnregisterStateDriver = function(frame, state) end
+_G._stateDrivers = {}  -- {[frame] = {[state] = macro}} — inspectable in tests
+_G.RegisterStateDriver = function(frame, state, macro)
+    if not _G._stateDrivers[frame] then _G._stateDrivers[frame] = {} end
+    _G._stateDrivers[frame][state] = macro
+end
+_G.UnregisterStateDriver = function(frame, state)
+    if _G._stateDrivers[frame] then _G._stateDrivers[frame][state] = nil end
+end
 
 _G.print = print  -- already exists in Lua
 
