@@ -7,19 +7,19 @@
 local CP = CouchPotato
 local BlizzardFrames = CP:NewModule("BlizzardFrames")
 
--- Frames to suppress, with their event re-show handlers to also suppress
+-- Frames to suppress via RegisterStateDriver while controller mode is active
 local MANAGED_FRAMES = {
-    { name = "MainMenuBar",         events = { "ACTIONBAR_PAGE_CHANGED", "UPDATE_BONUS_ACTIONBAR" } },
-    { name = "MultiBarBottomLeft",  events = {} },
-    { name = "MultiBarBottomRight", events = {} },
-    { name = "MultiBarLeft",        events = {} },
-    { name = "MultiBarRight",       events = {} },
-    { name = "PlayerFrame",         events = { "UNIT_PORTRAIT_UPDATE", "UNIT_HEALTH" } },
-    { name = "TargetFrame",         events = { "PLAYER_TARGET_CHANGED" } },
-    { name = "FocusFrame",          events = { "PLAYER_FOCUS_CHANGED" } },
-    { name = "CastingBarFrame",     events = { "UNIT_SPELLCAST_START" } },
-    { name = "PossessBarFrame",     events = {} },
-    { name = "OverrideActionBar",   events = {} },
+    "MainMenuBar",
+    "MultiBarBottomLeft",
+    "MultiBarBottomRight",
+    "MultiBarLeft",
+    "MultiBarRight",
+    "PlayerFrame",
+    "TargetFrame",
+    "FocusFrame",
+    "CastingBarFrame",
+    "PossessBarFrame",
+    "OverrideActionBar",
 }
 
 BlizzardFrames.hiddenFrames = {}
@@ -31,24 +31,26 @@ function BlizzardFrames:HideAll()
         self.pendingHide = true
         return
     end
-    
-    for _, frameInfo in ipairs(MANAGED_FRAMES) do
-        local frame = _G[frameInfo.name]
-        if frame and frame:IsShown() then
-            -- Unregister events that would re-show the frame
-            for _, event in ipairs(frameInfo.events) do
-                frame:UnregisterEvent(event)
-            end
-            frame:Hide()
-            self.hiddenFrames[frameInfo.name] = true
+
+    for _, frameName in ipairs(MANAGED_FRAMES) do
+        local frame = _G[frameName]
+        if frame then
+            -- Use RegisterStateDriver for secure, taint-free frame hiding.
+            -- Direct frame:Hide() on protected Blizzard frames (action bars, unit frames)
+            -- taints the addon's execution context in TWW. The state driver runs in a
+            -- secure context and can hide any frame, including protected ones.
+            -- Event unregistration is intentionally omitted — the driver re-hides the
+            -- frame if Blizzard code re-shows it, so we don't need to suppress events.
+            RegisterStateDriver(frame, "visibility", "hide")
+            self.hiddenFrames[frameName] = true
         end
     end
-    
+
     -- Party frames 1-4
     for i = 1, 4 do
         local pf = _G["PartyMemberFrame" .. i]
         if pf then
-            pf:Hide()
+            RegisterStateDriver(pf, "visibility", "hide")
             self.hiddenFrames["PartyMemberFrame"..i] = true
         end
     end
@@ -60,27 +62,21 @@ function BlizzardFrames:RestoreAll()
         self.pendingRestore = true
         return
     end
-    
-    for _, frameInfo in ipairs(MANAGED_FRAMES) do
-        local frame = _G[frameInfo.name]
-        if frame and self.hiddenFrames[frameInfo.name] then
-            frame:Show()
-            -- Re-register events (WoW re-registers them via the frame's own init — just show it)
-            self.hiddenFrames[frameInfo.name] = nil
+
+    for _, frameName in ipairs(MANAGED_FRAMES) do
+        local frame = _G[frameName]
+        if frame and self.hiddenFrames[frameName] then
+            UnregisterStateDriver(frame, "visibility")
+            self.hiddenFrames[frameName] = nil
         end
     end
-    
+
     for i = 1, 4 do
         local pf = _G["PartyMemberFrame"..i]
         if pf and self.hiddenFrames["PartyMemberFrame"..i] then
-            pf:Show()
+            UnregisterStateDriver(pf, "visibility")
             self.hiddenFrames["PartyMemberFrame"..i] = nil
         end
-    end
-    
-    -- Re-show MainMenuBar properly
-    if MainMenuBar then
-        MainMenuBar:Show()
     end
 end
 
