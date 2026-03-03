@@ -97,16 +97,20 @@ function Bindings:ApplyWheelBindings(wheelIdx)
     ClearOverrideBindings(owner)
     self.wheelOpen = true
 
-    -- Bumpers cycle wheels while open
+    -- Bumpers cycle pages
     SetOverrideBindingClick(owner, true, "PADLSHOULDER", "CouchPotatoLSBtn", "LeftButton")
     SetOverrideBindingClick(owner, true, "PADRSHOULDER", "CouchPotatoRSBtn", "LeftButton")
 
-    -- Keep trigger bound (AnyDown opens, AnyUp cancels without executing)
-    SetOverrideBindingClick(owner, true, "PADRTRIGGER", "CouchPotatoTriggerBtn", "LeftButton")
+    -- D-pad navigates the list
+    SetOverrideBindingClick(owner, true, "PADDDUP",   "CouchPotatoNavUpBtn",   "LeftButton")
+    SetOverrideBindingClick(owner, true, "PADDDDOWN", "CouchPotatoNavDownBtn", "LeftButton")
 
-    -- A (PAD1): confirm/execute selected slot; B (PAD2): cancel/close without executing
+    -- A (PAD1): confirm/execute selected item; B (PAD2): close without executing
     SetOverrideBindingClick(owner, true, "PAD1", "CouchPotatoConfirmBtn", "LeftButton")
-    SetOverrideBindingClick(owner, true, "PAD2", "CouchPotatoCloseBtn", "LeftButton")
+    SetOverrideBindingClick(owner, true, "PAD2", "CouchPotatoCloseBtn",   "LeftButton")
+
+    -- Keep trigger bound so a second press is a no-op (OpenWheel guards isVisible)
+    SetOverrideBindingClick(owner, true, "PADRTRIGGER", "CouchPotatoTriggerBtn", "LeftButton")
 end
 
 -- Called by Radial when the wheel closes.
