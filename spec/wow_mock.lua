@@ -593,6 +593,9 @@ _G.GameTimeCalendar_Toggle = function() end
 _G.ToggleProfessionsBook   = function() end
 _G.Screenshot              = function() end
 
+_G.ShowUIPanel = function(frame) if frame and frame.Show then frame:Show() end end
+_G.HideUIPanel = function(frame) if frame and frame.Hide then frame:Hide() end end
+
 -- WorldMapFrame: direct frame used for map toggle (ToggleWorldMap removed in TWW)
 _G.WorldMapFrame = {
     _shown = false,

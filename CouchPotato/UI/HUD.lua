@@ -181,14 +181,16 @@ function HUD:OnSpellCastStart(event, unit, castGUID, spellID)
             castFrame:Show()
         end
     elseif unit == "target" then
-        -- Check if target cast is interruptible
-        local name, _, _, _, _, _, _, notInterruptible = UnitCastingInfo(unit)
-        if name then
-            if not notInterruptible then
-                self.frames.target.interruptIndicator:Show()
-            else
-                self.frames.target.interruptIndicator:Hide()
-            end
+        -- notInterruptible from UnitCastingInfo is a secret boolean that becomes tainted
+        -- when called from a tainted context; wrap in pcall to prevent error spam
+        local ok, showIndicator = pcall(function()
+            local name, _, _, _, _, _, _, notInterruptible = UnitCastingInfo(unit)
+            return name ~= nil and not notInterruptible
+        end)
+        if ok and showIndicator then
+            self.frames.target.interruptIndicator:Show()
+        else
+            self.frames.target.interruptIndicator:Hide()
         end
     end
 end
