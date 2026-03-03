@@ -573,12 +573,10 @@ _G.IsGamePadCursorControlEnabled = function() return false end
 _G.IsGamePadFreelookEnabled = function() return false end
 
 -- Interface panel toggle stubs (real protected APIs, not MicroButton clicks)
-_G.BOOKTYPE_SPELL = "spell"
 _G.CloseAllWindows         = function() end
 _G.ToggleCharacter         = function(tab) end
 _G.ToggleSpellBook         = function(bookType) end
 _G.ToggleTalentFrame       = function() end
-_G.ToggleWorldMap          = function() end
 _G.ToggleQuestLog          = function() end
 _G.ToggleAchievementFrame  = function() end
 _G.ToggleAllBags           = function() end
@@ -586,7 +584,7 @@ _G.ToggleCollectionsJournal= function(tab) end
 _G.ToggleFriendsFrame      = function() end
 _G.ToggleEncounterJournal  = function() end
 _G.ToggleGuildFrame        = function() end
-_G.ToggleLFDParentFrame    = function() end
+_G.PVEFrame_ToggleFrame    = function() end  -- replaces removed ToggleLFDParentFrame
 _G.TogglePVPUI             = function() end
 _G.ToggleStoreUI           = function() end
 _G.ToggleHelpFrame         = function() end
@@ -594,6 +592,15 @@ _G.ToggleGameMenu          = function() end
 _G.GameTimeCalendar_Toggle = function() end
 _G.ToggleProfessionsBook   = function() end
 _G.Screenshot              = function() end
+
+-- WorldMapFrame: direct frame used for map toggle (ToggleWorldMap removed in TWW)
+_G.WorldMapFrame = {
+    _shown = false,
+    IsShown  = function(self) return self._shown end,
+    SetShown = function(self, v) self._shown = v end,
+    Show     = function(self) self._shown = true end,
+    Hide     = function(self) self._shown = false end,
+}
 
 _G.GetTime = function() return os.time() end
 

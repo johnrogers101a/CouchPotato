@@ -249,13 +249,12 @@ describe("Radial Module", function()
     end)
 
     describe("execute functions use direct WoW API", function()
-        it("wheel 1 Map slot calls ToggleWorldMap", function()
-            local called = false
-            _G.ToggleWorldMap = function() called = true end
+        it("wheel 1 Map slot toggles WorldMapFrame", function()
+            _G.WorldMapFrame._shown = false
             Radial:ShowCurrentWheel()
             Radial.highlightedSlot = 4  -- Map is slot 4
             Radial:ConfirmAndClose()
-            assert.is_true(called, "Map slot should call ToggleWorldMap()")
+            assert.is_true(_G.WorldMapFrame._shown, "Map slot should show WorldMapFrame")
         end)
 
         it("wheel 1 Bags slot calls ToggleAllBags", function()
