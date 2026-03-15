@@ -1,10 +1,10 @@
--- CouchPotato/UI/HealMode.lua
+-- ControllerCompanion/UI/HealMode.lua
 -- Healer party frame overlay for controller healing
 -- D-pad navigates between party/raid members
 -- Face buttons auto-swap to healing spells for focused member
 -- Patch 12.0.1 (Interface 120001)
 
-local CP = CouchPotato
+local CP = ControllerCompanion
 local HealMode = CP:NewModule("HealMode")
 
 HealMode.active = false
@@ -24,7 +24,7 @@ end
 
 function HealMode:CreateOverlay()
     -- Thin golden border that highlights the focused party frame
-    local overlay = CreateFrame("Frame", "CouchPotatoHealCursor", UIParent)
+    local overlay = CreateFrame("Frame", "ControllerCompanionHealCursor", UIParent)
     overlay:SetFrameStrata("DIALOG")
     overlay:SetSize(120, 36)
     overlay:Hide()

@@ -1,10 +1,10 @@
--- CouchPotato/UI/HUD.lua
+-- ControllerCompanion/UI/HUD.lua
 -- Controller HUD: cast bar + interrupt indicator only.
 -- Health, power, party, and raid frames are handled by Blizzard's built-in
 -- UI or the player's existing unit frame addon (e.g. ElvUI, SUF, etc.).
 -- Patch 12.0.1 (Interface 120001)
 
-local CP = CouchPotato
+local CP = ControllerCompanion
 local HUD = CP:NewModule("HUD")
 
 HUD.frames = {}
@@ -27,7 +27,7 @@ function HUD:CreateFrames()
 end
 
 function HUD:CreateCastBar()
-    local castFrame = CreateFrame("Frame", "CouchPotatoCastBar", UIParent)
+    local castFrame = CreateFrame("Frame", "ControllerCompanionCastBar", UIParent)
     castFrame:SetPoint("CENTER", UIParent, "CENTER", 0, -150)
     castFrame:SetSize(400, 50)
     castFrame:Hide()  -- hidden until casting
@@ -115,7 +115,7 @@ end
 function HUD:CreateTargetFrame()
     -- Minimal target overlay: just name, level, and an INTERRUPTIBLE flash.
     -- Health/power bars are handled by the player's existing unit frame addon.
-    local targetFrame = CreateFrame("Frame", "CouchPotatoTargetFrame", UIParent)
+    local targetFrame = CreateFrame("Frame", "ControllerCompanionTargetFrame", UIParent)
     targetFrame:SetPoint("TOP", UIParent, "TOP", 0, -80)
     targetFrame:SetSize(320, 40)
     targetFrame:Hide()

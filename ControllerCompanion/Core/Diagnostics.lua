@@ -1,4 +1,4 @@
--- CouchPotato/Core/Diagnostics.lua
+-- ControllerCompanion/Core/Diagnostics.lua
 -- In-game diagnostic suite and debug dump.
 --
 -- /cp test  — run assertions and print PASS/FAIL for each check
@@ -6,7 +6,7 @@
 --
 -- Patch 12.0.1 (Interface 120001)
 
-local CP = CouchPotato
+local CP = ControllerCompanion
 local Diagnostics = CP:NewModule("Diagnostics")
 
 -- Face-button → controller label
@@ -74,7 +74,7 @@ function Diagnostics:RunTests()
     -- After any patch, FAIL here = Blizzard removed or renamed that API.
     out("── API Compatibility ──")
 
-    -- C_GamePad namespace (Bindings.lua, GamePad.lua, Specs.lua, CouchPotato.lua)
+    -- C_GamePad namespace (Bindings.lua, GamePad.lua, Specs.lua, ControllerCompanion.lua)
     tally(check("C_GamePad (namespace)",
         type(C_GamePad) == "table",
         type(C_GamePad)))
@@ -102,7 +102,7 @@ function Diagnostics:RunTests()
         type(C_Spell and C_Spell.GetSpellInfo) == "function",
         type(C_Spell and C_Spell.GetSpellInfo)))
 
-    -- C_AddOns namespace (localized in CouchPotato.lua; used by Loader)
+    -- C_AddOns namespace (localized in ControllerCompanion.lua; used by Loader)
     tally(check("C_AddOns (namespace)",
         type(C_AddOns) == "table",
         type(C_AddOns)))
@@ -110,7 +110,7 @@ function Diagnostics:RunTests()
         type(C_AddOns and C_AddOns.IsAddOnLoaded) == "function",
         type(C_AddOns and C_AddOns.IsAddOnLoaded)))
 
-    -- C_Timer namespace (CouchPotato.lua ScheduleTimer / ScheduleRepeatingTimer, Radial.lua)
+    -- C_Timer namespace (ControllerCompanion.lua ScheduleTimer / ScheduleRepeatingTimer, Radial.lua)
     tally(check("C_Timer (namespace)",
         type(C_Timer) == "table",
         type(C_Timer)))
@@ -190,7 +190,7 @@ function Diagnostics:RunTests()
     local owner = Bindings and Bindings.ownerFrame
     tally(check("Bindings ownerFrame exists",
         owner ~= nil,
-        owner and "CouchPotatoBindingOwner" or "nil"))
+        owner and "ControllerCompanionBindingOwner" or "nil"))
 
     -- 5. Specs layout found for current character
     local Specs = CP:GetModule("Specs", true)
@@ -201,7 +201,7 @@ function Diagnostics:RunTests()
 
     -- 6–9. Verify direct-mode face button bindings.
     --      Direct mode now uses SetOverrideBindingClick → hidden SecureActionButton.
-    --      GetBindingAction returns "CLICK CouchPotatoDirectPAD4:LeftButton".
+    --      GetBindingAction returns "CLICK ControllerCompanionDirectPAD4:LeftButton".
     --      The spell itself lives on the button attribute, not in the binding string.
     if layout then
         local faceMap = {
@@ -211,7 +211,7 @@ function Diagnostics:RunTests()
             { pad = "PAD3", field = "interrupt",  spell = layout.interrupt },
         }
         for _, entry in ipairs(faceMap) do
-            local btnName    = "CouchPotatoDirect" .. entry.pad
+            local btnName    = "ControllerCompanionDirect" .. entry.pad
             local actual     = GetBindingAction(entry.pad, true)
             local expectedCl = "CLICK " .. btnName .. ":LeftButton"
             local detail     = string.format(
@@ -238,7 +238,7 @@ function Diagnostics:RunTests()
     -- 10. Cardinal wheel-slot buttons exist (created by Radial at load time)
     local cardinalSlots = { PAD4 = 1, PAD2 = 4, PAD1 = 7, PAD3 = 10 }
     for pad, slotIdx in pairs(cardinalSlots) do
-        local btnName = string.format("CouchPotatoWheel1Slot%d", slotIdx)
+        local btnName = string.format("ControllerCompanionWheel1Slot%d", slotIdx)
         local btn     = _G[btnName]
         tally(check(
             string.format("Wheel 1 Slot %d button exists (%s)", slotIdx, pad),
@@ -246,7 +246,7 @@ function Diagnostics:RunTests()
     end
 
     -- 11. Cardinal slots have a spell set (not still "empty")
-    local slot1 = _G["CouchPotatoWheel1Slot1"]
+    local slot1 = _G["ControllerCompanionWheel1Slot1"]
     if slot1 then
         local spellAttr = slot1:GetAttribute("spell")
         tally(check("Wheel 1 Slot 1 spell attribute",
@@ -257,7 +257,7 @@ function Diagnostics:RunTests()
         fail("Wheel 1 Slot 1 spell attribute", "button not found")
     end
 
-    local slot10 = _G["CouchPotatoWheel1Slot10"]
+    local slot10 = _G["ControllerCompanionWheel1Slot10"]
     if slot10 then
         local spellAttr = slot10:GetAttribute("spell")
         tally(check("Wheel 1 Slot 10 spell attribute (PAD3/X fix)",
@@ -275,10 +275,10 @@ function Diagnostics:RunTests()
         -- not on owner, so clearing it is always safe regardless of Bindings state.
         -- Cache probeOwner to avoid creating a new unnamed frame on each test run
         if not self.probeOwner then
-            self.probeOwner = CreateFrame("Frame", "CouchPotatoDiagProbeOwner", UIParent)
+            self.probeOwner = CreateFrame("Frame", "ControllerCompanionDiagProbeOwner", UIParent)
         end
         local probeOwner = self.probeOwner
-        local testName = "CouchPotatoDiagProbeBtn"
+        local testName = "ControllerCompanionDiagProbeBtn"
         -- Reuse the frame if it already exists (avoids "name already in use" error
         -- if /cp test is run more than once in the same session).
         local probe = _G[testName] or CreateFrame("Button", testName, UIParent,
@@ -372,7 +372,7 @@ function Diagnostics:DumpDebug()
         -- checkOverride=true to see the bindings we set via SetOverrideBinding*.
         -- Without this flag WoW returns the *default* binding (e.g. "ACTIONBUTTON2"),
         -- which makes it appear that our override had no effect.
-        -- Direct mode: expect "CLICK CouchPotatoDirectPAD4:LeftButton" (not "SPELL ...").
+        -- Direct mode: expect "CLICK ControllerCompanionDirectPAD4:LeftButton" (not "SPELL ...").
         local b = GetBindingAction(key, true)
         if b then
             out(string.format("  %-18s = %s", key, b))

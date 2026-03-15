@@ -1,5 +1,5 @@
 -------------------------------------------------------------------------------
--- CouchPotato - BG3-inspired Radial Controller UI for World of Warcraft
+-- ControllerCompanion - BG3-inspired Radial Controller UI for World of Warcraft
 -- Pure WoW Lua — no LibStub, no Ace3, no external dependencies
 -------------------------------------------------------------------------------
 
@@ -19,10 +19,10 @@ local ReloadUI = ReloadUI
 -- Core namespace
 -------------------------------------------------------------------------------
 local CP = {}
-_G["CouchPotato"] = CP
+_G["ControllerCompanion"] = CP
 
 CP.version    = "1.0.0"
-CP.addonName  = "CouchPotato"
+CP.addonName  = "ControllerCompanion"
 CP._modules   = {}           -- [name] = module table
 CP._eventCallbacks = {}      -- [event] = list of {obj, fn}
 
@@ -156,7 +156,7 @@ end
 local function _injectPrintAPI(obj)
     function obj:Print(...)
         local parts = { ... }
-        local msg = "|cff69ccf0CouchPotato|r:"
+        local msg = "|cff69ccf0ControllerCompanion|r:"
         for i = 1, #parts do
             msg = msg .. " " .. tostring(parts[i])
         end
@@ -280,13 +280,13 @@ local function deepMerge(target, source)
 end
 
 local function _initDB()
-    CouchPotatoDB          = CouchPotatoDB          or {}
-    CouchPotatoDB.profile  = CouchPotatoDB.profile  or {}
-    CouchPotatoDB.char     = CouchPotatoDB.char     or {}
-    CouchPotatoDB.global   = CouchPotatoDB.global   or {}
-    deepMerge(CouchPotatoDB.profile, defaults.profile)
-    deepMerge(CouchPotatoDB.char,    defaults.char)
-    CP.db = CouchPotatoDB
+    ControllerCompanionDB          = ControllerCompanionDB          or {}
+    ControllerCompanionDB.profile  = ControllerCompanionDB.profile  or {}
+    ControllerCompanionDB.char     = ControllerCompanionDB.char     or {}
+    ControllerCompanionDB.global   = ControllerCompanionDB.global   or {}
+    deepMerge(ControllerCompanionDB.profile, defaults.profile)
+    deepMerge(ControllerCompanionDB.char,    defaults.char)
+    CP.db = ControllerCompanionDB
     -- ResetProfile helper (used by /cp reset)
     CP.db.ResetProfile = function()
         for k in pairs(CP.db.profile) do CP.db.profile[k] = nil end
@@ -300,7 +300,7 @@ end
 function CP:_OnAddonLoaded()
     _initDB()
 
-    -- /cp is registered in CouchPotato_Loader so it works even without a controller.
+    -- /cp is registered in ControllerCompanion_Loader so it works even without a controller.
     -- No re-registration needed here.
     self:DebugPrint("Initialized")
 end
@@ -444,7 +444,7 @@ function CP:ChatCommand(input)
             CP.ConfigWindow.Show()
         else
             -- Fallback during early load before UI files are ready
-            self:Print("CouchPotato v" .. self.version)
+            self:Print("ControllerCompanion v" .. self.version)
             self:Print("Commands:")
             self:Print("  /cp show      - Show radial UI")
             self:Print("  /cp hide      - Hide radial UI")
@@ -463,7 +463,7 @@ end
 -- Helpers
 -------------------------------------------------------------------------------
 function CP:PrintStatus()
-    self:Print("=== CouchPotato Status ===")
+    self:Print("=== ControllerCompanion Status ===")
     self:Print(string_format("Version: %s", self.version))
     self:Print(string_format("Controller Active: %s",
         self:IsControllerActive() and "Yes" or "No"))

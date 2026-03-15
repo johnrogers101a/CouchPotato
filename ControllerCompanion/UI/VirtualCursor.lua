@@ -1,9 +1,9 @@
--- CouchPotato/UI/VirtualCursor.lua
+-- ControllerCompanion/UI/VirtualCursor.lua
 -- D-pad cursor for controller navigation of WoW UI elements
 -- Snaps to interactable frames; D-pad moves focus
 -- Patch 12.0.1 (Interface 120001)
 
-local CP = CouchPotato
+local CP = ControllerCompanion
 local VirtualCursor = CP:NewModule("VirtualCursor")
 
 VirtualCursor.enabled = false
@@ -29,7 +29,7 @@ end
 
 function VirtualCursor:CreateCursorFrame()
     -- A golden ring/border that overlays the focused frame
-    local cursor = CreateFrame("Frame", "CouchPotatoCursor", UIParent)
+    local cursor = CreateFrame("Frame", "ControllerCompanionCursor", UIParent)
     cursor:SetFrameStrata("TOOLTIP")  -- always on top
     cursor:SetSize(10, 10)            -- will be resized to match focused frame
     cursor:Hide()
