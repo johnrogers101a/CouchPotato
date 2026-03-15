@@ -102,4 +102,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 - [Ace3](https://www.wowace.com/projects/ace3) — addon framework
 - Inspired by [Baldur's Gate 3](https://baldursgate3.game/)'s radial controller UI
-- CouchPotato Team
+- [Wow Lua Api](https://github.com/Gethe/wow-ui-source/tree/live)

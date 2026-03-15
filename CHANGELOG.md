@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - AceTimer-3.0 timer utilities
 - Busted test suite for CI/CD
 
+### Fixed
+- Specs.lua: Use idiomatic `select(1, UnitClass())` pattern for first return value
+- HealMode.lua: Fix call to non-existent `ClearHealModeBindings()` → `ClearControllerBindings()`
+- Diagnostics.lua: Cache probeOwner frame to prevent accumulation on repeated `/cp test` calls
+- CouchPotato.toc: Add explicit `SavedVariables_Per_Character: CouchPotatoDB` declaration
+
 ### Technical
 - Interface version: 120001 (WoW Patch 12.0.1 Midnight)
 - SetOverrideBinding for safe keyboard restoration
