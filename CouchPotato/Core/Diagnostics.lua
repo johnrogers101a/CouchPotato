@@ -273,7 +273,11 @@ function Diagnostics:RunTests()
         -- Use a SEPARATE anonymous owner so the probe never touches Bindings.ownerFrame.
         -- This is the critical fix for the PAD4 leak: the probe binding lives on probeOwner,
         -- not on owner, so clearing it is always safe regardless of Bindings state.
-        local probeOwner = CreateFrame("Frame", nil, UIParent)
+        -- Cache probeOwner to avoid creating a new unnamed frame on each test run
+        if not self.probeOwner then
+            self.probeOwner = CreateFrame("Frame", "CouchPotatoDiagProbeOwner", UIParent)
+        end
+        local probeOwner = self.probeOwner
         local testName = "CouchPotatoDiagProbeBtn"
         -- Reuse the frame if it already exists (avoids "name already in use" error
         -- if /cp test is run more than once in the same session).
