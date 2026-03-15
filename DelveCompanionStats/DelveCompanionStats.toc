@@ -1,0 +1,8 @@
+## Interface: 120001
+## Title: DelveCompanionStats
+## Notes: Tracks delve companion level and displays above chat
+## Author: CouchPotato Addons
+## Version: 1.0.0
+## SavedVariables: DelveCompanionStatsDB
+
+DelveCompanionStats.lua
