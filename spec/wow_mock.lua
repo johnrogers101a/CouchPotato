@@ -632,11 +632,11 @@ if not _G.bit then
     else
         -- Fallback for Lua 5.3+
         _G.bit = {
-            band = function(a, b) return a & b end,
-            bor = function(a, b) return a | b end,
-            bxor = function(a, b) return a ~ b end,
-            lshift = function(a, b) return a << b end,
-            rshift = function(a, b) return a >> b end,
+            band = function(a, b) return bit.band(a, b) end,
+            bor = function(a, b) return bit.bor(a, b) end,
+            bxor = function(a, b) return bit.bxor(a, b) end,
+            lshift = function(a, b) return bit.lshift(a, b) end,
+            rshift = function(a, b) return bit.rshift(a, b) end,
         }
     end
 end
