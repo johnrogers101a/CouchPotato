@@ -65,6 +65,10 @@ function ns:OnLoad()
 
     ns.frame = frameResult
 
+    -- Set frame strata and level to ensure visibility above other UI
+    ns.frame:SetFrameStrata("DIALOG")
+    ns.frame:SetFrameLevel(100)
+
     -- 3. Set size and default anchor
     ns.frame:SetSize(200, 100)
     ns.frame:SetPoint("BOTTOM", UIParent, "BOTTOM", 20, 100)
@@ -83,6 +87,11 @@ function ns:OnLoad()
     ns.nameLabel:SetPoint("TOPLEFT", ns.frame, "TOPLEFT", 8, -8)
     ns.nameLabel:SetWidth(184)
     ns.nameLabel:SetJustifyH("LEFT")
+    ns.nameLabel:SetTextColor(1, 1, 1, 1)  -- Explicit white text color
+    -- Validate font; fall back to STANDARD_TEXT_FONT if GameFontNormal didn't load
+    if not ns.nameLabel:GetFont() then
+        ns.nameLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+    end
     ns.nameLabel:SetText("No companion data")
 
     -- 6. Create level label
@@ -90,6 +99,11 @@ function ns:OnLoad()
     ns.levelLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -4)
     ns.levelLabel:SetWidth(184)
     ns.levelLabel:SetJustifyH("LEFT")
+    ns.levelLabel:SetTextColor(1, 1, 1, 1)  -- Explicit white text color
+    -- Validate font; fall back to STANDARD_TEXT_FONT if GameFontNormal didn't load
+    if not ns.levelLabel:GetFont() then
+        ns.levelLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+    end
     ns.levelLabel:SetText("")
 
     -- 7. Make frame movable
@@ -135,4 +149,8 @@ function ns:OnLoad()
 
     -- 10. Show the frame
     if ns.frame then ns.frame:Show() end
+
+    -- Explicitly show fontstrings (belt-and-suspenders: ensures visibility even if parent Show() is pending)
+    if ns.nameLabel then ns.nameLabel:Show() end
+    if ns.levelLabel then ns.levelLabel:Show() end
 end
