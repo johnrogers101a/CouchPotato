@@ -27,10 +27,10 @@ describe("BlizzardFrames", function()
         -- Reset state driver tracking table (re-seed after resetMocks)
         _G._stateDrivers = {}
 
-        dofile("CouchPotato/CouchPotato.lua")
-        CP = CouchPotato
+        dofile("ControllerCompanion/ControllerCompanion.lua")
+        CP = ControllerCompanion
         CP.db = { profile = { hideBlizzardFrames = true } }
-        dofile("CouchPotato/Core/BlizzardFrames.lua")
+        dofile("ControllerCompanion/Core/BlizzardFrames.lua")
         BlizzardFrames = CP._modules["BlizzardFrames"]
         BlizzardFrames.hiddenFrames = {}
 

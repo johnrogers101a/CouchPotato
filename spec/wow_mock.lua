@@ -232,7 +232,7 @@ _G.C_GamePad = {
 -- C_AddOns API
 _G.C_AddOns = {
     _addons = {
-        CouchPotato = { loaded = false, enabled = true },
+        ControllerCompanion = { loaded = false, enabled = true },
     },
     
     IsAddOnLoaded = function(name)
@@ -260,7 +260,7 @@ _G.C_AddOns = {
     -- Test helpers
     _Reset = function()
         _G.C_AddOns._addons = {
-            CouchPotato = { loaded = false, enabled = true },
+            ControllerCompanion = { loaded = false, enabled = true },
         }
     end,
 }

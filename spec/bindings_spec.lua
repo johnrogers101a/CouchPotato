@@ -18,15 +18,15 @@ describe("Bindings Module", function()
     before_each(function()
         helpers.resetMocks()
 
-        dofile("CouchPotato/CouchPotato.lua")
-        CP = CouchPotato
+        dofile("ControllerCompanion/ControllerCompanion.lua")
+        CP = ControllerCompanion
         CP.db = {
             profile = { vibrationEnabled = true },
             char    = { currentWheel = 1, wheelLayouts = {} },
         }
 
-        dofile("CouchPotato/Core/Specs.lua")
-        dofile("CouchPotato/Core/Bindings.lua")
+        dofile("ControllerCompanion/Core/Specs.lua")
+        dofile("ControllerCompanion/Core/Bindings.lua")
 
         Specs    = CP:GetModule("Specs")
         Bindings = CP:GetModule("Bindings")
@@ -67,7 +67,7 @@ describe("Bindings Module", function()
             local override = _G._GetOverrideBindings(Bindings.ownerFrame)
             -- Only PADRTRIGGER should be bound
             assert.is_not_nil(override["PADRTRIGGER"], "PADRTRIGGER should be bound")
-            assert.equals("CLICK CouchPotatoTriggerBtn:LeftButton", override["PADRTRIGGER"])
+            assert.equals("CLICK ControllerCompanionTriggerBtn:LeftButton", override["PADRTRIGGER"])
             
             -- PAD1-4 should NOT be bound (WoW handles them normally)
             assert.is_nil(override["PAD1"], "PAD1 should NOT be bound (WoW handles it)")
@@ -133,19 +133,19 @@ describe("Bindings Module", function()
             assert.is_nil(bindings["PAD3"], "PAD3 should NOT be bound in wheel mode")
 
             -- PAD1 (A) → confirm/execute; PAD2 (B) → cancel/close
-            assert.is_truthy(bindings["PAD1"] and bindings["PAD1"]:find("CouchPotatoConfirmBtn"),
-                "PAD1 should be bound to CouchPotatoConfirmBtn")
-            assert.is_truthy(bindings["PAD2"] and bindings["PAD2"]:find("CouchPotatoCloseBtn"),
-                "PAD2 should be bound to CouchPotatoCloseBtn")
+            assert.is_truthy(bindings["PAD1"] and bindings["PAD1"]:find("ControllerCompanionConfirmBtn"),
+                "PAD1 should be bound to ControllerCompanionConfirmBtn")
+            assert.is_truthy(bindings["PAD2"] and bindings["PAD2"]:find("ControllerCompanionCloseBtn"),
+                "PAD2 should be bound to ControllerCompanionCloseBtn")
             
             -- Bumpers should be bound for wheel cycling
-            assert.is_truthy(bindings["PADLSHOULDER"]:find("CouchPotatoLSBtn"),
+            assert.is_truthy(bindings["PADLSHOULDER"]:find("ControllerCompanionLSBtn"),
                 "PADLSHOULDER should cycle wheels")
-            assert.is_truthy(bindings["PADRSHOULDER"]:find("CouchPotatoRSBtn"),
+            assert.is_truthy(bindings["PADRSHOULDER"]:find("ControllerCompanionRSBtn"),
                 "PADRSHOULDER should cycle wheels")
             
             -- Trigger should still be bound
-            assert.is_truthy(bindings["PADRTRIGGER"]:find("CouchPotatoTriggerBtn"),
+            assert.is_truthy(bindings["PADRTRIGGER"]:find("ControllerCompanionTriggerBtn"),
                 "PADRTRIGGER should be bound")
         end)
 

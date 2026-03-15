@@ -11,8 +11,8 @@ describe("GamePad Module", function()
     before_each(function()
         helpers.resetMocks()
 
-        dofile("CouchPotato/CouchPotato.lua")
-        CP = CouchPotato
+        dofile("ControllerCompanion/ControllerCompanion.lua")
+        CP = ControllerCompanion
         CP.db = {
             profile = {
                 vibrationEnabled = true,
@@ -23,7 +23,7 @@ describe("GamePad Module", function()
             char = { currentWheel = 1, wheelLayouts = {} },
         }
 
-        dofile("CouchPotato/Core/GamePad.lua")
+        dofile("ControllerCompanion/Core/GamePad.lua")
         GamePad = CP:GetModule("GamePad")
         GamePad:Enable()
     end)

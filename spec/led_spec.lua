@@ -11,14 +11,14 @@ describe("LED Module", function()
         helpers.resetMocks()
         C_GamePad._SimulateConnect(1)
 
-        dofile("CouchPotato/CouchPotato.lua")
-        CP = CouchPotato
+        dofile("ControllerCompanion/ControllerCompanion.lua")
+        CP = ControllerCompanion
         CP.db = {
             profile = { ledEnabled = true },
             char    = {},
         }
 
-        dofile("CouchPotato/Core/LED.lua")
+        dofile("ControllerCompanion/Core/LED.lua")
         LED = CP:GetModule("LED")
         LED:Enable()
     end)
