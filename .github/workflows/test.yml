@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # test: run the full Busted suite
+  # ──────────────────────────────────────────────────────────────────────────
+  test:
+    name: Busted Tests (Lua 5.1)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Lua 5.1 and LuaRocks
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y lua5.1 luarocks
+
+      - name: Cache LuaRocks packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.luarocks
+          key: luarocks-${{ runner.os }}-busted
+          restore-keys: |
+            luarocks-${{ runner.os }}-
+
+      - name: Install busted
+        run: sudo luarocks install busted
+
+      - name: Run tests
+        run: busted spec/
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # lint: run luacheck in parallel (no dependency on test job)
+  # ──────────────────────────────────────────────────────────────────────────
+  lint:
+    name: Luacheck Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Lua 5.1 and LuaRocks
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y lua5.1 luarocks
+
+      - name: Cache LuaRocks packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.luarocks
+          key: luarocks-${{ runner.os }}-luacheck
+          restore-keys: |
+            luarocks-${{ runner.os }}-
+
+      - name: Install luacheck
+        run: sudo luarocks install luacheck
+
+      - name: Run luacheck
+        # .luacheckrc already declares all WoW globals and per-file overrides.
+        # --no-unused-args suppresses argument warnings already covered by
+        # the  ignore = { "212", "213" }  entries in .luacheckrc.
+        run: luacheck . --no-unused-args
