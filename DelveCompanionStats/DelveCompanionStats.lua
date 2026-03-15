@@ -24,7 +24,7 @@ end)
 --- Called once when the addon first loads.
 function ns:OnLoad()
     -- 1. Create the main display frame
-    ns.frame = CreateFrame("Frame", "DelveCompanionStatsFrame", UIParent, "BackdropTemplateMixin and BackdropTemplate")
+    ns.frame = CreateFrame("Frame", "DelveCompanionStatsFrame", UIParent, "BackdropTemplate")
 
     -- 2. Set size
     ns.frame:SetSize(200, 100)
