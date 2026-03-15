@@ -630,13 +630,13 @@ if not _G.bit then
     if success then
         _G.bit = bitop
     else
-        -- Fallback for Lua 5.3+
+        -- Fallback for Lua 5.3+: use load() so luacheck (lua51) never parses the operators
         _G.bit = {
-            band = function(a, b) return bit.band(a, b) end,
-            bor = function(a, b) return bit.bor(a, b) end,
-            bxor = function(a, b) return bit.bxor(a, b) end,
-            lshift = function(a, b) return bit.lshift(a, b) end,
-            rshift = function(a, b) return bit.rshift(a, b) end,
+            band   = load("return function(a,b) return a & b end")(),
+            bor    = load("return function(a,b) return a | b end")(),
+            bxor   = load("return function(a,b) return a ~ b end")(),
+            lshift = load("return function(a,b) return a << b end")(),
+            rshift = load("return function(a,b) return a >> b end")(),
         }
     end
 end
