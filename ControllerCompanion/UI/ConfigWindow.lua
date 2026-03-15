@@ -1,4 +1,4 @@
--- CouchPotato/UI/ConfigWindow.lua
+-- ControllerCompanion/UI/ConfigWindow.lua
 -- Main configuration window — opened by  /cp  with no arguments.
 --
 -- Exposes:
@@ -7,7 +7,7 @@
 --
 -- Patch 12.0.1 (Interface 120001)
 
-local CP = CouchPotato
+local CP = ControllerCompanion
 
 -------------------------------------------------------------------------------
 -- Frame singleton — built once, reused forever
@@ -15,7 +15,7 @@ local CP = CouchPotato
 local _frame = nil
 
 local function _build()
-    local f = CreateFrame("Frame", "CouchPotatoConfigFrame", UIParent,
+    local f = CreateFrame("Frame", "ControllerCompanionConfigFrame", UIParent,
                           "BasicFrameTemplateWithInset")
     f:SetSize(480, 360)
     f:SetPoint("CENTER")
@@ -28,14 +28,14 @@ local function _build()
     f:Hide()
 
     -- Register with UISpecialFrames so ESC closes it (taint-safe)
-    tinsert(UISpecialFrames, "CouchPotatoConfigFrame")
+    tinsert(UISpecialFrames, "ControllerCompanionConfigFrame")
 
     ---------------------------------------------------------------------------
     -- Title bar
     ---------------------------------------------------------------------------
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     title:SetPoint("LEFT", f.TitleBg, "LEFT", 5, 0)
-    title:SetText("CouchPotato v" .. CP.version)
+    title:SetText("ControllerCompanion v" .. CP.version)
 
     -- BasicFrameTemplateWithInset provides f.CloseButton
     f.CloseButton:SetScript("OnClick", function() f:Hide() end)
@@ -156,7 +156,7 @@ local function _build()
     ---------------------------------------------------------------------------
     local footer = f:CreateFontString(nil, "OVERLAY", "GameFontDisable")
     footer:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 16, 16)
-    footer:SetText("CouchPotato v" .. CP.version)
+    footer:SetText("ControllerCompanion v" .. CP.version)
 
     _frame = f
 end

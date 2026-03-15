@@ -1,9 +1,9 @@
--- CouchPotato/Core/LED.lua
+-- ControllerCompanion/Core/LED.lua
 -- DualSense LED color management by spell school
 -- Uses C_GamePad.SetLedColor(ColorMixin) - DualSense/DualShock only
 -- Patch 12.0.1 (Interface 120001)
 
-local CP = CouchPotato
+local CP = ControllerCompanion
 local LED = CP:NewModule("LED")
 local band = bit.band
 

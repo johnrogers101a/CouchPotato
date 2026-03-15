@@ -1,9 +1,9 @@
 ## Interface: 120001
-## Title: CouchPotato Loader
-## Notes: Gamepad detection and dynamic loader for CouchPotato. Keep this enabled.
-## Author: CouchPotato Team
+## Title: ControllerCompanion Loader
+## Notes: Gamepad detection and dynamic loader for ControllerCompanion. Keep this enabled.
+## Author: CouchPotato Addons
 ## Version: 1.0.0
-## SavedVariables: CouchPotatoLoaderDB
+## SavedVariables: ControllerCompanionLoaderDB
 ## X-Category: Interface Enhancements
 ## IconTexture: Interface\Icons\Achievement_BG_winAV
 ## X-Curse-Project-ID: 0

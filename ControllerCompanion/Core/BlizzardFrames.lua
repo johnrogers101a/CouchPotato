@@ -1,10 +1,10 @@
--- CouchPotato/Core/BlizzardFrames.lua
+-- ControllerCompanion/Core/BlizzardFrames.lua
 -- Hides default Blizzard UI frames when controller mode is active
 -- Restores them on controller disconnect
 -- CRITICAL: All hide/show calls MUST check InCombatLockdown()
 -- Patch 12.0.1 (Interface 120001)
 
-local CP = CouchPotato
+local CP = ControllerCompanion
 local BlizzardFrames = CP:NewModule("BlizzardFrames")
 
 -- Frames to suppress via RegisterStateDriver while controller mode is active

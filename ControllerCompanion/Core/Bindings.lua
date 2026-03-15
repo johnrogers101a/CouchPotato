@@ -1,16 +1,16 @@
--- CouchPotato/Core/Bindings.lua
--- Minimal override-binding system for CouchPotato wheel trigger.
+-- ControllerCompanion/Core/Bindings.lua
+-- Minimal override-binding system for ControllerCompanion wheel trigger.
 --
 -- ARCHITECTURE:
 --   When wheel is CLOSED (normal play):
---     - CouchPotato binds ONLY PADRTRIGGER → CouchPotatoTriggerBtn (opens wheel)
+--     - ControllerCompanion binds ONLY PADRTRIGGER → ControllerCompanionTriggerBtn (opens wheel)
 --     - PAD1-4 (face buttons): WoW handles normally (action bars, etc.)
 --     - All other buttons: WoW handles normally
---     - CouchPotato stays out of the way — no interception, no overrides
+--     - ControllerCompanion stays out of the way — no interception, no overrides
 --
 --   When wheel is OPEN:
---     - CouchPotato overrides PAD1-4 → wheel slot SecureActionButtons
---     - CouchPotato overrides PADLSHOULDER/PADRSHOULDER → cycle buttons
+--     - ControllerCompanion overrides PAD1-4 → wheel slot SecureActionButtons
+--     - ControllerCompanion overrides PADLSHOULDER/PADRSHOULDER → cycle buttons
 --     - PADRTRIGGER stays bound (now closes the wheel)
 --
 --   When wheel CLOSES:
@@ -25,7 +25,7 @@
 --
 -- Patch 12.0.1 (Interface 120001)
 
-local CP = CouchPotato
+local CP = ControllerCompanion
 local Bindings = CP:NewModule("Bindings")
 
 Bindings.ownerFrame     = nil
@@ -46,7 +46,7 @@ function Bindings:OnEnable()
     -- Reuse existing ownerFrame if we've been through a Disable/Enable cycle.
     -- CreateFrame with the same global name throws a Lua error in WoW.
     if not self.ownerFrame then
-        self.ownerFrame = CreateFrame("Frame", "CouchPotatoBindingOwner", UIParent,
+        self.ownerFrame = CreateFrame("Frame", "ControllerCompanionBindingOwner", UIParent,
             "SecureHandlerStateTemplate")
     end
 
@@ -85,7 +85,7 @@ function Bindings:ApplyTriggerBinding()
     self.wheelOpen = false
     
     -- Only bind the trigger. Everything else is WoW's to manage.
-    SetOverrideBindingClick(self.ownerFrame, true, "PADRTRIGGER", "CouchPotatoTriggerBtn", "LeftButton")
+    SetOverrideBindingClick(self.ownerFrame, true, "PADRTRIGGER", "ControllerCompanionTriggerBtn", "LeftButton")
 end
 
 -- ── Wheel mode ───────────────────────────────────────────────────────────────
@@ -98,19 +98,19 @@ function Bindings:ApplyWheelBindings(wheelIdx)
     self.wheelOpen = true
 
     -- Bumpers cycle pages
-    SetOverrideBindingClick(owner, true, "PADLSHOULDER", "CouchPotatoLSBtn", "LeftButton")
-    SetOverrideBindingClick(owner, true, "PADRSHOULDER", "CouchPotatoRSBtn", "LeftButton")
+    SetOverrideBindingClick(owner, true, "PADLSHOULDER", "ControllerCompanionLSBtn", "LeftButton")
+    SetOverrideBindingClick(owner, true, "PADRSHOULDER", "ControllerCompanionRSBtn", "LeftButton")
 
     -- D-pad navigates the list
-    SetOverrideBindingClick(owner, true, "PADDDUP",   "CouchPotatoNavUpBtn",   "LeftButton")
-    SetOverrideBindingClick(owner, true, "PADDDDOWN", "CouchPotatoNavDownBtn", "LeftButton")
+    SetOverrideBindingClick(owner, true, "PADDDUP",   "ControllerCompanionNavUpBtn",   "LeftButton")
+    SetOverrideBindingClick(owner, true, "PADDDDOWN", "ControllerCompanionNavDownBtn", "LeftButton")
 
     -- A (PAD1): confirm/execute selected item; B (PAD2): close without executing
-    SetOverrideBindingClick(owner, true, "PAD1", "CouchPotatoConfirmBtn", "LeftButton")
-    SetOverrideBindingClick(owner, true, "PAD2", "CouchPotatoCloseBtn",   "LeftButton")
+    SetOverrideBindingClick(owner, true, "PAD1", "ControllerCompanionConfirmBtn", "LeftButton")
+    SetOverrideBindingClick(owner, true, "PAD2", "ControllerCompanionCloseBtn",   "LeftButton")
 
     -- Keep trigger bound so a second press is a no-op (OpenWheel guards isVisible)
-    SetOverrideBindingClick(owner, true, "PADRTRIGGER", "CouchPotatoTriggerBtn", "LeftButton")
+    SetOverrideBindingClick(owner, true, "PADRTRIGGER", "ControllerCompanionTriggerBtn", "LeftButton")
 end
 
 -- Called by Radial when the wheel closes.

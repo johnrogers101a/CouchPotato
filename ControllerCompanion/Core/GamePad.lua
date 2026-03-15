@@ -1,8 +1,8 @@
--- CouchPotato/Core/GamePad.lua
+-- ControllerCompanion/Core/GamePad.lua
 -- C_GamePad integration: vibration, state management, LED dispatch
 -- Patch 12.0.1 (Interface 120001)
 
-local CP = CouchPotato
+local CP = ControllerCompanion
 local GamePad = CP:NewModule("GamePad")
 
 -- State tracking

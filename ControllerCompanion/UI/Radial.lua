@@ -1,10 +1,10 @@
--- CouchPotato/UI/Radial.lua
+-- ControllerCompanion/UI/Radial.lua
 -- Controller vertical-list menu — replaces the radial wheel
 -- Right trigger opens; D-pad up/down navigates; A selects; B closes; LB/RB cycles pages
 -- Pre-creates ALL frames at load time — none during combat
 -- Patch 12.0.1 (Interface 120001)
 
-local CP = CouchPotato
+local CP = ControllerCompanion
 local Radial = CP:NewModule("Radial")
 
 local MAX_WHEELS  = 8
@@ -77,7 +77,7 @@ function Radial:CreateListFrames()
     if self.listWindow then return end
 
     -- ── Outer window ─────────────────────────────────────────────────────────
-    local win = CreateFrame("Frame", "CouchPotatoListWindow", UIParent)
+    local win = CreateFrame("Frame", "ControllerCompanionListWindow", UIParent)
     win:SetSize(WIN_WIDTH, WIN_HEIGHT)
     win:SetPoint("CENTER", UIParent, "CENTER", -180, 0)
     win:SetFrameStrata("DIALOG")
@@ -133,7 +133,7 @@ function Radial:CreateListFrames()
     local contentTop = -(HEADER_H + 2)  -- y offset from window top-left
 
     for wheelIdx = 1, MAX_WHEELS do
-        local page = CreateFrame("Frame", "CouchPotatoPage"..wheelIdx, win)
+        local page = CreateFrame("Frame", "ControllerCompanionPage"..wheelIdx, win)
         page:SetSize(WIN_INNER, MAX_SLOTS * ROW_HEIGHT)
         page:SetPoint("TOPLEFT", win, "TOPLEFT", WIN_PAD, contentTop)
         page:Hide()  -- shown by ShowCurrentWheel
@@ -145,7 +145,7 @@ function Radial:CreateListFrames()
 
             -- SecureActionButtonTemplate: combat-safe for user pages (3+)
             local row = CreateFrame("CheckButton",
-                string.format("CouchPotatoPage%dRow%d", wheelIdx, slotIdx),
+                string.format("ControllerCompanionPage%dRow%d", wheelIdx, slotIdx),
                 page, "SecureActionButtonTemplate")
             row:SetSize(WIN_INNER, ROW_HEIGHT - 2)
             row:SetPoint("TOPLEFT", page, "TOPLEFT", 0, yOff)
@@ -288,7 +288,7 @@ function Radial:ConfirmAndClose()
         local slotDef  = wheelDef and wheelDef.slots[slot]
         if slotDef and slotDef.execute then
             local ok, err = pcall(slotDef.execute)
-            if not ok then CP:Print("CouchPotato: " .. tostring(err)) end
+            if not ok then CP:Print("ControllerCompanion: " .. tostring(err)) end
         elseif not InCombatLockdown() then
             -- User-configured pages (3+): click the SecureActionButton
             local row = self.wheelButtons[self.currentWheel] and
@@ -412,35 +412,35 @@ function Radial:InitGamePadButtonHandling()
     if self.buttonFrame then return end
 
     -- PADRTRIGGER: single click opens the list (no AnyUp close — trigger is open-only)
-    self.triggerBtn = CreateFrame("Button", "CouchPotatoTriggerBtn", UIParent)
+    self.triggerBtn = CreateFrame("Button", "ControllerCompanionTriggerBtn", UIParent)
     self.triggerBtn:RegisterForClicks("AnyDown")
     self.triggerBtn:SetScript("OnClick", function()
         Radial:OpenWheel()
     end)
 
     -- PAD1 (A): confirm selected item + close
-    self.confirmBtn = CreateFrame("Button", "CouchPotatoConfirmBtn", UIParent)
+    self.confirmBtn = CreateFrame("Button", "ControllerCompanionConfirmBtn", UIParent)
     self.confirmBtn:RegisterForClicks("AnyDown")
     self.confirmBtn:SetScript("OnClick", function()
         Radial:ConfirmAndClose()
     end)
 
     -- PAD2 (B): close without executing
-    self.closeBtn = CreateFrame("Button", "CouchPotatoCloseBtn", UIParent)
+    self.closeBtn = CreateFrame("Button", "ControllerCompanionCloseBtn", UIParent)
     self.closeBtn:RegisterForClicks("AnyDown")
     self.closeBtn:SetScript("OnClick", function()
         Radial:CloseWheel()
     end)
 
     -- D-pad up: navigate list upward (−1 = toward index 1)
-    self.navUpBtn = CreateFrame("Button", "CouchPotatoNavUpBtn", UIParent)
+    self.navUpBtn = CreateFrame("Button", "ControllerCompanionNavUpBtn", UIParent)
     self.navUpBtn:RegisterForClicks("AnyDown")
     self.navUpBtn:SetScript("OnClick", function()
         Radial:NavigateList(-1)
     end)
 
     -- D-pad down: navigate list downward (+1 = toward last index)
-    self.navDownBtn = CreateFrame("Button", "CouchPotatoNavDownBtn", UIParent)
+    self.navDownBtn = CreateFrame("Button", "ControllerCompanionNavDownBtn", UIParent)
     self.navDownBtn:RegisterForClicks("AnyDown")
     self.navDownBtn:SetScript("OnClick", function()
         Radial:NavigateList(1)
@@ -448,20 +448,20 @@ function Radial:InitGamePadButtonHandling()
 
     -- PAD2 permanent global close: when menu is NOT open, B closes all windows.
     -- Plain button (CloseAllWindows is not protected — no SecureActionButtonTemplate needed).
-    self.globalCloseBtn = CreateFrame("Button", "CouchPotatoGlobalCloseBtn", UIParent)
+    self.globalCloseBtn = CreateFrame("Button", "ControllerCompanionGlobalCloseBtn", UIParent)
     self.globalCloseBtn:RegisterForClicks("AnyDown")
     self.globalCloseBtn:SetScript("OnClick", function() CloseAllWindows() end)
-    SetBindingClick("PAD2", "CouchPotatoGlobalCloseBtn", "LeftButton")
+    SetBindingClick("PAD2", "ControllerCompanionGlobalCloseBtn", "LeftButton")
 
     -- PADLSHOULDER → cycle page backward
-    self.lsBtn = CreateFrame("Button", "CouchPotatoLSBtn", UIParent)
+    self.lsBtn = CreateFrame("Button", "ControllerCompanionLSBtn", UIParent)
     self.lsBtn:RegisterForClicks("AnyDown")
     self.lsBtn:SetScript("OnClick", function()
         Radial:CycleWheelPrev()
     end)
 
     -- PADRSHOULDER → cycle page forward
-    self.rsBtn = CreateFrame("Button", "CouchPotatoRSBtn", UIParent)
+    self.rsBtn = CreateFrame("Button", "ControllerCompanionRSBtn", UIParent)
     self.rsBtn:RegisterForClicks("AnyDown")
     self.rsBtn:SetScript("OnClick", function()
         Radial:CycleWheelNext()

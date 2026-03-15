@@ -1,10 +1,10 @@
--- CouchPotato_Loader/Loader.lua
--- Minimal always-on addon that detects gamepad input and dynamically loads CouchPotato
+-- ControllerCompanion_Loader/Loader.lua
+-- Minimal always-on addon that detects gamepad input and dynamically loads ControllerCompanion
 -- Patch 12.0.1 (Interface 120001)
 -- Created: 2026-03-01
 
-local ADDON_NAME = "CouchPotato_Loader"
-local MAIN_ADDON = "CouchPotato"
+local ADDON_NAME = "ControllerCompanion_Loader"
+local MAIN_ADDON = "ControllerCompanion"
 
 -- Frame for event handling
 local frame = CreateFrame("Frame")
@@ -13,23 +13,23 @@ local frame = CreateFrame("Frame")
 local isLoaded = false
 
 -- SavedVariables (initialized in ADDON_LOADED)
-CouchPotatoLoaderDB = CouchPotatoLoaderDB or {
+ControllerCompanionLoaderDB = ControllerCompanionLoaderDB or {
     lastKnownState = false,
     autoLoad = true,
 }
 
--- Load the main CouchPotato addon
-local function LoadCouchPotato()
+-- Load the main ControllerCompanion addon
+local function LoadControllerCompanion()
     -- Check if auto-load is disabled
-    if not CouchPotatoLoaderDB.autoLoad then
+    if not ControllerCompanionLoaderDB.autoLoad then
         return
     end
     
     -- Already loaded?
     if C_AddOns.IsAddOnLoaded(MAIN_ADDON) then
-        if CouchPotato then
+        if ControllerCompanion then
             -- Signal it to activate
-            CouchPotato:OnControllerActivated()
+            ControllerCompanion:OnControllerActivated()
         end
         isLoaded = true
         return
@@ -45,30 +45,30 @@ local function LoadCouchPotato()
         end
         
         if not loaded then
-            print(string.format("|cffff6600CouchPotato:|r Failed to load: %s", reason or "Unknown"))
+            print(string.format("|cffff6600ControllerCompanion:|r Failed to load: %s", reason or "Unknown"))
             return
         end
     end
     
     isLoaded = true
-    print("|cffff6600CouchPotato:|r Controller detected - addon loaded.")
-    CouchPotatoLoaderDB.lastKnownState = true
+    print("|cffff6600ControllerCompanion:|r Controller detected - addon loaded.")
+    ControllerCompanionLoaderDB.lastKnownState = true
 
     -- Activate modules now that the addon is freshly loaded.
     -- OnControllerActivated enables all modules and applies bindings.
     -- (When the addon was already loaded we call this in the early-return branch above;
     --  here we mirror that call so both paths are identical.)
-    if CouchPotato then
-        CouchPotato:OnControllerActivated()
+    if ControllerCompanion then
+        ControllerCompanion:OnControllerActivated()
     end
 end
 
--- Signal CouchPotato to restore keyboard UI
+-- Signal ControllerCompanion to restore keyboard UI
 local function RestoreKeyboardMode()
-    if C_AddOns.IsAddOnLoaded(MAIN_ADDON) and CouchPotato then
-        CouchPotato:OnControllerDeactivated()
+    if C_AddOns.IsAddOnLoaded(MAIN_ADDON) and ControllerCompanion then
+        ControllerCompanion:OnControllerDeactivated()
     end
-    CouchPotatoLoaderDB.lastKnownState = false
+    ControllerCompanionLoaderDB.lastKnownState = false
 end
 
 -- Event: GAME_PAD_ACTIVE_CHANGED (Patch 9.1.5+)
@@ -78,7 +78,7 @@ end
 -- GAME_PAD_DISCONNECTED (physical unplug) and CVAR_UPDATE (user disables it).
 local function OnGamePadActiveChanged(isActive)
     if isActive then
-        LoadCouchPotato()
+        LoadControllerCompanion()
     end
 end
 
@@ -87,7 +87,7 @@ end
 local function OnGamePadConnected(deviceID)
     -- Only load if GamePad is also enabled in settings
     if C_GamePad.IsEnabled() then
-        LoadCouchPotato()
+        LoadControllerCompanion()
     end
 end
 
@@ -104,7 +104,7 @@ local function OnCVarUpdate(cvarName, cvarValue)
     
     if cvarValue == "1" then
         -- GamePad enabled
-        LoadCouchPotato()
+        LoadControllerCompanion()
     elseif cvarValue == "0" then
         -- GamePad disabled
         RestoreKeyboardMode()
@@ -115,7 +115,7 @@ end
 -- Check initial state on login
 local function OnPlayerLogin()
     if C_GamePad.IsEnabled() then
-        LoadCouchPotato()
+        LoadControllerCompanion()
     end
 end
 
@@ -125,17 +125,17 @@ local function OnAddonLoaded(addonName)
     if addonName ~= ADDON_NAME then return end
     
     -- Ensure DB structure
-    CouchPotatoLoaderDB = CouchPotatoLoaderDB or {}
-    if CouchPotatoLoaderDB.autoLoad == nil then
-        CouchPotatoLoaderDB.autoLoad = true
+    ControllerCompanionLoaderDB = ControllerCompanionLoaderDB or {}
+    if ControllerCompanionLoaderDB.autoLoad == nil then
+        ControllerCompanionLoaderDB.autoLoad = true
     end
-    if CouchPotatoLoaderDB.lastKnownState == nil then
-        CouchPotatoLoaderDB.lastKnownState = false
+    if ControllerCompanionLoaderDB.lastKnownState == nil then
+        ControllerCompanionLoaderDB.lastKnownState = false
     end
     
     -- Check if controller is active at load time
     if C_GamePad.IsEnabled() then
-        LoadCouchPotato()
+        LoadControllerCompanion()
     end
 end
 
@@ -182,12 +182,12 @@ SlashCmdList["CP"] = function(msg)
     end
 
     -- Delegate everything to the main addon's handler if it loaded
-    if CouchPotato and CouchPotato.ChatCommand then
+    if ControllerCompanion and ControllerCompanion.ChatCommand then
         -- Default: open config window
         if msg == "" then msg = "config" end
-        CouchPotato:ChatCommand(msg)
+        ControllerCompanion:ChatCommand(msg)
     else
-        print("|cffff6600CouchPotato:|r Failed to load main addon.")
+        print("|cffff6600ControllerCompanion:|r Failed to load main addon.")
     end
 end
 
@@ -198,21 +198,21 @@ SlashCmdList["CPLOAD"] = function(msg)
     
     if msg == "" then
         -- Manual load
-        LoadCouchPotato()
+        LoadControllerCompanion()
     elseif msg == "auto" then
         -- Toggle auto-load
-        CouchPotatoLoaderDB.autoLoad = not CouchPotatoLoaderDB.autoLoad
-        print(string.format("|cffff6600CouchPotato:|r Auto-load %s", 
-            CouchPotatoLoaderDB.autoLoad and "enabled" or "disabled"))
+        ControllerCompanionLoaderDB.autoLoad = not ControllerCompanionLoaderDB.autoLoad
+        print(string.format("|cffff6600ControllerCompanion:|r Auto-load %s", 
+            ControllerCompanionLoaderDB.autoLoad and "enabled" or "disabled"))
     elseif msg == "status" then
         -- Show status
-        print("|cffff6600CouchPotato Loader:|r")
+        print("|cffff6600ControllerCompanion Loader:|r")
         print(string.format("  Controller active: %s", C_GamePad.IsEnabled() and "Yes" or "No"))
         print(string.format("  Main addon loaded: %s", C_AddOns.IsAddOnLoaded(MAIN_ADDON) and "Yes" or "No"))
-        print(string.format("  Auto-load: %s", CouchPotatoLoaderDB.autoLoad and "Enabled" or "Disabled"))
+        print(string.format("  Auto-load: %s", ControllerCompanionLoaderDB.autoLoad and "Enabled" or "Disabled"))
     else
-        print("|cffff6600CouchPotato Loader:|r Commands:")
-        print("  /cpload - Manually load CouchPotato")
+        print("|cffff6600ControllerCompanion Loader:|r Commands:")
+        print("  /cpload - Manually load ControllerCompanion")
         print("  /cpload auto - Toggle auto-load on controller detection")
         print("  /cpload status - Show current status")
     end

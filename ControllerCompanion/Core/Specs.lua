@@ -1,8 +1,8 @@
--- CouchPotato/Core/Specs.lua
+-- ControllerCompanion/Core/Specs.lua
 -- Default ability button layouts for all 39 WoW specs (Patch 12.0.1)
 -- Players can customize these via the settings UI; these are the defaults.
 
-local CP = CouchPotato
+local CP = ControllerCompanion
 local Specs = CP:NewModule("Specs")
 
 -- specLayouts[classID][specIndex] = layout table

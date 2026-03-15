@@ -1,4 +1,4 @@
--- CouchPotato/UI/DiagnosticsWindow.lua
+-- ControllerCompanion/UI/DiagnosticsWindow.lua
 -- Scrollable output window for /cp test and /cp debug results.
 --
 -- Exposes:
@@ -11,7 +11,7 @@
 --
 -- Patch 12.0.1 (Interface 120001)
 
-local CP = CouchPotato
+local CP = ControllerCompanion
 
 -------------------------------------------------------------------------------
 -- Color-code stripper (same pattern used in Diagnostics.lua)
