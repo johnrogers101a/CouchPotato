@@ -63,18 +63,17 @@ function Find-WoWAddOnsPath {
         }
     }
 
-    # 3. Filesystem search — enumerate fixed drives and look for the AddOns folder.
+    # 3. Filesystem search — enumerate fixed drives and look for _retail_ folders.
     $FixedDrives = Get-PSDrive -PSProvider FileSystem |
         Where-Object { $_.Root -and (Test-Path -LiteralPath $_.Root) }
 
     foreach ($Drive in $FixedDrives) {
-        $WoWRoot = Join-Path $Drive.Root 'World of Warcraft'
-        if (Test-Path -LiteralPath $WoWRoot -PathType Container) {
-            $Found = Get-ChildItem -LiteralPath $WoWRoot -Directory -Recurse -Depth 4 -ErrorAction SilentlyContinue |
-                Where-Object { $_.FullName -match '[/\\]_retail_[/\\]Interface[/\\]AddOns$' } |
-                Select-Object -First 1
-            if ($Found) {
-                return $Found.FullName
+        $RetailDirs = Get-ChildItem -LiteralPath $Drive.Root -Directory -Recurse -Depth 4 -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -eq '_retail_' }
+        foreach ($RetailDir in $RetailDirs) {
+            $Candidate = Join-Path $RetailDir.FullName 'Interface\AddOns'
+            if (Test-Path -LiteralPath $Candidate -PathType Container) {
+                return $Candidate
             }
         }
     }
