@@ -59,7 +59,7 @@ globals = {
     "DEFAULT_CHAT_FRAME", "GameTooltip", "SlashCmdList",
     "RAID_CLASS_COLORS", "CUSTOM_CLASS_COLORS",
     "GameFontNormal", "GameFontNormalLarge", "GameFontNormalSmall",
-    "NumberFontNormal", "ChatFontNormal",
+    "NumberFontNormal", "ChatFontNormal", "STANDARD_TEXT_FONT",
     "LootFrame", "CharacterFrame", "MainMenuBar",
     "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarLeft", "MultiBarRight",
     "PlayerFrame", "TargetFrame", "FocusFrame",
