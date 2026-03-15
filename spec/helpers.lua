@@ -1,13 +1,13 @@
 -- spec/helpers.lua
--- Test helper utilities for CouchPotato test suite
+-- Test helper utilities for ControllerCompanion test suite
 
 local helpers = {}
 
 -- Fire a WoW event to all registered CP module handlers.
--- Uses CouchPotato._FireEvent — works after dofile("CouchPotato/CouchPotato.lua").
+-- Uses ControllerCompanion._FireEvent — works after dofile("ControllerCompanion/ControllerCompanion.lua").
 function helpers.fireEvent(event, ...)
-    if _G.CouchPotato and _G.CouchPotato._FireEvent then
-        _G.CouchPotato._FireEvent(event, ...)
+    if _G.ControllerCompanion and _G.ControllerCompanion._FireEvent then
+        _G.ControllerCompanion._FireEvent(event, ...)
     end
 end
 
@@ -26,13 +26,13 @@ function helpers.resetMocks()
     _G._ResetBindings()
     _G._rawEventListeners = {}
 
-    -- Clear CouchPotato named frames so each test's dofile() creates fresh ones.
+    -- Clear ControllerCompanion named frames so each test's dofile() creates fresh ones.
     -- Without this, frames from a previous test's dofile() persist in _G and
     -- the `_G[name] or CreateFrame(...)` guard in OnEnable() reuses stale state.
     local cpFrames = {
-        "CouchPotatoBindingOwner",
-        "CouchPotatoDirectPAD4", "CouchPotatoDirectPAD2",
-        "CouchPotatoDirectPAD1", "CouchPotatoDirectPAD3",
+        "ControllerCompanionBindingOwner",
+        "ControllerCompanionDirectPAD4", "ControllerCompanionDirectPAD2",
+        "ControllerCompanionDirectPAD1", "ControllerCompanionDirectPAD3",
     }
     for _, name in ipairs(cpFrames) do _G[name] = nil end
 end

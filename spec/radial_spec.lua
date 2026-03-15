@@ -12,8 +12,8 @@ describe("Radial Module", function()
     before_each(function()
         helpers.resetMocks()
 
-        dofile("CouchPotato/CouchPotato.lua")
-        CP = CouchPotato
+        dofile("ControllerCompanion/ControllerCompanion.lua")
+        CP = ControllerCompanion
         CP.db = {
             profile = {
                 radialAlpha      = 0.9,
@@ -27,9 +27,9 @@ describe("Radial Module", function()
             },
         }
 
-        dofile("CouchPotato/Core/GamePad.lua")
-        dofile("CouchPotato/Core/Specs.lua")
-        dofile("CouchPotato/UI/Radial.lua")
+        dofile("ControllerCompanion/Core/GamePad.lua")
+        dofile("ControllerCompanion/Core/Specs.lua")
+        dofile("ControllerCompanion/UI/Radial.lua")
 
         CP:GetModule("GamePad"):Enable()
         CP:GetModule("Specs"):Enable()
@@ -57,7 +57,7 @@ describe("Radial Module", function()
         
         it("creates the outer list window frame", function()
             assert.is_not_nil(Radial.listWindow)
-            assert.is_not_nil(_G["CouchPotatoListWindow"])
+            assert.is_not_nil(_G["ControllerCompanionListWindow"])
         end)
         
         it("starts with all page frames hidden", function()
@@ -152,12 +152,12 @@ describe("Radial Module", function()
     end)
 
     describe("D-pad navigation", function()
-        it("CouchPotatoNavUpBtn frame is created on init", function()
-            assert.is_not_nil(_G["CouchPotatoNavUpBtn"])
+        it("ControllerCompanionNavUpBtn frame is created on init", function()
+            assert.is_not_nil(_G["ControllerCompanionNavUpBtn"])
         end)
 
-        it("CouchPotatoNavDownBtn frame is created on init", function()
-            assert.is_not_nil(_G["CouchPotatoNavDownBtn"])
+        it("ControllerCompanionNavDownBtn frame is created on init", function()
+            assert.is_not_nil(_G["ControllerCompanionNavDownBtn"])
         end)
 
         it("OpenWheel auto-selects the first visible slot", function()
@@ -284,23 +284,23 @@ describe("Radial Module", function()
     end)
 
     describe("A/B button confirm/cancel semantics", function()
-        it("CouchPotatoConfirmBtn frame is created on init", function()
-            assert.is_not_nil(_G["CouchPotatoConfirmBtn"])
+        it("ControllerCompanionConfirmBtn frame is created on init", function()
+            assert.is_not_nil(_G["ControllerCompanionConfirmBtn"])
         end)
 
-        it("CouchPotatoCloseBtn frame is created on init", function()
-            assert.is_not_nil(_G["CouchPotatoCloseBtn"])
+        it("ControllerCompanionCloseBtn frame is created on init", function()
+            assert.is_not_nil(_G["ControllerCompanionCloseBtn"])
         end)
 
-        it("CouchPotatoGlobalCloseBtn frame is created on init", function()
-            assert.is_not_nil(_G["CouchPotatoGlobalCloseBtn"])
+        it("ControllerCompanionGlobalCloseBtn frame is created on init", function()
+            assert.is_not_nil(_G["ControllerCompanionGlobalCloseBtn"])
         end)
 
-        it("PAD2 has a permanent binding to CouchPotatoGlobalCloseBtn at addon load", function()
+        it("PAD2 has a permanent binding to ControllerCompanionGlobalCloseBtn at addon load", function()
             local bindings = _G._GetPermanentBindings()
             assert.is_not_nil(bindings["PAD2"], "PAD2 should have a permanent binding")
-            assert.is_truthy(bindings["PAD2"]:find("CouchPotatoGlobalCloseBtn"),
-                "PAD2 permanent binding should target CouchPotatoGlobalCloseBtn")
+            assert.is_truthy(bindings["PAD2"]:find("ControllerCompanionGlobalCloseBtn"),
+                "PAD2 permanent binding should target ControllerCompanionGlobalCloseBtn")
         end)
 
         it("CloseWheel hides the list without executing the selected item", function()

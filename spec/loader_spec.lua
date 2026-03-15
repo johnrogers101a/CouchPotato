@@ -1,17 +1,17 @@
 -- spec/loader_spec.lua
--- Tests for CouchPotato_Loader: detection logic, dynamic loading, SavedVars
+-- Tests for ControllerCompanion_Loader: detection logic, dynamic loading, SavedVars
 
 require("spec/wow_mock")
 local helpers = require("spec/helpers")
 
-describe("CouchPotato_Loader", function()
+describe("ControllerCompanion_Loader", function()
     local loaderEnv
     
     before_each(function()
         helpers.resetMocks()
         C_AddOns._Reset()
-        -- Make CouchPotato unloaded
-        C_AddOns._addons.CouchPotato = { loaded = false, enabled = true }
+        -- Make ControllerCompanion unloaded
+        C_AddOns._addons.ControllerCompanion = { loaded = false, enabled = true }
         
         -- We test the loader logic by examining its behavior
         -- The loader registers events on a frame; we simulate those events
@@ -19,33 +19,33 @@ describe("CouchPotato_Loader", function()
     
     describe("C_AddOns loading mechanics", function()
         it("LoadAddOn returns true for enabled addon", function()
-            local loaded, reason = C_AddOns.LoadAddOn("CouchPotato")
+            local loaded, reason = C_AddOns.LoadAddOn("ControllerCompanion")
             assert.is_true(loaded)
             assert.is_nil(reason)
-            assert.is_true(C_AddOns.IsAddOnLoaded("CouchPotato"))
+            assert.is_true(C_AddOns.IsAddOnLoaded("ControllerCompanion"))
         end)
         
         it("LoadAddOn returns DISABLED reason for disabled addon", function()
-            C_AddOns.DisableAddOn("CouchPotato")
-            local loaded, reason = C_AddOns.LoadAddOn("CouchPotato")
+            C_AddOns.DisableAddOn("ControllerCompanion")
+            local loaded, reason = C_AddOns.LoadAddOn("ControllerCompanion")
             assert.is_false(loaded)
             assert.equals("DISABLED", reason)
         end)
         
         it("EnableAddOn + LoadAddOn succeeds for previously disabled addon", function()
-            C_AddOns.DisableAddOn("CouchPotato")
-            C_AddOns.EnableAddOn("CouchPotato")
-            local loaded, reason = C_AddOns.LoadAddOn("CouchPotato")
+            C_AddOns.DisableAddOn("ControllerCompanion")
+            C_AddOns.EnableAddOn("ControllerCompanion")
+            local loaded, reason = C_AddOns.LoadAddOn("ControllerCompanion")
             assert.is_true(loaded)
         end)
         
         it("IsAddOnLoaded returns false before loading", function()
-            assert.is_false(C_AddOns.IsAddOnLoaded("CouchPotato"))
+            assert.is_false(C_AddOns.IsAddOnLoaded("ControllerCompanion"))
         end)
         
         it("IsAddOnLoaded returns true after loading", function()
-            C_AddOns.LoadAddOn("CouchPotato")
-            assert.is_true(C_AddOns.IsAddOnLoaded("CouchPotato"))
+            C_AddOns.LoadAddOn("ControllerCompanion")
+            assert.is_true(C_AddOns.IsAddOnLoaded("ControllerCompanion"))
         end)
     end)
     
@@ -72,8 +72,8 @@ describe("CouchPotato_Loader", function()
     describe("edge cases", function()
         it("calling LoadAddOn twice does not error", function()
             assert.has_no.errors(function()
-                C_AddOns.LoadAddOn("CouchPotato")
-                C_AddOns.LoadAddOn("CouchPotato")
+                C_AddOns.LoadAddOn("ControllerCompanion")
+                C_AddOns.LoadAddOn("ControllerCompanion")
             end)
         end)
         
