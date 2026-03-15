@@ -1,5 +1,6 @@
 -- LuaCheck configuration for ControllerCompanion
 -- WoW Lua 5.1 environment
+-- Note: spec/wow_mock.lua uses load() for Lua 5.3+ bit operators to stay lua51-clean
 
 std = "lua51"
 
