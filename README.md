@@ -43,13 +43,25 @@ This design keeps WoW's memory footprint minimal for keyboard/mouse players whil
 
 ### Installation
 
-#### CurseForge / WoWUp
-1. Search for "ControllerCompanion" in your addon manager
-2. Install and enable **both** ControllerCompanion Loader and ControllerCompanion
+#### Automated Installation (Windows)
+
+Run the included PowerShell script to automatically detect your WoW installation and copy all addons:
+
+```powershell
+# From the repo root in PowerShell:
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\install.ps1
+```
+
+The script will:
+- Automatically locate your WoW Retail installation
+- Copy **ControllerCompanion**, **ControllerCompanion_Loader**, and **DelveCompanionStats** to your `Interface/AddOns/` folder
+- Prompt you for your WoW path if it cannot be found automatically
 
 #### Manual Installation
+
 1. Download the latest release from [Releases](../../releases)
-2. Extract both `ControllerCompanion_Loader/` and `ControllerCompanion/` folders to your `Interface/AddOns/` directory
+2. Extract the `ControllerCompanion_Loader/`, `ControllerCompanion/`, and `DelveCompanionStats/` folders to your `Interface/AddOns/` directory
 3. Ensure **ControllerCompanion Loader** is enabled (ControllerCompanion will be loaded automatically)
 
 ### Quick Start
