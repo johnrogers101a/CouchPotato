@@ -6,6 +6,7 @@
 ## LoadOnDemand: 1
 ## Dependencies: CouchPotato_Loader
 ## SavedVariables: CouchPotatoDB
+## SavedVariables_Per_Character: CouchPotatoDB
 ## X-Category: Interface Enhancements
 ## IconTexture: Interface\Icons\Achievement_BG_winAV
 

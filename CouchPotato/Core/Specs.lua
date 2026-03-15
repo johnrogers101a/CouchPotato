@@ -627,7 +627,7 @@ end
 
 function Specs:GetCurrentLayout()
     local specIndex = GetSpecialization()
-    local _, _, classID = UnitClass("player")
+    local classID = select(1, UnitClass("player"))
     
     if not specIndex or not classID then return nil end
     

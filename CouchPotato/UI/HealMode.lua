@@ -99,7 +99,7 @@ function HealMode:Exit()
     -- Clear heal mode override bindings
     local Bindings = CP:GetModule("Bindings")
     if Bindings then
-        Bindings:ClearHealModeBindings()
+        Bindings:ClearControllerBindings()
         Bindings:ApplyControllerBindings()  -- restore normal combat bindings
     end
     
