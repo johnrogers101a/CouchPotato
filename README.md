@@ -1,10 +1,25 @@
-# ControllerCompanion
+# Couch Potato
+
+*A collection of controller-friendly World of Warcraft addons.*
+
+Couch Potato is a suite of WoW addons built for players who prefer gaming from the couch. The project focuses on seamless controller support, companion utilities, and intuitive interfaces that make WoW playable and enjoyable without a keyboard and mouse.
+
+## Addons
+
+| Addon | Purpose |
+|-------|---------|
+| **ControllerCompanion** | BG3-inspired radial controller UI — dual-component system (loader + full UI) for efficient, load-on-demand gamepad support. |
+| **DelveCompanionStats** | Companion stat tracking and display utility *(In Development)*. |
+
+---
+
+## ControllerCompanion
 
 **BG3-inspired radial controller UI for World of Warcraft**
 
 Play WoW with a gamepad using intuitive radial menus, just like Baldur's Gate 3. ControllerCompanion transforms your controller into a powerful interface with peek-and-lock trigger behavior, haptic feedback, DualSense LED integration, and intelligent heal mode targeting.
 
-## Features
+### Features
 
 - **Radial Action Wheels** — 8 wheels × 12 slots for abilities, items, mounts, and macros
 - **L1/R1 Wheel Cycling** — Quick switching between wheels during combat
@@ -15,7 +30,7 @@ Play WoW with a gamepad using intuitive radial menus, just like Baldur's Gate 3.
 - **Virtual Cursor** — D-pad navigation when radial is hidden
 - **39 Spec Layouts** — Pre-configured ability layouts for all classes/specs
 
-## Architecture
+### Architecture
 
 ControllerCompanion uses a two-component loader system:
 
@@ -26,18 +41,18 @@ ControllerCompanion uses a two-component loader system:
 
 This design keeps WoW's memory footprint minimal for keyboard/mouse players while providing full controller support on demand.
 
-## Installation
+### Installation
 
-### CurseForge / WoWUp
+#### CurseForge / WoWUp
 1. Search for "ControllerCompanion" in your addon manager
 2. Install and enable **both** ControllerCompanion Loader and ControllerCompanion
 
-### Manual Installation
+#### Manual Installation
 1. Download the latest release from [Releases](../../releases)
 2. Extract both `ControllerCompanion_Loader/` and `ControllerCompanion/` folders to your `Interface/AddOns/` directory
 3. Ensure **ControllerCompanion Loader** is enabled (ControllerCompanion will be loaded automatically)
 
-## Quick Start
+### Quick Start
 
 1. Enable the ControllerCompanion Loader addon
 2. Connect your controller and ensure WoW recognizes it (check System > Controls > Enable Controller)
@@ -46,7 +61,7 @@ This design keeps WoW's memory footprint minimal for keyboard/mouse players whil
 5. Use **L1/R1** to cycle between wheels
 6. Configure layouts via `/cp config` (coming soon)
 
-## Slash Commands
+### Slash Commands
 
 | Command | Description |
 |---------|-------------|
@@ -58,11 +73,28 @@ This design keeps WoW's memory footprint minimal for keyboard/mouse players whil
 | `/cp reset` | Reset profile to defaults |
 | `/cp debug` | Toggle debug mode |
 
-## Requirements
+### Requirements
 
 - **World of Warcraft**: Patch 12.0.1 (Midnight) or later
 - **Interface Version**: 120001
 - **Controller**: Any XInput-compatible gamepad (Xbox, PlayStation, etc.)
+
+---
+
+## DelveCompanionStats *(In Development)*
+
+**Companion stat tracking and display utility for World of Warcraft**
+
+DelveCompanionStats is a lightweight addon designed to track and surface companion statistics during Delve content.
+
+*Planned features:*
+- Companion level tracking
+- Display panel above chat window
+- SavedVariables persistence
+
+> **Note:** Core functionality is not yet implemented. See [CHANGELOG.md](CHANGELOG.md) for status.
+
+---
 
 ## Development
 
