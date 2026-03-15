@@ -625,19 +625,34 @@ end
 
 -- bit library (available in WoW's Lua 5.1 environment)
 if not _G.bit then
-    -- Try to load bitop if available, otherwise use Lua 5.3+ operators
+    -- Try to load luabitop (installed in CI via luarocks install luabitop)
     local success, bitop = pcall(require, "bit")
     if success then
         _G.bit = bitop
     else
-        -- Fallback: use loadstring (Lua 5.1) or load (Lua 5.2+) so luacheck never parses the operators
-        local _load = loadstring or load
+        -- Pure Lua 5.1 fallback — no Lua 5.3 syntax used here
+        local function _bits(n, w)
+            local t = {}
+            for i = 1, w do t[i] = n % 2; n = math.floor(n / 2) end
+            return t
+        end
+        local function _num(t)
+            local n = 0
+            for i = #t, 1, -1 do n = n * 2 + t[i] end
+            return n
+        end
+        local function _op(a, b, fn)
+            local ta, tb, tc = _bits(a, 32), _bits(b, 32), {}
+            for i = 1, 32 do tc[i] = fn(ta[i], tb[i]) end
+            return _num(tc)
+        end
         _G.bit = {
-            band   = _load("return function(a,b) return a & b end")(),
-            bor    = _load("return function(a,b) return a | b end")(),
-            bxor   = _load("return function(a,b) return a ~ b end")(),
-            lshift = _load("return function(a,b) return a << b end")(),
-            rshift = _load("return function(a,b) return a >> b end")(),
+            band   = function(a, b) return _op(a, b, function(x, y) return (x == 1 and y == 1) and 1 or 0 end) end,
+            bor    = function(a, b) return _op(a, b, function(x, y) return (x == 1 or  y == 1) and 1 or 0 end) end,
+            bxor   = function(a, b) return _op(a, b, function(x, y) return (x ~= y)            and 1 or 0 end) end,
+            lshift = function(a, b) return math.floor(a * (2 ^ b)) end,
+            rshift = function(a, b) return math.floor(a / (2 ^ b)) end,
+            bnot   = function(a)    return -(a + 1) end,
         }
     end
 end

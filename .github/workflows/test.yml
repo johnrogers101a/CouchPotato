@@ -31,8 +31,8 @@ jobs:
           restore-keys: |
             luarocks-${{ runner.os }}-
 
-      - name: Install busted
-        run: sudo luarocks install busted
+      - name: Install busted and luabitop
+        run: sudo luarocks install busted && sudo luarocks install luabitop
 
       - name: Run tests
         run: busted spec/
