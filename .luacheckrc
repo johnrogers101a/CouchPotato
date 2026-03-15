@@ -1,4 +1,4 @@
--- LuaCheck configuration for CouchPotato
+-- LuaCheck configuration for ControllerCompanion
 -- WoW Lua 5.1 environment
 
 std = "lua51"
@@ -64,7 +64,7 @@ globals = {
     "LibStub",
     
     -- Addon globals
-    "CouchPotato", "CouchPotatoDB", "CouchPotatoLoaderDB",
+    "ControllerCompanion", "ControllerCompanionDB", "ControllerCompanionLoaderDB",
     
     -- bit library
     "bit",

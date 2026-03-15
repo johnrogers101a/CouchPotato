@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to CouchPotato will be documented in this file.
+All notable changes to ControllerCompanion will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 - Two-component loader/UI architecture
-  - CouchPotato_Loader: Always-on gamepad detection
-  - CouchPotato: Load-on-demand full UI
+  - ControllerCompanion_Loader: Always-on gamepad detection
+  - ControllerCompanion: Load-on-demand full UI
 - BG3-inspired radial action wheels (8 wheels × 12 slots)
 - L1/R1 wheel cycling during gameplay
 - Peek vs lock trigger behavior
@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Specs.lua: Use idiomatic `select(1, UnitClass())` pattern for first return value
 - HealMode.lua: Fix call to non-existent `ClearHealModeBindings()` → `ClearControllerBindings()`
 - Diagnostics.lua: Cache probeOwner frame to prevent accumulation on repeated `/cp test` calls
-- CouchPotato.toc: Add explicit `SavedVariables_Per_Character: CouchPotatoDB` declaration
+- ControllerCompanion.toc: Add explicit `SavedVariablesPerCharacter: ControllerCompanionDB` declaration
 
 ### Technical
 - Interface version: 120001 (WoW Patch 12.0.1 Midnight)

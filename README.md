@@ -1,8 +1,8 @@
-# CouchPotato
+# ControllerCompanion
 
 **BG3-inspired radial controller UI for World of Warcraft**
 
-Play WoW with a gamepad using intuitive radial menus, just like Baldur's Gate 3. CouchPotato transforms your controller into a powerful interface with peek-and-lock trigger behavior, haptic feedback, DualSense LED integration, and intelligent heal mode targeting.
+Play WoW with a gamepad using intuitive radial menus, just like Baldur's Gate 3. ControllerCompanion transforms your controller into a powerful interface with peek-and-lock trigger behavior, haptic feedback, DualSense LED integration, and intelligent heal mode targeting.
 
 ## Features
 
@@ -17,29 +17,29 @@ Play WoW with a gamepad using intuitive radial menus, just like Baldur's Gate 3.
 
 ## Architecture
 
-CouchPotato uses a two-component loader system:
+ControllerCompanion uses a two-component loader system:
 
 | Component | Purpose |
 |-----------|---------|
-| **CouchPotato_Loader** | Always enabled. Lightweight gamepad detection (~150 lines). Automatically loads the main addon when a controller is detected. |
-| **CouchPotato** | Load-on-demand. Full radial UI, Ace3-based. Only loads when you're actually using a controller. |
+| **ControllerCompanion_Loader** | Always enabled. Lightweight gamepad detection (~150 lines). Automatically loads the main addon when a controller is detected. |
+| **ControllerCompanion** | Load-on-demand. Full radial UI, Ace3-based. Only loads when you're actually using a controller. |
 
 This design keeps WoW's memory footprint minimal for keyboard/mouse players while providing full controller support on demand.
 
 ## Installation
 
 ### CurseForge / WoWUp
-1. Search for "CouchPotato" in your addon manager
-2. Install and enable **both** CouchPotato Loader and CouchPotato
+1. Search for "ControllerCompanion" in your addon manager
+2. Install and enable **both** ControllerCompanion Loader and ControllerCompanion
 
 ### Manual Installation
 1. Download the latest release from [Releases](../../releases)
-2. Extract both `CouchPotato_Loader/` and `CouchPotato/` folders to your `Interface/AddOns/` directory
-3. Ensure **CouchPotato Loader** is enabled (CouchPotato will be loaded automatically)
+2. Extract both `ControllerCompanion_Loader/` and `ControllerCompanion/` folders to your `Interface/AddOns/` directory
+3. Ensure **ControllerCompanion Loader** is enabled (ControllerCompanion will be loaded automatically)
 
 ## Quick Start
 
-1. Enable the CouchPotato Loader addon
+1. Enable the ControllerCompanion Loader addon
 2. Connect your controller and ensure WoW recognizes it (check System > Controls > Enable Controller)
 3. The loader will automatically detect your gamepad and load the full UI
 4. Press **L2** or **R2** (triggers) to open the radial menu
@@ -77,13 +77,13 @@ busted --output=plain spec/
 
 ### Project Structure
 ```
-CouchPotato/
-├── CouchPotato_Loader/     # Lightweight loader addon
-│   ├── CouchPotato_Loader.toc
+ControllerCompanion/
+├── ControllerCompanion_Loader/     # Lightweight loader addon
+│   ├── ControllerCompanion_Loader.toc
 │   └── Loader.lua
-├── CouchPotato/            # Main addon (load-on-demand)
-│   ├── CouchPotato.toc
-│   ├── CouchPotato.lua     # Ace3 entry point
+├── ControllerCompanion/            # Main addon (load-on-demand)
+│   ├── ControllerCompanion.toc
+│   ├── ControllerCompanion.lua     # Ace3 entry point
 │   ├── embeds.xml
 │   ├── libs/               # Ace3 libraries
 │   ├── Core/               # Core systems
