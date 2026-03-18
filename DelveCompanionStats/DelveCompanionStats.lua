@@ -19,11 +19,15 @@ _G.DelveCompanionStatsNS = ns
 
 ns.version = "1.0.0"
 
+-- Companion ID → Display Name mapping
+-- Hardcoded because WoW API provides no function to retrieve display names by companion ID
+-- Known companions in WoW Delves (as of patch 12.0.x)
 ns.companionNames = {
     [1] = "Brann Bronzebeard",
     [2] = "Valeera Sanguinar",
-    [3] = "Turalyon",
-    [4] = "Thisalee Crow",
+    [3] = "Waxmonger Squick",
+    [4] = "Turalyon",
+    [5] = "Thisalee Crow",
 }
 
 -------------------------------------------------------------------------------
@@ -206,7 +210,7 @@ function ns:UpdateCompanionData()
     -- Step 3: Get companion level from friendship reputation (needs faction ID)
     local factionID = nil
     if C_DelvesUI and C_DelvesUI.GetFactionForCompanion then
-        local ok, result = pcall(C_DelvesUI.GetFactionForCompanion, nil)
+        local ok, result = pcall(C_DelvesUI.GetFactionForCompanion, companionID)
         if ok and result and result ~= 0 then
             factionID = result
         end
