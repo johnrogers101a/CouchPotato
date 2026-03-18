@@ -3,6 +3,18 @@
 -- Simulates WoW's global environment outside the game client
 -- Interface: 120001 (Patch 12.0.1 Midnight)
 
+-- ChatFrame1 stub (used by DelveCompanionStats for position anchor)
+_G.ChatFrame1 = {
+    _type = "Frame",
+    GetPoint = function() return "BOTTOMLEFT", nil, "BOTTOMLEFT", 0, 0 end,
+}
+setmetatable(_G.ChatFrame1, {__index = _G.UIParent})
+
+-- C_DelvesUI stub (used by DelveCompanionStats to fetch active companion)
+_G.C_DelvesUI = {
+    GetActiveCompanion = function() return nil end,
+}
+
 -- Core UI frames
 _G.UIParent = {
     _type = "Frame",
