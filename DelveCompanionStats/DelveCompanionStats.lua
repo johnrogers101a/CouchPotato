@@ -71,7 +71,7 @@ function ns:OnLoad()
 
     -- 3. Set size and default anchor
     ns.frame:SetSize(200, 100)
-    ns.frame:SetPoint("BOTTOM", UIParent, "BOTTOM", 20, 100)
+    ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 130)
 
     -- 4. Apply dark semi-transparent backdrop
     ns.frame:SetBackdrop({
@@ -136,21 +136,68 @@ function ns:OnLoad()
         end
     end
 
-    -- 9. Populate companion data from SavedVariables OR show placeholder
-    -- NOTE: Update this section when a companion-data event is available
-    -- (e.g., DELVE_COMPANION_LEVEL if Blizzard ever exposes one).
-    if db and db.companionName then
-        if ns.nameLabel then ns.nameLabel:SetText(db.companionName) end
-        if ns.levelLabel then ns.levelLabel:SetText("Level: " .. (db.companionLevel or "?")) end
-    else
-        if ns.nameLabel then ns.nameLabel:SetText("No companion data") end
-        if ns.levelLabel then ns.levelLabel:SetText("") end
-    end
+    -- 9. Populate companion data: Try live API first, fall back to SavedVariables
+    -- NOTE: UpdateCompanionData uses C_DelvesUI.GetActiveCompanion() to fetch
+    -- live data, and updates SavedVariables + UI atomically.
+    ns:UpdateCompanionData()
 
     -- 10. Show the frame
     if ns.frame then ns.frame:Show() end
 
+    -- 11. Register events for companion data updates
+    if ns.frame then
+        local dataFrame = CreateFrame("Frame")
+        dataFrame:RegisterEvent("DELVE_COMPANION_UPDATE")
+        dataFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+        dataFrame:SetScript("OnEvent", function(self, event, ...)
+            -- Update companion data whenever these events fire
+            ns:UpdateCompanionData()
+        end)
+        ns.dataEventFrame = dataFrame
+    end
+
     -- Explicitly show fontstrings (belt-and-suspenders: ensures visibility even if parent Show() is pending)
     if ns.nameLabel then ns.nameLabel:Show() end
     if ns.levelLabel then ns.levelLabel:Show() end
+end
+
+-------------------------------------------------------------------------------
+-- UpdateCompanionData: Fetch active companion from C_DelvesUI and update UI
+-- Called by event handlers and during initialization
+-------------------------------------------------------------------------------
+function ns:UpdateCompanionData()
+    -- Safely call C_DelvesUI API with defensive checks
+    local companion = nil
+    local ok, result = pcall(function()
+        return C_DelvesUI and C_DelvesUI.GetActiveCompanion and C_DelvesUI.GetActiveCompanion()
+    end)
+
+    if ok and result then
+        companion = result
+    end
+
+    -- Update SavedVariables and UI based on API result
+    if companion and companion.name and companion.level then
+        -- Companion is active — update SavedVariables and display
+        DelveCompanionStatsDB.companionName = companion.name
+        DelveCompanionStatsDB.companionLevel = companion.level
+
+        if ns.nameLabel then
+            ns.nameLabel:SetText(companion.name)
+        end
+        if ns.levelLabel then
+            ns.levelLabel:SetText("Level: " .. tostring(companion.level))
+        end
+    else
+        -- No active companion — clear SavedVariables and show placeholder
+        DelveCompanionStatsDB.companionName = nil
+        DelveCompanionStatsDB.companionLevel = nil
+
+        if ns.nameLabel then
+            ns.nameLabel:SetText("No companion data")
+        end
+        if ns.levelLabel then
+            ns.levelLabel:SetText("")
+        end
+    end
 end
