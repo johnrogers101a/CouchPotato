@@ -3,6 +3,18 @@
 -- Simulates WoW's global environment outside the game client
 -- Interface: 120001 (Patch 12.0.1 Midnight)
 
+-- ChatFrame1 stub (used by DelveCompanionStats for position anchor)
+_G.ChatFrame1 = {
+    _type = "Frame",
+    GetPoint = function() return "BOTTOMLEFT", nil, "BOTTOMLEFT", 0, 0 end,
+}
+setmetatable(_G.ChatFrame1, {__index = _G.UIParent})
+
+-- C_DelvesUI stub (used by DelveCompanionStats to fetch active companion)
+_G.C_DelvesUI = {
+    GetActiveCompanion = function() return nil end,
+}
+
 -- Core UI frames
 _G.UIParent = {
     _type = "Frame",
@@ -625,18 +637,34 @@ end
 
 -- bit library (available in WoW's Lua 5.1 environment)
 if not _G.bit then
-    -- Try to load bitop if available, otherwise use Lua 5.3+ operators
+    -- Try to load luabitop (installed in CI via luarocks install luabitop)
     local success, bitop = pcall(require, "bit")
     if success then
         _G.bit = bitop
     else
-        -- Fallback for Lua 5.3+
+        -- Pure Lua 5.1 fallback — no Lua 5.3 syntax used here
+        local function _bits(n, w)
+            local t = {}
+            for i = 1, w do t[i] = n % 2; n = math.floor(n / 2) end
+            return t
+        end
+        local function _num(t)
+            local n = 0
+            for i = #t, 1, -1 do n = n * 2 + t[i] end
+            return n
+        end
+        local function _op(a, b, fn)
+            local ta, tb, tc = _bits(a, 32), _bits(b, 32), {}
+            for i = 1, 32 do tc[i] = fn(ta[i], tb[i]) end
+            return _num(tc)
+        end
         _G.bit = {
-            band = function(a, b) return a & b end,
-            bor = function(a, b) return a | b end,
-            bxor = function(a, b) return a ~ b end,
-            lshift = function(a, b) return a << b end,
-            rshift = function(a, b) return a >> b end,
+            band   = function(a, b) return _op(a, b, function(x, y) return (x == 1 and y == 1) and 1 or 0 end) end,
+            bor    = function(a, b) return _op(a, b, function(x, y) return (x == 1 or  y == 1) and 1 or 0 end) end,
+            bxor   = function(a, b) return _op(a, b, function(x, y) return (x ~= y)            and 1 or 0 end) end,
+            lshift = function(a, b) return math.floor(a * (2 ^ b)) end,
+            rshift = function(a, b) return math.floor(a / (2 ^ b)) end,
+            bnot   = function(a)    return -(a + 1) end,
         }
     end
 end
