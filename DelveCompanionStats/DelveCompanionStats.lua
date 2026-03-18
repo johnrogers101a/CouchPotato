@@ -141,8 +141,8 @@ function ns:OnLoad()
     end
 
     -- 9. Populate companion data: Try live API first, fall back to SavedVariables
-    -- NOTE: UpdateCompanionData uses C_DelvesUI.GetActiveCompanion() to fetch
-    -- live data, and updates SavedVariables + UI atomically.
+    -- NOTE: UpdateCompanionData uses C_DelvesUI.GetFactionForCompanion() + C_Reputation
+    -- and C_GossipInfo APIs to fetch live data, and updates SavedVariables + UI atomically.
     ns:UpdateCompanionData()
 
     -- 10. Show the frame
@@ -154,6 +154,10 @@ function ns:OnLoad()
         ns.frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
         -- DELVE_COMPANION_UPDATE may not exist in all WoW versions; pcall guards against error
         pcall(function() ns.frame:RegisterEvent("DELVE_COMPANION_UPDATE") end)
+        -- UPDATE_FACTION fires when friendship reputation changes
+        ns.frame:RegisterEvent("UPDATE_FACTION")
+        -- MAJOR_FACTION_RENOWN_LEVEL_CHANGED fires when renown level changes
+        ns.frame:RegisterEvent("MAJOR_FACTION_RENOWN_LEVEL_CHANGED")
         ns.frame:SetScript("OnEvent", function(self, event, ...)
             ns:UpdateCompanionData()
         end)
@@ -171,19 +175,43 @@ end
 function ns:UpdateCompanionData()
     if not ns.frame then return end
     local name, level = nil, nil
-    -- Try live API first
-    if C_DelvesUI and C_DelvesUI.GetActiveCompanion then
-        local ok, info = pcall(C_DelvesUI.GetActiveCompanion)
-        if ok and info then
-            name = info.name or info.companionName
-            level = info.level or info.companionLevel
+
+    -- Step 1: Get companion faction ID via correct API
+    local factionID = nil
+    if C_DelvesUI and C_DelvesUI.GetFactionForCompanion then
+        local ok, result = pcall(C_DelvesUI.GetFactionForCompanion, nil)
+        if ok and result and result ~= 0 then
+            factionID = result
         end
     end
-    -- Fall back to SavedVariables
+
+    -- Step 2: Get companion name from faction data
+    if factionID and C_Reputation and C_Reputation.GetFactionDataByID then
+        local ok, factionData = pcall(C_Reputation.GetFactionDataByID, factionID)
+        if ok and factionData and factionData.name then
+            name = factionData.name
+        end
+    end
+
+    -- Step 3: Get companion level from friendship reputation
+    if factionID and C_GossipInfo and C_GossipInfo.GetFriendshipReputation then
+        local ok, friendData = pcall(C_GossipInfo.GetFriendshipReputation, factionID)
+        if ok and friendData then
+            if C_GossipInfo.GetFriendshipReputationRanks then
+                local rok, ranks = pcall(C_GossipInfo.GetFriendshipReputationRanks, factionID)
+                if rok and ranks and ranks.currentLevel then
+                    level = ranks.currentLevel
+                end
+            end
+        end
+    end
+
+    -- Fall back to SavedVariables if live API returned nothing
     if not name and DelveCompanionStatsDB then
-        name = DelveCompanionStatsDB.companionName
+        name  = DelveCompanionStatsDB.companionName
         level = DelveCompanionStatsDB.companionLevel
     end
+
     -- Update UI
     if ns.nameLabel then
         ns.nameLabel:SetText(name or "No companion data")
@@ -191,9 +219,10 @@ function ns:UpdateCompanionData()
     if ns.levelLabel then
         ns.levelLabel:SetText(level and ("Level: " .. tostring(level)) or "")
     end
+
     -- Persist to SavedVariables
     if name and DelveCompanionStatsDB then
-        DelveCompanionStatsDB.companionName = name
+        DelveCompanionStatsDB.companionName  = name
         DelveCompanionStatsDB.companionLevel = level
     end
 end
