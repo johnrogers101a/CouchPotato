@@ -13,6 +13,8 @@ setmetatable(_G.ChatFrame1, {__index = _G.UIParent})
 -- C_DelvesUI stub (used by DelveCompanionStats to fetch active companion)
 _G.C_DelvesUI = {
     GetActiveCompanion = function() return nil end,
+    GetFactionForCompanion = function(companionID) return nil end,
+    GetCompanionInfoForActivePlayer = function() return nil end,
 }
 
 -- Core UI frames
@@ -22,6 +24,8 @@ _G.UIParent = {
     Show = function() end,
     Hide = function() end,
 }
+
+_G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 
 _G.DEFAULT_CHAT_FRAME = {
     AddMessage = function(self, msg, r, g, b)
@@ -78,6 +82,14 @@ local function createMockFrame(frameType, name, parent, template)
     function frame:SetPropagateKeyboardInput(p) self._propagateKeyboard = p end
     function frame:RegisterForClicks(...) end
     function frame:GetName() return self._name end
+    function frame:SetBackdrop(backdrop) self._backdrop = backdrop end
+    function frame:SetBackdropColor(r,g,b,a) self._backdropColor = {r,g,b,a} end
+    function frame:SetMovable(v) self._movable = v end
+    function frame:EnableMouse(v) self._mouseEnabled = v end
+    function frame:RegisterForDrag(...) end
+    function frame:GetPoint(index)
+        return "BOTTOMLEFT", nil, "BOTTOMLEFT", 0, 0
+    end
     
     function frame:SetScript(event, fn)
         self._scripts[event] = fn
@@ -156,6 +168,7 @@ local function createMockFrame(frameType, name, parent, template)
         function fs:Show() self._shown = true end
         function fs:Hide() self._shown = false end
         function fs:IsShown() return self._shown end
+        function fs:GetFont() return "GameFontNormal", 12, "" end
         table.insert(frame._fontstrings, fs)
         return fs
     end
@@ -634,6 +647,17 @@ _G.print = print  -- already exists in Lua
 if not _G.unpack then
     _G.unpack = table.unpack
 end
+
+-- C_GossipInfo stub (used by DelveCompanionStats for friendship reputation)
+_G.C_GossipInfo = _G.C_GossipInfo or {
+    GetFriendshipReputation = function(factionID) return nil end,
+    GetFriendshipReputationRanks = function(factionID) return nil end,
+}
+
+-- C_Reputation stub (used by some older addon code; not used after fix)
+_G.C_Reputation = {
+    GetFactionDataByID = function(factionID) return nil end,
+}
 
 -- bit library (available in WoW's Lua 5.1 environment)
 if not _G.bit then

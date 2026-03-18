@@ -10,8 +10,21 @@
 -- to be complete before any other events fire.
 
 local addonName, ns = ...
+-- Fallback for test environments (dofile() does not populate varargs)
+if not ns then
+    addonName = "DelveCompanionStats"
+    ns = {}
+end
+_G.DelveCompanionStatsNS = ns
 
 ns.version = "1.0.0"
+
+ns.companionNames = {
+    [1] = "Brann Bronzebeard",
+    [2] = "Valeera Sanguinar",
+    [3] = "Turalyon",
+    [4] = "Thisalee Crow",
+}
 
 -------------------------------------------------------------------------------
 -- Central event frame — ADDON_LOADED only (no PLAYER_LOGIN race condition)
@@ -176,7 +189,21 @@ function ns:UpdateCompanionData()
     if not ns.frame then return end
     local name, level = nil, nil
 
-    -- Step 1: Get companion faction ID via correct API
+    -- Step 1: Get companion ID via GetCompanionInfoForActivePlayer
+    local companionID = nil
+    if C_DelvesUI and C_DelvesUI.GetCompanionInfoForActivePlayer then
+        local ok, result = pcall(C_DelvesUI.GetCompanionInfoForActivePlayer)
+        if ok and result and result ~= 0 then
+            companionID = result
+        end
+    end
+
+    -- Step 2: Look up companion name in hardcoded table; fall back to "Unknown Companion"
+    if companionID then
+        name = ns.companionNames[companionID] or "Unknown Companion"
+    end
+
+    -- Step 3: Get companion level from friendship reputation (needs faction ID)
     local factionID = nil
     if C_DelvesUI and C_DelvesUI.GetFactionForCompanion then
         local ok, result = pcall(C_DelvesUI.GetFactionForCompanion, nil)
@@ -185,15 +212,6 @@ function ns:UpdateCompanionData()
         end
     end
 
-    -- Step 2: Get companion name from faction data
-    if factionID and C_Reputation and C_Reputation.GetFactionDataByID then
-        local ok, factionData = pcall(C_Reputation.GetFactionDataByID, factionID)
-        if ok and factionData and factionData.name then
-            name = factionData.name
-        end
-    end
-
-    -- Step 3: Get companion level from friendship reputation
     if factionID and C_GossipInfo and C_GossipInfo.GetFriendshipReputation then
         local ok, friendData = pcall(C_GossipInfo.GetFriendshipReputation, factionID)
         if ok and friendData then
