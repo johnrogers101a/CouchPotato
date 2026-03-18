@@ -69,9 +69,13 @@ function ns:OnLoad()
     ns.frame:SetFrameStrata("DIALOG")
     ns.frame:SetFrameLevel(100)
 
-    -- 3. Set size and default anchor
+    -- 3. Set size and default anchor (above ChatFrame1 when available)
     ns.frame:SetSize(200, 100)
-    ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 130)
+    if ChatFrame1 then
+        ns.frame:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 10)
+    else
+        ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 130)
+    end
 
     -- 4. Apply dark semi-transparent backdrop
     ns.frame:SetBackdrop({
@@ -146,14 +150,13 @@ function ns:OnLoad()
 
     -- 11. Register events for companion data updates
     if ns.frame then
-        local dataFrame = CreateFrame("Frame")
-        dataFrame:RegisterEvent("DELVE_COMPANION_UPDATE")
-        dataFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-        dataFrame:SetScript("OnEvent", function(self, event, ...)
-            -- Update companion data whenever these events fire
+        ns.frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+        ns.frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+        -- DELVE_COMPANION_UPDATE may not exist in all WoW versions; pcall guards against error
+        pcall(function() ns.frame:RegisterEvent("DELVE_COMPANION_UPDATE") end)
+        ns.frame:SetScript("OnEvent", function(self, event, ...)
             ns:UpdateCompanionData()
         end)
-        ns.dataEventFrame = dataFrame
     end
 
     -- Explicitly show fontstrings (belt-and-suspenders: ensures visibility even if parent Show() is pending)
@@ -166,38 +169,31 @@ end
 -- Called by event handlers and during initialization
 -------------------------------------------------------------------------------
 function ns:UpdateCompanionData()
-    -- Safely call C_DelvesUI API with defensive checks
-    local companion = nil
-    local ok, result = pcall(function()
-        return C_DelvesUI and C_DelvesUI.GetActiveCompanion and C_DelvesUI.GetActiveCompanion()
-    end)
-
-    if ok and result then
-        companion = result
+    if not ns.frame then return end
+    local name, level = nil, nil
+    -- Try live API first
+    if C_DelvesUI and C_DelvesUI.GetActiveCompanion then
+        local ok, info = pcall(C_DelvesUI.GetActiveCompanion)
+        if ok and info then
+            name = info.name or info.companionName
+            level = info.level or info.companionLevel
+        end
     end
-
-    -- Update SavedVariables and UI based on API result
-    if companion and companion.name and companion.level then
-        -- Companion is active — update SavedVariables and display
-        DelveCompanionStatsDB.companionName = companion.name
-        DelveCompanionStatsDB.companionLevel = companion.level
-
-        if ns.nameLabel then
-            ns.nameLabel:SetText(companion.name)
-        end
-        if ns.levelLabel then
-            ns.levelLabel:SetText("Level: " .. tostring(companion.level))
-        end
-    else
-        -- No active companion — clear SavedVariables and show placeholder
-        DelveCompanionStatsDB.companionName = nil
-        DelveCompanionStatsDB.companionLevel = nil
-
-        if ns.nameLabel then
-            ns.nameLabel:SetText("No companion data")
-        end
-        if ns.levelLabel then
-            ns.levelLabel:SetText("")
-        end
+    -- Fall back to SavedVariables
+    if not name and DelveCompanionStatsDB then
+        name = DelveCompanionStatsDB.companionName
+        level = DelveCompanionStatsDB.companionLevel
+    end
+    -- Update UI
+    if ns.nameLabel then
+        ns.nameLabel:SetText(name or "No companion data")
+    end
+    if ns.levelLabel then
+        ns.levelLabel:SetText(level and ("Level: " .. tostring(level)) or "")
+    end
+    -- Persist to SavedVariables
+    if name and DelveCompanionStatsDB then
+        DelveCompanionStatsDB.companionName = name
+        DelveCompanionStatsDB.companionLevel = level
     end
 end

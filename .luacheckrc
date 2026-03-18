@@ -90,6 +90,9 @@ globals = {
     -- Ace3 (embedded)
     "LibStub",
 
+    -- Delves
+    "C_DelvesUI", "ChatFrame1",
+
     -- Addon globals
     "ControllerCompanion", "ControllerCompanionDB", "ControllerCompanionLoaderDB",
     "DelveCompanionStatsDB",
