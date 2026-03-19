@@ -1214,20 +1214,75 @@ end
 -- Expose for unit testing
 ns.IsCombatCriteria = IsCombatCriteria
 
+-- Minimum delve tier required for nemesis minions to appear.
+local NEMESIS_MIN_TIER = 4
+ns.NEMESIS_MIN_TIER = NEMESIS_MIN_TIER
+
+-- GetDelveTier: Returns the current delve difficulty tier (number), or nil when
+-- not in a delve or when the C_DelvesUI.GetDelveTier API is unavailable.
+local function GetDelveTier()
+    if C_DelvesUI and C_DelvesUI.GetDelveTier then
+        local ok, tier = pcall(C_DelvesUI.GetDelveTier)
+        if ok and tier then return tier end
+    end
+    return nil
+end
+ns.GetDelveTier = GetDelveTier
+
+-- CollectNemesisCriteria: Gathers criteria from bonus scenario steps (nemesis
+-- objectives live in bonus steps, not the main step).  Falls back to searching
+-- the main step for criteria whose description contains "nemesis" when no bonus
+-- steps are available.  Returns a (possibly empty) list of criteria tables.
+local function CollectNemesisCriteria()
+    local allCriteria = {}
+
+    -- Primary: iterate bonus scenario steps
+    if C_ScenarioInfo and C_ScenarioInfo.GetBonusSteps then
+        local bonusSteps = C_ScenarioInfo.GetBonusSteps()
+        if bonusSteps and #bonusSteps > 0 then
+            for _, stepIndex in ipairs(bonusSteps) do
+                local stepInfo = C_ScenarioInfo.GetStepInfo and C_ScenarioInfo.GetStepInfo(stepIndex)
+                if stepInfo and stepInfo.numCriteria then
+                    for i = 1, stepInfo.numCriteria do
+                        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfoByStep, stepIndex, i)
+                        if ok and c then
+                            table.insert(allCriteria, c)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Fallback: scan main step for criteria whose description contains "nemesis"
+    if #allCriteria == 0 and C_ScenarioInfo and C_ScenarioInfo.GetScenarioStepInfo then
+        local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
+        if stepInfo and stepInfo.numCriteria then
+            for i = 1, stepInfo.numCriteria do
+                local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
+                if ok and c and c.description and c.description:lower():find("nemesis") then
+                    table.insert(allCriteria, c)
+                end
+            end
+        end
+    end
+
+    return allCriteria
+end
+
 -- GetNemesisProgress: Returns "Nemesis Strongbox (current/max)" by summing
--- quantity and totalQuantity across all combat criteria, or "" when none qualify.
--- Non-combat objectives (Speak with, Find, Collect, etc.) are excluded so
--- only enemy-kill trackers contribute to the count.
+-- quantity and totalQuantity across nemesis bonus-step criteria, or "" when
+-- none qualify or the delve tier is below NEMESIS_MIN_TIER.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
-    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
-    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
-    if not stepInfo or not stepInfo.numCriteria then return "" end
+    local tier = GetDelveTier()
+    if tier and tier < NEMESIS_MIN_TIER then return "" end
+
+    local allCriteria = CollectNemesisCriteria()
 
     local currentTotal, maxTotal = 0, 0
-    for i = 1, stepInfo.numCriteria do
-        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and IsCombatCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
+    for _, c in ipairs(allCriteria) do
+        if IsCombatCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
             currentTotal = currentTotal + (c.quantity or 0)
             maxTotal     = maxTotal + c.totalQuantity
         end
@@ -1238,18 +1293,18 @@ end
 
 -------------------------------------------------------------------------------
 -- GetNemesisDetailText: Returns newline-separated white body lines for each
--- qualifying combat criterion, formatted as "description: quantity/totalQuantity".
+-- qualifying nemesis bonus criterion, formatted as "description: qty/total".
 -- Returns "" when no criteria qualify (mirrors GetBoonsDisplayText pattern).
 -------------------------------------------------------------------------------
 local function GetNemesisDetailText()
-    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
-    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
-    if not stepInfo or not stepInfo.numCriteria then return "" end
+    local tier = GetDelveTier()
+    if tier and tier < NEMESIS_MIN_TIER then return "" end
+
+    local allCriteria = CollectNemesisCriteria()
 
     local lines = {}
-    for i = 1, stepInfo.numCriteria do
-        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and IsCombatCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
+    for _, c in ipairs(allCriteria) do
+        if IsCombatCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
             table.insert(lines, string.format("%s: %d/%d", c.description, c.quantity or 0, c.totalQuantity))
         end
     end
