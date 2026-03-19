@@ -94,6 +94,9 @@ globals = {
     -- Delves
     "C_DelvesUI", "ChatFrame1", "C_Reputation", "IsInInstance",
 
+    -- Unit Auras and Scenario APIs
+    "C_UnitAuras", "C_Scenario", "C_ScenarioInfo", "UnitAura",
+
     -- Addon globals
     "ControllerCompanion", "ControllerCompanionDB", "ControllerCompanionLoaderDB",
     "DelveCompanionStatsDB", "DelveCompanionStatsNS",
@@ -117,7 +120,8 @@ ignore = {
 -- Per-file settings
 files = {
     ["spec/**"] = {
-        globals = { "_MockPlayer", "_SetCombatState", "_GetOverrideBindings", "_ResetBindings" },
+        globals = { "_MockPlayer", "_SetCombatState", "_GetOverrideBindings", "_ResetBindings",
+                    "_SetMockAura", "_ClearMockAuras", "_SetMockNemesis" },
         ignore = { "143" },  -- accessing undefined fields (busted assertions, table.unpack compat)
     }
 }
