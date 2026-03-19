@@ -760,6 +760,81 @@ describe("DelveCompanionStats", function()
         end)
 
     end)
+
+    -- -------------------------------------------------------------------------
+    -- Collapse button visibility and styling (native header template)
+    -- -------------------------------------------------------------------------
+    describe("collapse button (native header)", function()
+
+        it("collapse button has initial text '–'", function()
+            local collapseBtn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            assert.is_not_nil(collapseBtn)
+            assert.equals("–", collapseBtn:GetText())
+        end)
+
+        it("collapse button text color is gold", function()
+            local collapseBtn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            assert.is_not_nil(collapseBtn)
+            local r, g, b, a = collapseBtn:GetTextColor()
+            assert.is_not_nil(r, "text color R should be set")
+            assert.near(1.0,  r, 0.01, "R should be ~1.0 (gold)")
+            assert.near(0.78, g, 0.01, "G should be ~0.78 (gold)")
+            assert.near(0.1,  b, 0.01, "B should be ~0.1 (gold)")
+            assert.near(1.0,  a, 0.01, "A should be ~1.0 (opaque)")
+        end)
+
+        it("collapse button is positioned on right side of header", function()
+            local collapseBtn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            assert.is_not_nil(collapseBtn)
+            local hasRight = false
+            for _, pt in ipairs(collapseBtn._points or {}) do
+                if pt[1] == "RIGHT" then
+                    hasRight = true
+                    break
+                end
+            end
+            assert.is_true(hasRight, "expected a SetPoint call with 'RIGHT' anchor")
+        end)
+
+        it("collapse button click hides content and updates text", function()
+            local collapseBtn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            assert.is_not_nil(collapseBtn)
+            ns.contentFrame:Show()
+            collapseBtn._scripts["OnClick"]()
+            assert.is_false(ns.contentFrame:IsShown())
+            assert.equals("+", collapseBtn:GetText())
+            assert.is_true(DelveCompanionStatsDB.collapsed)
+        end)
+
+        it("collapse button click again shows content and updates text", function()
+            local collapseBtn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            assert.is_not_nil(collapseBtn)
+            -- First click: collapse
+            ns.contentFrame:Show()
+            collapseBtn._scripts["OnClick"]()
+            -- Second click: expand
+            collapseBtn._scripts["OnClick"]()
+            assert.is_true(ns.contentFrame:IsShown())
+            assert.equals("–", collapseBtn:GetText())
+            assert.is_false(DelveCompanionStatsDB.collapsed)
+        end)
+
+        it("collapsed state is restored on load", function()
+            _G.DelveCompanionStatsDB  = { collapsed = true }
+            _G.DelveCompanionStatsNS  = nil
+            _G.DelveCompanionStatsFrame  = nil
+            _G.DelveCompanionStatsHeader = nil
+            dofile("DelveCompanionStats/DelveCompanionStats.lua")
+            local ns2 = _G.DelveCompanionStatsNS
+            ns2:OnLoad()
+            assert.is_false(ns2.contentFrame:IsShown())
+            local collapseBtn = ns2.headerFrame.Button or ns2.headerFrame.CollapseButton
+            assert.is_not_nil(collapseBtn)
+            assert.equals("+", collapseBtn:GetText())
+        end)
+
+    end)
+
     describe("Nemesis progress", function()
 
         before_each(function()
