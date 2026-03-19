@@ -667,6 +667,7 @@ function ns:OnLoad()
     header:SetHeight(28)
     header:SetPoint("TOPLEFT",  ns.frame, "TOPLEFT",  0, 0)
     header:SetPoint("TOPRIGHT", ns.frame, "TOPRIGHT", 0, 0)
+    header:EnableMouse(true)
 
     -- Background: dark olive/brown gradient
     local headerBg = header:CreateTexture(nil, "BACKGROUND")
@@ -748,6 +749,7 @@ function ns:OnLoad()
     pinText:SetJustifyV("MIDDLE")
     ns.pinBtnText = pinText
     ns.pinBtn     = pinBtn
+    pinBtn:EnableMouse(true)
 
     -- ApplyPinnedState: anchor frame to tracker, disable dragging, gold icon.
     local function ApplyPinnedState()
@@ -779,23 +781,11 @@ function ns:OnLoad()
     end
 
     pinBtn:SetScript("OnClick", function()
-        if DelveCompanionStatsDB.pinned ~= false then
-            -- Currently pinned → unpin
-            DelveCompanionStatsDB.pinned = false
-            ns.frame:SetMovable(true)
-            ns.frame:EnableMouse(true)
-            ns.frame:RegisterForDrag("LeftButton")
-            ns.frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
-            ns.frame:SetScript("OnDragStop", function(f)
-                f:StopMovingOrSizing()
-                local point, _, relPoint, x, y = f:GetPoint()
-                DelveCompanionStatsDB.position = {point=point, relPoint=relPoint, x=x, y=y}
-            end)
-            ns.pinBtnText:SetText("📌")
-            ns.pinBtnText:SetTextColor(0.5, 0.5, 0.5, 1)  -- grey = unpinned
-        else
-            -- Currently unpinned → pin
-            DelveCompanionStatsDB.pinned = true
+        local db = DelveCompanionStatsDB
+        if not db then return end
+        if db.pinned == false then
+            -- currently unpinned → pin it
+            db.pinned = true
             ns.frame:SetMovable(false)
             ns.frame:SetScript("OnDragStart", nil)
             ns.frame:SetScript("OnDragStop", nil)
@@ -805,8 +795,25 @@ function ns:OnLoad()
             else
                 ns.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
             end
-            ns.pinBtnText:SetText("📌")
-            ns.pinBtnText:SetTextColor(1, 0.78, 0.1, 1)  -- gold = pinned
+            if ns.pinBtnText then
+                ns.pinBtnText:SetText("📌")
+                ns.pinBtnText:SetTextColor(1, 0.78, 0.1, 1)
+            end
+        else
+            -- currently pinned (or nil) → unpin it
+            db.pinned = false
+            ns.frame:SetMovable(true)
+            ns.frame:RegisterForDrag("LeftButton")
+            ns.frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
+            ns.frame:SetScript("OnDragStop", function(f)
+                f:StopMovingOrSizing()
+                local point, _, relPoint, x, y = f:GetPoint()
+                db.position = {point=point, relPoint=relPoint, x=x, y=y}
+            end)
+            if ns.pinBtnText then
+                ns.pinBtnText:SetText("📌")
+                ns.pinBtnText:SetTextColor(0.5, 0.5, 0.5, 1)
+            end
         end
     end)
 
@@ -969,22 +976,31 @@ function ns:OnLoad()
     end
 
     -- 8c. Restore pin/unpin state. Default (nil) is treated as pinned.
-    if db.pinned == false then
-        ApplyUnpinnedState()
-        -- Restore saved position for unpinned frames
-        local pos = db.position
-        if pos then
-            local posOk = pcall(function()
-                ns.frame:ClearAllPoints()
-                ns.frame:SetPoint(
-                    pos.point or "CENTER", UIParent,
-                    pos.relPoint or pos.relativePoint or "CENTER",
-                    pos.x or 0, pos.y or 0)
-            end)
-            if not posOk then dcsprint("Could not restore unpinned position; using default.") end
+    if DelveCompanionStatsDB.pinned == false then
+        ns.frame:SetMovable(true)
+        ns.frame:RegisterForDrag("LeftButton")
+        ns.frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
+        ns.frame:SetScript("OnDragStop", function(f)
+            f:StopMovingOrSizing()
+            local point, _, relPoint, x, y = f:GetPoint()
+            DelveCompanionStatsDB.position = {point=point, relPoint=relPoint, x=x, y=y}
+        end)
+        local pos = DelveCompanionStatsDB.position
+        if pos and pos.point then
+            ns.frame:ClearAllPoints()
+            ns.frame:SetPoint(pos.point, UIParent, pos.relPoint or pos.point, pos.x or 0, pos.y or 0)
         end
+        if ns.pinBtnText then ns.pinBtnText:SetTextColor(0.5, 0.5, 0.5, 1) end
     else
-        ApplyPinnedState()
+        -- pinned (true or nil) → immovable, gold icon, normalise db value to true
+        DelveCompanionStatsDB.pinned = true
+        ns.frame:SetMovable(false)
+        ns.frame:SetScript("OnDragStart", nil)
+        ns.frame:SetScript("OnDragStop", nil)
+        if ns.pinBtnText then
+            ns.pinBtnText:SetText("📌")
+            ns.pinBtnText:SetTextColor(1, 0.78, 0.1, 1)
+        end
     end
 
     -- 9. Determine frame visibility based on active delve state
@@ -1323,29 +1339,32 @@ function ns:UpdateCompanionData(event)
         ns.headerTitle:SetText(name)
     end
 
-    -- Update UI — Line 1: combined "LN  XP" on nameLabel (no name, no percentage)
+    -- Update UI — Line 1: "Level N  x/y (z%)" on nameLabel
     -- levelLabel and xpLabel are kept as hidden labels for backward-compat/testability
+
+    -- Build level string
+    local levelStr = ""
+    if level then
+        local lvlNum = tostring(level):gsub("^[Ll]evel%s+", "")
+        levelStr = "Level " .. lvlNum
+    end
+
+    -- Build XP string with percentage
+    local xpText = ""
+    if friendData and friendData.standing and friendData.nextThreshold then
+        local threshold = friendData.reactionThreshold or 0
+        local currentXP = friendData.standing - threshold
+        local maxXP = friendData.nextThreshold - threshold
+        if maxXP > 0 then
+            local pct = math.floor((currentXP / maxXP) * 100)
+            xpText = FormatNumber(currentXP) .. "/" .. FormatNumber(maxXP) .. " (" .. pct .. "%)"
+        end
+    end
+
+    local parts = {}
+    if levelStr ~= "" then parts[#parts + 1] = levelStr end
+    if xpText   ~= "" then parts[#parts + 1] = xpText end
     if ns.nameLabel then
-        -- Build level fragment
-        local levelStr = ""
-        if level then
-            levelStr = tostring(level):gsub("^[Ll]evel%s+", "")
-        end
-
-        -- Build XP fragment — treat nil reactionThreshold as 0 (TWW may omit it)
-        local xpText = ""
-        if friendData and friendData.standing and friendData.nextThreshold then
-            local threshold = friendData.reactionThreshold or 0
-            local currentXP = friendData.standing - threshold
-            local maxXP     = friendData.nextThreshold - threshold
-            if maxXP > 0 then
-                xpText = FormatNumber(currentXP) .. "/" .. FormatNumber(maxXP)
-            end
-        end
-
-        local parts = {}
-        if levelStr ~= "" then parts[#parts + 1] = "L" .. levelStr end
-        if xpText   ~= "" then parts[#parts + 1] = xpText end
         ns.nameLabel:SetText(table.concat(parts, "  "))
     end
 

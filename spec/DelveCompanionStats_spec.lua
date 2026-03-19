@@ -84,7 +84,7 @@ describe("DelveCompanionStats", function()
 
             -- Name goes to header; nameLabel shows level only (no XP in this mock)
             assert.equals("Valeera Sanguinar", ns.headerTitle:GetText())
-            assert.is_truthy(ns.nameLabel._text:find("L3", 1, true))
+            assert.is_truthy(ns.nameLabel._text:find("Level 3", 1, true))
             assert.equals("", ns.levelLabel._text)
         end)
 
@@ -95,7 +95,7 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.is_truthy(ns.nameLabel._text:find("L5", 1, true))
+            assert.is_truthy(ns.nameLabel._text:find("Level 5", 1, true))
             assert.equals("", ns.levelLabel._text)
         end)
 
@@ -140,11 +140,12 @@ describe("DelveCompanionStats", function()
 
             -- currentXP = 491930 - 460435 = 31,495
             -- maxXP     = 499810 - 460435 = 39,375
-            -- nameLabel shows "L24  31,495/39,375" — level and XP only, no name, no %
+            -- pct       = floor(31495/39375 * 100) = 79
+            -- nameLabel shows "Level 24  31,495/39,375 (79%)"
             assert.equals("Valeera Sanguinar", ns.headerTitle:GetText())
-            assert.is_truthy(ns.nameLabel._text:find("L24", 1, true))
+            assert.is_truthy(ns.nameLabel._text:find("Level 24", 1, true))
             assert.is_truthy(ns.nameLabel._text:find("31,495/39,375", 1, true))
-            assert.is_nil(ns.nameLabel._text:find("79%%", 1, true))
+            assert.is_truthy(ns.nameLabel._text:find("79%", 1, true))
             assert.is_nil(ns.nameLabel._text:find("Valeera Sanguinar", 1, true))
             -- xpLabel is hidden/unused
             assert.equals("", ns.xpLabel._text)
@@ -159,8 +160,8 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            -- No XP data → nameLabel contains name + level only, no "XP" fragment
-            assert.is_truthy(ns.nameLabel._text:find("L3", 1, true))
+            -- No XP data → nameLabel contains level only, no "XP" fragment
+            assert.is_truthy(ns.nameLabel._text:find("Level 3", 1, true))
             assert.is_nil(ns.nameLabel._text:find("XP", 1, true))
             assert.equals("", ns.xpLabel._text)
         end)
