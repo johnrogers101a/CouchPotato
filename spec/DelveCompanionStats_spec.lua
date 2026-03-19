@@ -394,4 +394,120 @@ describe("DelveCompanionStats", function()
         end)
 
     end)
+
+    -- -------------------------------------------------------------------------
+    -- Boon display tests
+    -- -------------------------------------------------------------------------
+    describe("Boon display", function()
+
+        before_each(function()
+            -- Set up a valid companion so UpdateCompanionData proceeds past early return
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID   = function() return { name = "Brann Bronzebeard" } end
+            C_GossipInfo.GetFriendshipReputation = function()
+                return { friendshipRank = 12, standing = 100, reactionThreshold = 0, nextThreshold = 200 }
+            end
+            _ClearMockAuras()
+            -- Clear nemesis so it doesn't interfere
+            C_Scenario._criteria = {}
+        end)
+
+        after_each(function()
+            _ClearMockAuras()
+            C_Scenario._criteria = {}
+        end)
+
+        it("boon display shows only boons with value > 0", function()
+            _SetMockAura(438104, 8)   -- Versatility 8%
+            _SetMockAura(438102, 0)   -- Critical Strike 0% — should be excluded
+
+            ns:UpdateCompanionData()
+
+            local text = ns.boonLabel._text
+            assert.is_truthy(text:find("Versatility", 1, true),       "expected Versatility in boon text")
+            assert.is_falsy( text:find("Critical Strike", 1, true),   "expected Critical Strike to be excluded")
+        end)
+
+        it("boon display hides label when no active boons", function()
+            -- No auras set — all values nil or 0
+            ns:UpdateCompanionData()
+
+            assert.equals("", ns.boonLabel._text)
+            assert.is_false(ns.boonLabel:IsShown())
+        end)
+
+        it("boon values are formatted as integers (math.floor applied)", function()
+            _SetMockAura(438104, 8.7)  -- Versatility 8.7 → should display as 8
+
+            ns:UpdateCompanionData()
+
+            local text = ns.boonLabel._text
+            assert.is_truthy(text:find("8%%"),  "expected integer value 8 in boon text")
+            assert.is_falsy( text:find("8%.7"), "expected decimal to be stripped")
+        end)
+
+        it("boon label is shown when at least one boon is active", function()
+            _SetMockAura(438104, 5)  -- Versatility 5%
+
+            ns:UpdateCompanionData()
+
+            assert.is_true(ns.boonLabel:IsShown())
+        end)
+
+    end)
+
+    -- -------------------------------------------------------------------------
+    -- Nemesis progress tests
+    -- -------------------------------------------------------------------------
+    describe("Nemesis progress", function()
+
+        before_each(function()
+            -- Set up a valid companion
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID   = function() return { name = "Brann Bronzebeard" } end
+            C_GossipInfo.GetFriendshipReputation = function()
+                return { friendshipRank = 12, standing = 100, reactionThreshold = 0, nextThreshold = 200 }
+            end
+            _ClearMockAuras()
+            C_Scenario._criteria = {}
+        end)
+
+        after_each(function()
+            _ClearMockAuras()
+            C_Scenario._criteria = {}
+        end)
+
+        it("nemesis progress displays X/Y format", function()
+            _SetMockNemesis(2, 4)
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Nemesis: 2/4", ns.nemesisLabel._text)
+        end)
+
+        it("nemesis progress hides label if criterion not found", function()
+            -- No criteria set
+            ns:UpdateCompanionData()
+
+            assert.equals("", ns.nemesisLabel._text)
+            assert.is_false(ns.nemesisLabel:IsShown())
+        end)
+
+        it("nemesis label is shown when criterion is found", function()
+            _SetMockNemesis(1, 4)
+
+            ns:UpdateCompanionData()
+
+            assert.is_true(ns.nemesisLabel:IsShown())
+        end)
+
+        it("boon and nemesis labels hidden when no delve data present", function()
+            -- No auras, no criteria — simulates not being in a delve
+            ns:UpdateCompanionData()
+
+            assert.is_false(ns.boonLabel:IsShown())
+            assert.is_false(ns.nemesisLabel:IsShown())
+        end)
+
+    end)
 end)
