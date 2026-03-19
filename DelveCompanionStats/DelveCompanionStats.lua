@@ -611,13 +611,6 @@ function ns:OnLoad()
 
     ns.frame = frameResult
 
-    -- Plain dark background matching the objective tracker content area.
-    -- Using a colored texture avoids the generic dialog-box look and requires
-    -- no BackdropTemplate mixin — the frame creation fallback above is sufficient.
-    local bg = ns.frame:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0.05, 0.03, 0.02, 0.75)  -- dark warm brown-black, 75% opacity
-
     -- Set frame strata and level to ensure visibility above other UI
     ns.frame:SetFrameStrata("DIALOG")
     ns.frame:SetFrameLevel(100)
@@ -642,31 +635,74 @@ function ns:OnLoad()
         ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 130)
     end
 
-    -- 4b. Section header label — Blizzard gold, matching tracker section headers
-    -- ("Delves", "All Objectives" use GameFontNormal with the gold accent colour)
-    ns.headerLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ns.headerLabel:SetPoint("TOPLEFT", ns.frame, "TOPLEFT", 8, -8)
+    -- 4a. Header frame — dark blue/purple gradient with gold bottom border line,
+    -- matching the Blizzard ObjectiveTracker section header style ("Delves").
+    local headerFrame = CreateFrame("Frame", nil, ns.frame)
+    headerFrame:SetHeight(28)
+    headerFrame:SetPoint("TOPLEFT",  ns.frame, "TOPLEFT",  0, 0)
+    headerFrame:SetPoint("TOPRIGHT", ns.frame, "TOPRIGHT", 0, 0)
+
+    -- Deep navy/purple solid base
+    local headerBg = headerFrame:CreateTexture(nil, "BACKGROUND")
+    headerBg:SetAllPoints()
+    headerBg:SetColorTexture(0.08, 0.06, 0.18, 0.95)
+
+    -- Warm brown/amber centre-left glow overlay (replicates the warm gradient in the Blizzard header)
+    local headerGlow = headerFrame:CreateTexture(nil, "BACKGROUND", nil, 1)
+    headerGlow:SetPoint("LEFT", headerFrame, "LEFT", 0, 0)
+    headerGlow:SetSize(frameWidth * 0.6, 28)
+    headerGlow:SetColorTexture(0.28, 0.14, 0.04, 0.6)
+
+    -- Bright gold/amber 2-px rule along the bottom edge of the header
+    local headerLine = headerFrame:CreateTexture(nil, "ARTWORK")
+    headerLine:SetHeight(2)
+    headerLine:SetPoint("BOTTOMLEFT",  headerFrame, "BOTTOMLEFT",  0, 0)
+    headerLine:SetPoint("BOTTOMRIGHT", headerFrame, "BOTTOMRIGHT", 0, 0)
+    headerLine:SetColorTexture(1, 0.78, 0.1, 1.0)
+
+    -- 4b. Section header label — gold text, larger than body labels
+    ns.headerLabel = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    ns.headerLabel:SetPoint("LEFT", headerFrame, "LEFT", 8, 0)
     ns.headerLabel:SetWidth(contentWidth)
     ns.headerLabel:SetJustifyH("LEFT")
-    local headerFontOk = pcall(function() ns.headerLabel:SetFontObject("GameFontNormal") end)
+    local headerFontOk = pcall(function() ns.headerLabel:SetFontObject("GameFontNormalLarge") end)
     if not headerFontOk or not ns.headerLabel:GetFont() then
         ns.headerLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
     end
-    ns.headerLabel:SetTextColor(1, 0.82, 0, 1)   -- Blizzard gold
+    ns.headerLabel:SetTextColor(1, 0.78, 0.1, 1.0)   -- bright gold matching the border line
     ns.headerLabel:SetShadowOffset(1, -1)
     ns.headerLabel:SetShadowColor(0, 0, 0, 1)
     ns.headerLabel:SetText("Delve Companion")
 
-    -- Thin gold separator line under section header (matches Blizzard tracker style)
-    local divider = ns.frame:CreateTexture(nil, "ARTWORK")
-    divider:SetHeight(1)
-    divider:SetPoint("TOPLEFT",  ns.headerLabel, "BOTTOMLEFT",  0, -2)
-    divider:SetPoint("TOPRIGHT", ns.headerLabel, "BOTTOMRIGHT", 0, -2)
-    divider:SetColorTexture(1, 0.82, 0, 0.8)
+    -- 4c. Content frame — dark brown/leather background with gold border,
+    -- matching the Blizzard delve entry card style.
+    local contentFrame
+    local contentOk, contentResult = pcall(function()
+        return CreateFrame("Frame", nil, ns.frame, "BackdropTemplate")
+    end)
+    if contentOk and contentResult then
+        contentFrame = contentResult
+    else
+        contentFrame = CreateFrame("Frame", nil, ns.frame)
+    end
+    contentFrame:SetPoint("TOPLEFT",     headerFrame, "BOTTOMLEFT",  0,  0)
+    contentFrame:SetPoint("BOTTOMRIGHT", ns.frame,    "BOTTOMRIGHT", 0,  0)
+    pcall(function()
+        contentFrame:SetBackdrop({
+            bgFile   = "Interface/Tooltips/UI-Tooltip-Background",
+            edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+            edgeSize = 12,
+            insets   = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        contentFrame:SetBackdropColor(0.22, 0.12, 0.04, 0.95)        -- dark brown/leather
+        contentFrame:SetBackdropBorderColor(0.9, 0.72, 0.1, 1.0)     -- gold border
+    end)
+    -- Store on ns so UpdateCompanionData can resize it
+    ns.contentFrame = contentFrame
 
     -- 5. Name label — small white text, matching tracker objective style
-    ns.nameLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.nameLabel:SetPoint("TOPLEFT", divider, "BOTTOMLEFT", 0, -4)
+    ns.nameLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ns.nameLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 8, -8)
     ns.nameLabel:SetWidth(contentWidth)
     ns.nameLabel:SetJustifyH("LEFT")
     ns.nameLabel:SetTextColor(1, 1, 1, 1)
@@ -679,7 +715,7 @@ function ns:OnLoad()
     ns.nameLabel:SetShadowColor(0, 0, 0, 1)
 
     -- 6. Level label
-    ns.levelLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ns.levelLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ns.levelLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -4)
     ns.levelLabel:SetWidth(contentWidth)
     ns.levelLabel:SetJustifyH("LEFT")
@@ -693,7 +729,7 @@ function ns:OnLoad()
     ns.levelLabel:SetShadowColor(0, 0, 0, 1)
 
     -- 6b. XP label — slightly larger than body text, matching tracker XP readout
-    ns.xpLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    ns.xpLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     ns.xpLabel:SetPoint("TOPLEFT", ns.levelLabel, "BOTTOMLEFT", 0, -4)
     ns.xpLabel:SetWidth(contentWidth)
     ns.xpLabel:SetJustifyH("LEFT")
@@ -707,7 +743,7 @@ function ns:OnLoad()
     ns.xpLabel:SetText("")
 
     -- 6c. Boon label
-    ns.boonLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ns.boonLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ns.boonLabel:SetPoint("TOPLEFT", ns.xpLabel, "BOTTOMLEFT", 0, -4)
     local boonFontOk = pcall(function() ns.boonLabel:SetFontObject("GameFontHighlightSmall") end)
     if not boonFontOk or not ns.boonLabel:GetFont() then
@@ -721,7 +757,7 @@ function ns:OnLoad()
     ns.boonLabel:SetText("")
 
     -- 6d. Nemesis label
-    ns.nemesisLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ns.nemesisLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -4)
     local nemesisFontOk = pcall(function() ns.nemesisLabel:SetFontObject("GameFontHighlightSmall") end)
     if not nemesisFontOk or not ns.nemesisLabel:GetFont() then
@@ -1106,21 +1142,24 @@ function ns:UpdateCompanionData(event)
 
     -- Dynamic frame height based on visible content
     if ns.frame then
-        -- Base: top-pad(8) + header(20) + gap(4) + name(18) + gap(4) + level(18) + gap(4) + xp(18) + gap(4) + bottom-pad(8) ≈ 100
-        local height = 100
+        -- Content frame base height:
+        --   top-pad(8) + name(18) + gap(4) + level(18) + gap(4) + xp(18) + gap(4) + bottom-pad(8) = 82
+        local contentHeight = 82
         -- Count boon lines (each separated by \n)
         if ns.boonLabel and ns.boonLabel:IsShown() then
             local boonText = ns.boonLabel:GetText() or ""
             local _, newlines = boonText:gsub("\n", "\n")
-            height = height + (newlines + 1) * 16
+            contentHeight = contentHeight + (newlines + 1) * 16
         end
         -- Nemesis label (may be multi-line)
         if ns.nemesisLabel and ns.nemesisLabel:IsShown() then
             local nemText = ns.nemesisLabel:GetText() or ""
             local _, newlines = nemText:gsub("\n", "\n")
-            height = height + (newlines + 1) * 16
+            contentHeight = contentHeight + (newlines + 1) * 16
         end
-        ns.frame:SetHeight(height)
+        -- Resize contentFrame then total frame (header 28px + content)
+        if ns.contentFrame then ns.contentFrame:SetHeight(contentHeight) end
+        ns.frame:SetHeight(28 + contentHeight)
     end
 
     -- Persist to SavedVariables
