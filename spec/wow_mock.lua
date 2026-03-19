@@ -30,6 +30,14 @@ _G.UIParent = {
 
 _G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 
+-- WoW string utility globals
+_G.strlower  = function(s) return (s or ""):lower() end
+_G.strupper  = function(s) return (s or ""):upper() end
+_G.strtrim   = function(s) return (s or ""):match("^%s*(.-)%s*$") end
+_G.strfind   = string.find
+_G.strsub    = string.sub
+_G.strlen    = string.len
+
 _G.DEFAULT_CHAT_FRAME = {
     AddMessage = function(self, msg, r, g, b)
         print(msg)
@@ -185,6 +193,13 @@ local function createMockFrame(frameType, name, parent, template)
     if template and template:find("CooldownFrameTemplate") then
         function frame:SetDrawEdge(v) end
         function frame:SetCooldown(start, duration) end
+    end
+
+    -- UIPanelButtonTemplate support (SetText on button labels)
+    if template and template:find("UIPanelButtonTemplate") then
+        frame._text = ""
+        function frame:SetText(t) self._text = t end
+        function frame:GetText() return self._text end
     end
     
     -- StatusBar support
