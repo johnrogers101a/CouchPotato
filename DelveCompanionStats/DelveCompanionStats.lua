@@ -586,18 +586,18 @@ end
 
 -------------------------------------------------------------------------------
 -- DELVE_BOONS: Registry of spell IDs → display names for delve boons.
--- TODO: Validate spell IDs 438098–438105 in-game before release.
+-- Spell IDs sourced from Wowhead (verified 2025). Parent meta-buff: 1280098 "Boons".
 -- Each entry maps a numeric spell ID to a human-readable stat name.
 -------------------------------------------------------------------------------
 local DELVE_BOONS = {
-    [438098] = "Maximum Health",
-    [438099] = "Movement Speed",
-    [438100] = "Strength",
-    [438101] = "Haste",
-    [438102] = "Critical Strike",
-    [438103] = "Mastery",
-    [438104] = "Versatility",
-    [438105] = "Damage Reduction",
+    [1279750] = "Max Health",
+    [1279751] = "Dmg Reduction",
+    [1279752] = "Move Speed",
+    [1279753] = "Primary Stat",
+    [1266965] = "Crit Strike",
+    [1266966] = "Haste",
+    [1266967] = "Mastery",
+    [1266969] = "Versatility",
 }
 
 -------------------------------------------------------------------------------
