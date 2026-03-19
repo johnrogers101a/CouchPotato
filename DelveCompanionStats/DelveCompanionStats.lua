@@ -307,12 +307,12 @@ function ns:UpdateCompanionData(event)
     -- Step 3: Get companion level from friendship reputation (needs faction ID)
     local factionID = nil
     if C_DelvesUI and C_DelvesUI.GetFactionForCompanion then
-        local ok, result = pcall(C_DelvesUI.GetFactionForCompanion, companionID)
+        local ok, result = pcall(C_DelvesUI.GetFactionForCompanion)
         if ok and result and result ~= 0 then
             factionID = result
         end
     end
-    dcsprint("  GetFactionForCompanion(" .. tostring(companionID) .. ") => " .. tostring(factionID))
+    dcsprint("  GetFactionForCompanion() => " .. tostring(factionID))
 
     if factionID and C_GossipInfo and C_GossipInfo.GetFriendshipReputation then
         local ok, friendData = pcall(C_GossipInfo.GetFriendshipReputation, factionID)
