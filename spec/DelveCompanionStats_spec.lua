@@ -434,13 +434,13 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.boonLabel:IsShown())
         end)
 
-        it("boon display hides label when parent aura 1280098 has value1 == 0", function()
-            _SetMockAura(1280098, 0)   -- aura present but value1 == 0 → should hide
+        it("boon display shows 'Boons: Active' even when parent aura 1280098 has value1 == 0", function()
+            _SetMockAura(1280098, 0)   -- aura present with value1 == 0 → still active
 
             ns:UpdateCompanionData()
 
-            assert.equals("", ns.boonLabel._text)
-            assert.is_false(ns.boonLabel:IsShown())
+            assert.equals("Boons: Active", ns.boonLabel._text)
+            assert.is_true(ns.boonLabel:IsShown())
         end)
 
         it("boon label is shown when parent aura 1280098 is active", function()

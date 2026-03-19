@@ -770,7 +770,7 @@ if not _G.bit then
 end
 
 -- C_UnitAuras stub (used by DelveCompanionStats for boon detection)
--- _auras[spellID] = { value1 = N } or nil
+-- _auras[spellID] = table (truthy) or nil
 _G.C_UnitAuras = {
     _auras = {},
 
@@ -803,7 +803,7 @@ _G.C_ScenarioInfo = {
     end,
 }
 
--- Test helper: set a single boon aura by spell ID + value
+-- Test helper: set a single boon aura by spell ID (value1 optional; presence is enough)
 _G._SetMockAura = function(spellID, value1)
     _G.C_UnitAuras._auras[spellID] = { value1 = value1 }
 end
