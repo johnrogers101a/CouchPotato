@@ -648,6 +648,10 @@ function ns:OnLoad()
     -- 6c. Create boon label (below xpLabel)
     ns.boonLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ns.boonLabel:SetPoint("TOPLEFT", ns.xpLabel, "BOTTOMLEFT", 0, -4)
+    local boonFontOk = pcall(function() ns.boonLabel:SetFontObject("GameFontNormal") end)
+    if not boonFontOk or not ns.boonLabel:GetFont() then
+        ns.boonLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+    end
     ns.boonLabel:SetWidth(216)
     ns.boonLabel:SetJustifyH("LEFT")
     ns.boonLabel:SetTextColor(1, 1, 1, 1)
@@ -658,6 +662,10 @@ function ns:OnLoad()
     -- 6d. Create nemesis label (below boonLabel)
     ns.nemesisLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -4)
+    local nemesisFontOk = pcall(function() ns.nemesisLabel:SetFontObject("GameFontNormal") end)
+    if not nemesisFontOk or not ns.nemesisLabel:GetFont() then
+        ns.nemesisLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+    end
     ns.nemesisLabel:SetWidth(216)
     ns.nemesisLabel:SetJustifyH("LEFT")
     ns.nemesisLabel:SetTextColor(1, 1, 1, 1)
