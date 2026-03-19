@@ -181,14 +181,15 @@ local function createMockFrame(frameType, name, parent, template)
         function fs:SetPoint(...) end
         function fs:SetText(t) self._text = t end
         function fs:GetText() return self._text end
-        function fs:SetTextColor(r,g,b,a) end
-        function fs:SetFont(font, size, flags) end
+        function fs:SetTextColor(r,g,b,a) self._r = r; self._g = g; self._b = b; self._a = a end
+        function fs:GetTextColor() return self._r or 1, self._g or 1, self._b or 1, self._a or 1 end
+        function fs:SetFont(font, size, flags) self._fontPath = font; self._fontSize = size; self._fontFlags = flags end
+        function fs:GetFont() return self._fontPath or "GameFontNormal", self._fontSize or 12, self._fontFlags or "" end
         function fs:SetWidth(w) self._width = w end
         function fs:SetJustifyH(j) end
         function fs:Show() self._shown = true end
         function fs:Hide() self._shown = false end
         function fs:IsShown() return self._shown end
-        function fs:GetFont() return "GameFontNormal", 12, "" end
         function fs:SetShadowOffset(x, y) end
         function fs:SetShadowColor(r, g, b, a) end
         table.insert(frame._fontstrings, fs)
@@ -701,7 +702,17 @@ end
 -- C_GossipInfo stub (used by DelveCompanionStats for friendship reputation)
 _G.C_GossipInfo = _G.C_GossipInfo or {
     GetFriendshipReputation = function(factionID)
-        if factionID == 2744 then return { friendshipRank = 3 } end
+        if factionID == 2744 then
+            return {
+                standing           = 491930,
+                reactionThreshold  = 460435,
+                nextThreshold      = 499810,
+                reaction           = "Level 24",
+                friendshipFactionID = 2744,
+                name               = "Valeera Sanguinar",
+                friendshipRank     = 3,
+            }
+        end
         return nil
     end,
     GetFriendshipReputationRanks = function(factionID) return nil end,
