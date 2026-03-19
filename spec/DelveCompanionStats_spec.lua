@@ -222,6 +222,8 @@ describe("DelveCompanionStats", function()
             C_DelvesUI._SetHasActiveDelve(false)
             -- Restore HasActiveDelve in case a test replaced it with an error stub.
             C_DelvesUI.HasActiveDelve = function() return C_DelvesUI._hasActiveDelve or false end
+            -- Reset instance type
+            _G._isInInstanceType = "none"
         end)
 
         it("hides frame after OnLoad when HasActiveDelve returns false", function()
@@ -273,14 +275,27 @@ describe("DelveCompanionStats", function()
         end)
 
         it("keeps frame hidden when HasActiveDelve raises an error", function()
+            -- Ensure we're not in a party instance so IsInDelve() falls through to HasActiveDelve.
+            _G._isInInstanceType = "none"
             -- Replace HasActiveDelve with a function that throws.
             C_DelvesUI.HasActiveDelve = function() error("API unavailable") end
 
-            -- UpdateFrameVisibility must survive the error (pcall guard) and hide.
+            -- IsInDelve() checks instanceType first ("none" → false), then calls HasActiveDelve
+            -- inside a pcall, so the error is swallowed. UpdateFrameVisibility must not raise.
             assert.has_no_error(function()
                 ns:UpdateFrameVisibility()
             end)
             assert.equals(false, ns.frame:IsShown())
+        end)
+
+        it("shows frame when IsInInstance returns 'party' even if HasActiveDelve returns false", function()
+            -- Simulate being inside a delve instance where HasActiveDelve is unreliable
+            _G._isInInstanceType = "party"
+            C_DelvesUI._SetHasActiveDelve(false)  -- HasActiveDelve returns false
+
+            -- Frame should show because instanceType == "party"
+            ns:UpdateFrameVisibility()
+            assert.equals(true, ns.frame:IsShown())
         end)
 
     end)

@@ -118,6 +118,23 @@ function ns:CreateDebugPopup()
 end
 
 -------------------------------------------------------------------------------
+-- IsInDelve: Returns true when the player is inside a delve instance.
+-- Uses IsInInstance() returning "party" as the primary signal (reliable across
+-- all phases of a delve run), with HasActiveDelve() as a secondary fallback.
+-------------------------------------------------------------------------------
+local function IsInDelve()
+    local _, instanceType = IsInInstance()
+    -- Delves are "party" instances in TWW
+    if instanceType == "party" then return true end
+    -- Also check HasActiveDelve as secondary signal (pcall guards against API errors)
+    local ok, hasDelve = pcall(function()
+        return C_DelvesUI.HasActiveDelve and C_DelvesUI.HasActiveDelve()
+    end)
+    if ok and hasDelve then return true end
+    return false
+end
+
+-------------------------------------------------------------------------------
 -- PrintDebugInfo: Dump C_DelvesUI API state and last-known addon values.
 -- Output goes into a scrollable popup instead of spamming the chat frame.
 -------------------------------------------------------------------------------
@@ -169,6 +186,14 @@ function ns:PrintDebugInfo()
     add("nameLabel text: "  .. tostring(ns.nameLabel  and ns.nameLabel:GetText()  or "N/A"))
     add("levelLabel text: " .. tostring(ns.levelLabel and ns.levelLabel:GetText() or "N/A"))
 
+    -- Live API return values
+    add("HasActiveDelve() = " .. tostring(C_DelvesUI.HasActiveDelve and C_DelvesUI.HasActiveDelve()))
+    local ok2, result2 = pcall(function() return C_DelvesUI.GetFactionForCompanion() end)
+    add("GetFactionForCompanion() = " .. tostring(result2))
+    local _, instanceType = IsInInstance()
+    add("IsInInstance() type = " .. tostring(instanceType))
+    add("IsInDelve() = " .. tostring(IsInDelve()))
+
     local text = table.concat(lines, "\n")
 
     -- Show in scrollable popup (create once, reuse on subsequent calls)
@@ -200,8 +225,7 @@ end)
 function ns:UpdateFrameVisibility()
     if not ns.frame then return end
     local wasShown = ns.frame:IsShown()
-    local ok, hasDelve = pcall(function() return C_DelvesUI.HasActiveDelve() end)
-    if ok and hasDelve then
+    if IsInDelve() then
         ns.frame:Show()
     else
         ns.frame:Hide()

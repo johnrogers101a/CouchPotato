@@ -92,7 +92,7 @@ globals = {
     "LibStub",
 
     -- Delves
-    "C_DelvesUI", "ChatFrame1", "C_Reputation",
+    "C_DelvesUI", "ChatFrame1", "C_Reputation", "IsInInstance",
 
     -- Addon globals
     "ControllerCompanion", "ControllerCompanionDB", "ControllerCompanionLoaderDB",
