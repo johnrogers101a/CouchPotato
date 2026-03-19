@@ -1053,11 +1053,13 @@ describe("DelveCompanionStats", function()
         -- ── Fonts ─────────────────────────────────────────────────────────────
         describe("fonts", function()
 
-            it("header label uses ObjectiveTitleFont", function()
-                -- ns.headerLabel is aliased to ns.headerTitle on the manual header
+            it("header label uses Frizqt font (explicit SetFont, not ObjectiveTitleFont arg)", function()
+                -- ns.headerLabel is aliased to ns.headerTitle on the manual header.
+                -- Font is set explicitly via SetFont() so it renders even before
+                -- font objects finish loading in-game.
                 assert.is_not_nil(ns.headerLabel)
                 local fontPath = ns.headerLabel:GetFont()
-                assert.equals("ObjectiveTitleFont", fontPath)
+                assert.equals("Fonts\\FRIZQT__.TTF", fontPath)
             end)
 
             it("nameLabel uses ObjectiveFont", function()
@@ -1085,11 +1087,11 @@ describe("DelveCompanionStats", function()
                 assert.equals("ObjectiveFont", fontPath)
             end)
 
-            it("header always uses ObjectiveTitleFont (manual header, no template)", function()
-                -- Since header is always built manually, font is always ObjectiveTitleFont
+            it("header always uses Frizqt font (manual header, explicit SetFont)", function()
+                -- Header is always built manually with explicit SetFont() — no template dependency.
                 assert.is_not_nil(ns.headerLabel)
                 local fontPath = ns.headerLabel:GetFont()
-                assert.equals("ObjectiveTitleFont", fontPath)
+                assert.equals("Fonts\\FRIZQT__.TTF", fontPath)
             end)
 
         end)
@@ -1270,4 +1272,124 @@ describe("DelveCompanionStats", function()
         end)
 
     end)
+
+    -- -------------------------------------------------------------------------
+    -- Pin / Unpin button
+    -- -------------------------------------------------------------------------
+    describe("pin/unpin button", function()
+
+        it("ns.pinBtn is not nil after OnLoad", function()
+            assert.is_not_nil(ns.pinBtn)
+        end)
+
+        it("ns.pinBtnText is not nil after OnLoad", function()
+            assert.is_not_nil(ns.pinBtnText)
+        end)
+
+        it("default pin state is pinned (db.pinned = true after fresh OnLoad)", function()
+            assert.is_true(DelveCompanionStatsDB.pinned)
+        end)
+
+        it("pin button text is '📌' after OnLoad (both pinned and unpinned use same icon)", function()
+            assert.equals("📌", ns.pinBtnText:GetText())
+        end)
+
+        it("pin button text color is gold when pinned", function()
+            -- Default state after OnLoad is pinned
+            local r, g, b = ns.pinBtnText:GetTextColor()
+            assert.near(1.0,  r, 0.01, "R should be ~1.0 (gold)")
+            assert.near(0.78, g, 0.01, "G should be ~0.78 (gold)")
+            assert.near(0.1,  b, 0.01, "B should be ~0.1 (gold)")
+        end)
+
+        it("frame is not movable when pinned (default)", function()
+            assert.is_false(ns.frame._movable)
+        end)
+
+        it("clicking pin button when pinned switches to unpinned state", function()
+            assert.is_true(DelveCompanionStatsDB.pinned)   -- precondition
+            ns.pinBtn._scripts["OnClick"]()
+            assert.is_false(DelveCompanionStatsDB.pinned)
+        end)
+
+        it("frame becomes movable when unpinned via pin button click", function()
+            ns.pinBtn._scripts["OnClick"]()   -- unpin
+            assert.is_true(ns.frame._movable)
+        end)
+
+        it("pin button text color is grey when unpinned", function()
+            ns.pinBtn._scripts["OnClick"]()   -- unpin
+            local r, g, b = ns.pinBtnText:GetTextColor()
+            assert.near(0.6, r, 0.01, "R should be ~0.6 (grey)")
+            assert.near(0.6, g, 0.01, "G should be ~0.6 (grey)")
+            assert.near(0.6, b, 0.01, "B should be ~0.6 (grey)")
+        end)
+
+        it("clicking pin button when unpinned switches back to pinned state", function()
+            ns.pinBtn._scripts["OnClick"]()   -- unpin
+            assert.is_false(DelveCompanionStatsDB.pinned)
+            ns.pinBtn._scripts["OnClick"]()   -- re-pin
+            assert.is_true(DelveCompanionStatsDB.pinned)
+        end)
+
+        it("frame becomes not movable after re-pinning", function()
+            ns.pinBtn._scripts["OnClick"]()   -- unpin
+            ns.pinBtn._scripts["OnClick"]()   -- re-pin
+            assert.is_false(ns.frame._movable)
+        end)
+
+        it("pin button text color is gold after re-pinning", function()
+            ns.pinBtn._scripts["OnClick"]()   -- unpin
+            ns.pinBtn._scripts["OnClick"]()   -- re-pin
+            local r, g, b = ns.pinBtnText:GetTextColor()
+            assert.near(1.0,  r, 0.01)
+            assert.near(0.78, g, 0.01)
+            assert.near(0.1,  b, 0.01)
+        end)
+
+        it("pin button is positioned LEFT of the collapse button", function()
+            assert.is_not_nil(ns.pinBtn)
+            local hasRight = false
+            for _, pt in ipairs(ns.pinBtn._points or {}) do
+                if pt[1] == "RIGHT" then
+                    hasRight = true
+                    break
+                end
+            end
+            assert.is_true(hasRight, "expected a SetPoint with 'RIGHT' anchor on pin button")
+        end)
+
+        it("restores unpinned state on load when db.pinned = false", function()
+            _G.DelveCompanionStatsDB = { pinned = false }
+            _G.DelveCompanionStatsNS = nil
+            _G.DelveCompanionStatsFrame = nil
+            dofile("DelveCompanionStats/DelveCompanionStats.lua")
+            local ns2 = _G.DelveCompanionStatsNS
+            ns2:OnLoad()
+            assert.is_true(ns2.frame._movable)
+            assert.is_false(DelveCompanionStatsDB.pinned)
+        end)
+
+        it("restores pinned state on load when db.pinned = true", function()
+            _G.DelveCompanionStatsDB = { pinned = true }
+            _G.DelveCompanionStatsNS = nil
+            _G.DelveCompanionStatsFrame = nil
+            dofile("DelveCompanionStats/DelveCompanionStats.lua")
+            local ns2 = _G.DelveCompanionStatsNS
+            ns2:OnLoad()
+            assert.is_false(ns2.frame._movable)
+            assert.is_true(DelveCompanionStatsDB.pinned)
+        end)
+
+        it("unpinned drag stop saves position with relPoint key", function()
+            ns.pinBtn._scripts["OnClick"]()   -- unpin → registers drag scripts
+            -- Simulate a drag stop
+            ns.frame._scripts["OnDragStop"](ns.frame)
+            assert.is_not_nil(DelveCompanionStatsDB.position)
+            -- relPoint key (not relativePoint) is what the new handler saves
+            assert.is_not_nil(DelveCompanionStatsDB.position.relPoint)
+        end)
+
+    end)
+
 end)
