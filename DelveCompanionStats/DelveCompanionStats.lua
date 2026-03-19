@@ -514,7 +514,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
 
         -- Delayed resize: use fixed 235 px (avoids picking up "All Objectives" ~460 px width)
         C_Timer.After(0.5, function()
-            local w = 235
+            local w = 248
             if ns.frame then ns.frame:SetWidth(w) end
             if ns.headerFrame then ns.headerFrame:SetWidth(w) end
             if ns.header then ns.header:SetWidth(w) end
@@ -534,11 +534,9 @@ end)
 -- Returns nil when neither is available/visible.
 -------------------------------------------------------------------------------
 local function GetTrackerAnchor()
-    if ScenarioObjectiveTracker
-        and ScenarioObjectiveTracker.IsShown
-        and ScenarioObjectiveTracker:IsShown() then
-        return ScenarioObjectiveTracker
-    end
+    -- Always anchor to the full ObjectiveTrackerFrame so we stay below ALL
+    -- tracker content (quests, scenarios, achievements, etc.), not just
+    -- the Delves/Scenario section.
     if ObjectiveTrackerFrame
         and ObjectiveTrackerFrame.IsShown
         and ObjectiveTrackerFrame:IsShown() then
@@ -660,7 +658,7 @@ function ns:OnLoad()
         frameWidth = ScenarioObjectiveTracker:GetWidth()
     end
     if frameWidth < 100 or frameWidth > 300 then
-        frameWidth = 235  -- match Delves section content box width
+        frameWidth = 248  -- match Delves section content box width
     end
     -- Inner content width: 6 px padding each side (matches ObjectiveTracker label inset)
     local contentWidth = frameWidth - 12
@@ -980,7 +978,7 @@ function ns:OnLoad()
     -- ResizeToTracker: re-measure ScenarioObjectiveTracker width and apply to all labels.
     -- Called on PLAYER_ENTERING_WORLD so the tracker is fully sized before we read it.
     local function ResizeToTracker()
-        local w = 235  -- Fixed width for Delves section content box
+        local w = 248  -- Fixed width for Delves section content box
         if ns.frame then ns.frame:SetWidth(w) end
         if ns.header then ns.header:SetWidth(w) end
         if ns.headerFrame then ns.headerFrame:SetWidth(w) end
@@ -1008,6 +1006,9 @@ function ns:OnLoad()
         ns.frame:RegisterEvent("UNIT_NAME_UPDATE")
         -- SCENARIO_CRITERIA_UPDATE fires when nemesis kill count changes
         pcall(function() ns.frame:RegisterEvent("SCENARIO_CRITERIA_UPDATE") end)
+        -- QUEST_WATCH_LIST_CHANGED fires when quests are tracked/untracked;
+        -- re-anchor so we stay below the full tracker content.
+        ns.frame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
         -- UNIT_AURA fires when buffs/debuffs change on a unit; used to detect
         -- when the boon aura (spell 1280098) becomes active after zone-in.
         ns.frame:RegisterEvent("UNIT_AURA")
@@ -1045,6 +1046,15 @@ function ns:OnLoad()
                             ns:UpdateCompanionData("TIMER_5S_PEW")
                         end
                     end)
+                end
+                return
+            end
+
+            -- QUEST_WATCH_LIST_CHANGED: re-anchor after a short delay so the
+            -- tracker has time to finish its layout before we read its bounds.
+            if event == "QUEST_WATCH_LIST_CHANGED" then
+                if C_Timer and C_Timer.After then
+                    C_Timer.After(0.1, function() AnchorFrame() end)
                 end
                 return
             end

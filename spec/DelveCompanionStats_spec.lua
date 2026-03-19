@@ -1172,24 +1172,24 @@ describe("DelveCompanionStats", function()
         describe("spacing and padding", function()
 
             it("nameLabel width is frameWidth - 12", function()
-                -- frameWidth fallback is 235; contentWidth = 235 - 12 = 223
-                assert.equals(223, ns.nameLabel._width)
+                -- frameWidth fallback is 248; contentWidth = 248 - 12 = 236
+                assert.equals(236, ns.nameLabel._width)
             end)
 
             it("boonHeaderLabel width is frameWidth - 12", function()
-                assert.equals(223, ns.boonHeaderLabel._width)
+                assert.equals(236, ns.boonHeaderLabel._width)
             end)
 
             it("boonLabel width is frameWidth - 12", function()
-                assert.equals(223, ns.boonLabel._width)
+                assert.equals(236, ns.boonLabel._width)
             end)
 
             it("nemesisLabel width is frameWidth - 12", function()
-                assert.equals(223, ns.nemesisLabel._width)
+                assert.equals(236, ns.nemesisLabel._width)
             end)
 
             it("nemesisDetailLabel width is frameWidth - 12", function()
-                assert.equals(223, ns.nemesisDetailLabel._width)
+                assert.equals(236, ns.nemesisDetailLabel._width)
             end)
 
         end)
