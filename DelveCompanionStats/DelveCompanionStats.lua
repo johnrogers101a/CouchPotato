@@ -764,6 +764,7 @@ function ns:OnLoad()
     ns.nameLabel:SetText("No companion data")
     ns.nameLabel:SetShadowOffset(1, -1)
     ns.nameLabel:SetShadowColor(0, 0, 0, 1)
+    ns.nameLabel:SetWordWrap(false)
 
     -- 6. Level label — kept for backward-compat / testability; hidden in normal operation
     -- (level is now part of the combined Line 1 in nameLabel)
@@ -1192,7 +1193,7 @@ function ns:UpdateCompanionData(event)
             local currentXP = friendData.standing - friendData.reactionThreshold
             local maxXP     = friendData.nextThreshold - friendData.reactionThreshold
             local percent   = math.floor((currentXP / maxXP) * 100)
-            xpText = FormatNumber(currentXP) .. " / " .. FormatNumber(maxXP) .. " XP (" .. percent .. "%)"
+            xpText = FormatNumber(currentXP) .. "/" .. FormatNumber(maxXP) .. " (" .. percent .. "%)"
         end
 
         local parts = { name }
