@@ -254,6 +254,25 @@ local function createMockFrame(frameType, name, parent, template)
         function frame:SetText(t) self._text = t end
         function frame:GetText() return self._text end
     end
+
+    -- ObjectiveTrackerSectionHeaderTemplate support
+    -- Provides .Text (title FontString) and .Button (collapse/expand) children,
+    -- matching the real Blizzard template's child widget names.
+    if template and template:find("ObjectiveTrackerSectionHeaderTemplate") then
+        frame.Text = {
+            _text = "",
+            SetText = function(self, t) self._text = t end,
+            GetText = function(self) return self._text end,
+        }
+        frame.Button = {
+            _text = "–",
+            _scripts = {},
+            SetText   = function(self, t) self._text = t end,
+            GetText   = function(self) return self._text end,
+            SetScript = function(self, event, fn) self._scripts[event] = fn end,
+            GetScript = function(self, event) return self._scripts[event] end,
+        }
+    end
     
     -- StatusBar support
     if frameType == "StatusBar" then

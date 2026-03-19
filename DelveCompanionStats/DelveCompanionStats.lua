@@ -586,6 +586,7 @@ function ns:OnLoad()
     db.position       = db.position       -- keep existing or nil
     db.companionName  = db.companionName  -- keep existing or nil
     db.companionLevel = db.companionLevel -- keep existing or nil
+    db.collapsed      = db.collapsed      -- keep existing or nil (nil = expanded)
 
     -- 2. Create the main display frame
     -- Wrapped in pcall: guards against any unexpected frame creation failures.
@@ -635,46 +636,96 @@ function ns:OnLoad()
         ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 130)
     end
 
-    -- 4a. Header frame — dark blue/purple gradient with gold bottom border line,
-    -- matching the Blizzard ObjectiveTracker section header style ("Delves").
-    local headerFrame = CreateFrame("Frame", nil, ns.frame)
-    headerFrame:SetHeight(28)
-    headerFrame:SetPoint("TOPLEFT",  ns.frame, "TOPLEFT",  0, 0)
-    headerFrame:SetPoint("TOPRIGHT", ns.frame, "TOPRIGHT", 0, 0)
+    -- 4a. Header frame — use Blizzard's ObjectiveTrackerSectionHeaderTemplate for a
+    -- native look (gradient + collapse/expand button + gold text).  Wrapped in pcall
+    -- so we fall back to a fully custom header if the template is unavailable.
+    local headerFrame
+    local useNativeHeader = false
+    local nativeOk = pcall(function()
+        headerFrame = CreateFrame("Button", "DelveCompanionStatsHeader", ns.frame,
+            "ObjectiveTrackerSectionHeaderTemplate")
+    end)
 
-    -- Deep navy/purple solid base
-    local headerBg = headerFrame:CreateTexture(nil, "BACKGROUND")
-    headerBg:SetAllPoints()
-    headerBg:SetColorTexture(0.08, 0.06, 0.18, 0.95)
+    if nativeOk and headerFrame then
+        -- ── Native Blizzard template path ────────────────────────────────────
+        useNativeHeader = true
+        headerFrame:SetHeight(28)
+        headerFrame:SetPoint("TOPLEFT",  ns.frame, "TOPLEFT",  0, 0)
+        headerFrame:SetPoint("TOPRIGHT", ns.frame, "TOPRIGHT", 0, 0)
 
-    -- Warm brown/amber centre-left glow overlay (replicates the warm gradient in the Blizzard header)
-    local headerGlow = headerFrame:CreateTexture(nil, "BACKGROUND", nil, 1)
-    headerGlow:SetPoint("LEFT", headerFrame, "LEFT", 0, 0)
-    headerGlow:SetSize(frameWidth * 0.6, 28)
-    headerGlow:SetColorTexture(0.28, 0.14, 0.04, 0.6)
+        -- Set the section title (template exposes .Text or .Title child)
+        local titleChild = headerFrame.Text or headerFrame.Title
+        if titleChild then
+            titleChild:SetText("Delve Companion")
+        end
+        -- Keep a stable reference on ns for debug/test access
+        ns.headerLabel = titleChild
 
-    -- Bright gold/amber 2-px rule along the bottom edge of the header
-    local headerLine = headerFrame:CreateTexture(nil, "ARTWORK")
-    headerLine:SetHeight(2)
-    headerLine:SetPoint("BOTTOMLEFT",  headerFrame, "BOTTOMLEFT",  0, 0)
-    headerLine:SetPoint("BOTTOMRIGHT", headerFrame, "BOTTOMRIGHT", 0, 0)
-    headerLine:SetColorTexture(1, 0.78, 0.1, 1.0)
+        -- Wire the collapse/expand button (template child is .Button or .CollapseButton)
+        local collapseBtn = headerFrame.Button or headerFrame.CollapseButton
+        if collapseBtn then
+            collapseBtn:SetScript("OnClick", function()
+                if ns.contentFrame:IsShown() then
+                    ns.contentFrame:Hide()
+                    collapseBtn:SetText("+")
+                    if DelveCompanionStatsDB then
+                        DelveCompanionStatsDB.collapsed = true
+                    end
+                else
+                    ns.contentFrame:Show()
+                    collapseBtn:SetText("–")
+                    if DelveCompanionStatsDB then
+                        DelveCompanionStatsDB.collapsed = false
+                    end
+                end
+                ns.frame:SetHeight(headerFrame:GetHeight() +
+                    (ns.contentFrame:IsShown() and ns.contentFrame:GetHeight() or 0))
+            end)
+        end
+    else
+        -- ── Fallback: custom header matching the Blizzard style ───────────────
+        headerFrame = CreateFrame("Frame", nil, ns.frame)
+        headerFrame:SetHeight(28)
+        headerFrame:SetPoint("TOPLEFT",  ns.frame, "TOPLEFT",  0, 0)
+        headerFrame:SetPoint("TOPRIGHT", ns.frame, "TOPRIGHT", 0, 0)
 
-    -- 4b. Section header label — gold text, larger than body labels
-    ns.headerLabel = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    ns.headerLabel:SetPoint("LEFT", headerFrame, "LEFT", 8, 0)
-    ns.headerLabel:SetWidth(contentWidth)
-    ns.headerLabel:SetJustifyH("LEFT")
-    local headerFontOk = pcall(function() ns.headerLabel:SetFontObject("GameFontNormalLarge") end)
-    if not headerFontOk or not ns.headerLabel:GetFont() then
-        ns.headerLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+        -- Deep navy/purple solid base
+        local headerBg = headerFrame:CreateTexture(nil, "BACKGROUND")
+        headerBg:SetAllPoints()
+        headerBg:SetColorTexture(0.08, 0.06, 0.18, 0.95)
+
+        -- Warm brown/amber centre-left glow overlay
+        local headerGlow = headerFrame:CreateTexture(nil, "BACKGROUND", nil, 1)
+        headerGlow:SetPoint("LEFT", headerFrame, "LEFT", 0, 0)
+        headerGlow:SetSize(frameWidth * 0.6, 28)
+        headerGlow:SetColorTexture(0.28, 0.14, 0.04, 0.6)
+
+        -- Bright gold/amber 2-px rule along the bottom edge
+        local headerLine = headerFrame:CreateTexture(nil, "ARTWORK")
+        headerLine:SetHeight(2)
+        headerLine:SetPoint("BOTTOMLEFT",  headerFrame, "BOTTOMLEFT",  0, 0)
+        headerLine:SetPoint("BOTTOMRIGHT", headerFrame, "BOTTOMRIGHT", 0, 0)
+        headerLine:SetColorTexture(1, 0.78, 0.1, 1.0)
+
+        -- Section header label — gold text, larger than body labels
+        ns.headerLabel = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        ns.headerLabel:SetPoint("LEFT", headerFrame, "LEFT", 8, 0)
+        ns.headerLabel:SetWidth(contentWidth)
+        ns.headerLabel:SetJustifyH("LEFT")
+        local headerFontOk = pcall(function() ns.headerLabel:SetFontObject("GameFontNormalLarge") end)
+        if not headerFontOk or not ns.headerLabel:GetFont() then
+            ns.headerLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+        end
+        ns.headerLabel:SetTextColor(1, 0.78, 0.1, 1.0)
+        ns.headerLabel:SetShadowOffset(1, -1)
+        ns.headerLabel:SetShadowColor(0, 0, 0, 1)
+        ns.headerLabel:SetText("Delve Companion")
     end
-    ns.headerLabel:SetTextColor(1, 0.78, 0.1, 1.0)   -- bright gold matching the border line
-    ns.headerLabel:SetShadowOffset(1, -1)
-    ns.headerLabel:SetShadowColor(0, 0, 0, 1)
-    ns.headerLabel:SetText("Delve Companion")
 
-    -- 4c. Content frame — dark brown/leather background with gold border,
+    -- Store on ns for test access and OnClick height calculations
+    ns.headerFrame = headerFrame
+
+    -- 4b. Content frame — dark brown/leather background with gold border,
     -- matching the Blizzard delve entry card style.
     local contentFrame
     local contentOk, contentResult = pcall(function()
@@ -799,6 +850,18 @@ function ns:OnLoad()
         end)
         -- posOk == false means corrupt position data; default anchor from step 3 remains
         if not posOk then dcsprint("Could not restore saved position; using default.") end
+    end
+
+    -- 8b. Restore collapsed state from SavedVariables
+    if db.collapsed then
+        if ns.contentFrame then ns.contentFrame:Hide() end
+        -- Update header height (collapsed = header only)
+        ns.frame:SetHeight(ns.headerFrame and ns.headerFrame:GetHeight() or 28)
+        -- Update collapse button text when using native template
+        if ns.headerFrame then
+            local collapseBtn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            if collapseBtn and collapseBtn.SetText then collapseBtn:SetText("+") end
+        end
     end
 
     -- 9. Determine frame visibility based on active delve state
@@ -1157,9 +1220,14 @@ function ns:UpdateCompanionData(event)
             local _, newlines = nemText:gsub("\n", "\n")
             contentHeight = contentHeight + (newlines + 1) * 16
         end
-        -- Resize contentFrame then total frame (header 28px + content)
+        -- Resize contentFrame then total frame (header height + content, or header only when collapsed)
         if ns.contentFrame then ns.contentFrame:SetHeight(contentHeight) end
-        ns.frame:SetHeight(28 + contentHeight)
+        local headerH = ns.headerFrame and ns.headerFrame:GetHeight() or 28
+        if ns.contentFrame and ns.contentFrame:IsShown() then
+            ns.frame:SetHeight(headerH + contentHeight)
+        else
+            ns.frame:SetHeight(headerH)
+        end
     end
 
     -- Persist to SavedVariables
