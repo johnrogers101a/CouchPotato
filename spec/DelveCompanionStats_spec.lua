@@ -407,49 +407,60 @@ describe("DelveCompanionStats", function()
             C_GossipInfo.GetFriendshipReputation = function()
                 return { friendshipRank = 12, standing = 100, reactionThreshold = 0, nextThreshold = 200 }
             end
-            _ClearMockAuras()
+            _ClearMockBoonTooltip()
             -- Clear nemesis so it doesn't interfere
             C_ScenarioInfo._criteria = {}
         end)
 
         after_each(function()
-            _ClearMockAuras()
+            _ClearMockBoonTooltip()
             C_ScenarioInfo._criteria = {}
         end)
 
-        it("boon display shows 'Boons: Active' when parent aura 1280098 is present", function()
-            _SetMockAura(1280098, 8)   -- parent "Boons" aura active
+        it("boon display shows abbreviated stats parsed from tooltip", function()
+            _SetMockBoonTooltip({
+                "Boons",
+                "Maximum Health: 3%.",
+                "Movement Speed: 5%.",
+                "Strength: 4%.",
+                "Mastery: 3%.",
+            })
 
             ns:UpdateCompanionData()
 
-            local text = ns.boonLabel._text
-            assert.equals("Boons: Active", text)
+            assert.equals("HP:3% Spd:5% Str:4% Mast:3%", ns.boonLabel._text)
         end)
 
         it("boon display hides label when no active boons", function()
-            -- No auras set — all values nil or 0
+            -- No tooltip lines set — simulates spell not active
             ns:UpdateCompanionData()
 
             assert.equals("", ns.boonLabel._text)
             assert.is_false(ns.boonLabel:IsShown())
         end)
 
-        it("boon display shows 'Boons: Active' even when parent aura 1280098 has value1 == 0", function()
-            _SetMockAura(1280098, 0)   -- aura present with value1 == 0 → still active
+        it("boon display excludes stats where value is 0", function()
+            _SetMockBoonTooltip({
+                "Boons",
+                "Maximum Health: 3%.",
+                "Haste: 0%.",        -- zero value, must be excluded
+            })
 
             ns:UpdateCompanionData()
 
-            assert.equals("Boons: Active", ns.boonLabel._text)
-            assert.is_true(ns.boonLabel:IsShown())
+            assert.equals("HP:3%", ns.boonLabel._text)
         end)
 
-        it("boon label is shown when parent aura 1280098 is active", function()
-            _SetMockAura(1280098, 5)   -- parent "Boons" aura active
+        it("boon label is shown when tooltip has boon lines", function()
+            _SetMockBoonTooltip({
+                "Boons",
+                "Versatility: 7%.",
+            })
 
             ns:UpdateCompanionData()
 
             assert.is_true(ns.boonLabel:IsShown())
-            assert.equals("Boons: Active", ns.boonLabel._text)
+            assert.equals("Vers:7%", ns.boonLabel._text)
         end)
 
     end)
@@ -466,12 +477,12 @@ describe("DelveCompanionStats", function()
             C_GossipInfo.GetFriendshipReputation = function()
                 return { friendshipRank = 12, standing = 100, reactionThreshold = 0, nextThreshold = 200 }
             end
-            _ClearMockAuras()
+            _ClearMockBoonTooltip()
             C_ScenarioInfo._criteria = {}
         end)
 
         after_each(function()
-            _ClearMockAuras()
+            _ClearMockBoonTooltip()
             C_ScenarioInfo._criteria = {}
         end)
 

@@ -121,7 +121,8 @@ ignore = {
 files = {
     ["spec/**"] = {
         globals = { "_MockPlayer", "_SetCombatState", "_GetOverrideBindings", "_ResetBindings",
-                    "_SetMockAura", "_ClearMockAuras", "_SetMockNemesis" },
+                    "_SetMockAura", "_ClearMockAuras", "_SetMockNemesis",
+                    "_SetMockBoonTooltip", "_ClearMockBoonTooltip" },
         ignore = { "143" },  -- accessing undefined fields (busted assertions, table.unpack compat)
     }
 }
