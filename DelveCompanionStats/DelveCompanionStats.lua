@@ -816,34 +816,46 @@ GetBoonsDisplayText = function()
 end
 
 -------------------------------------------------------------------------------
--- GetNemesisProgress: Returns "Nemesis: X/Y" if an Enemy group criterion exists,
--- otherwise returns "".
--- Queries C_ScenarioInfo criteria to find the nemesis strongbox kill objective.
+-- AbbreviateLabel: Shorten a scenario criterion description to a compact label.
+-- Strips common trailing action words (slain, destroyed, killed, kills, remaining)
+-- then returns the last meaningful word, capitalised, truncated to 12 characters.
+local function AbbreviateLabel(desc)
+    -- Strip trailing action words (case-insensitive)
+    local stripped = desc
+        :gsub("%s+[Ss]lain$",     "")
+        :gsub("%s+[Dd]estroyed$", "")
+        :gsub("%s+[Kk]illed$",    "")
+        :gsub("%s+[Kk]ills$",     "")
+        :gsub("%s+[Rr]emaining$", "")
+    -- Trim whitespace
+    stripped = stripped:match("^%s*(.-)%s*$") or stripped
+    -- Take the last word
+    local lastWord = stripped:match("(%S+)%s*$") or stripped
+    -- Capitalise first letter
+    lastWord = lastWord:sub(1, 1):upper() .. lastWord:sub(2)
+    -- Truncate to 12 characters
+    if #lastWord > 12 then lastWord = lastWord:sub(1, 12) end
+    return lastWord
+end
+
+-- GetNemesisProgress: Returns all scenario criteria (totalQuantity > 0) as
+-- separate "Label: X/Y" lines joined by "\n", or "" when no criteria exist.
+-- Queries C_ScenarioInfo — shows every objective so the player has full context.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
     if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
     local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
     if not stepInfo or not stepInfo.numCriteria then return "" end
 
-    -- Primary: case-insensitive description match
-    for i = 1, stepInfo.numCriteria do
-        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and c.description then
-            local desc = c.description:lower()
-            if desc:find("enemy group") or desc:find("nemesis") then
-                return "Nemesis: " .. tostring(c.quantity) .. "/" .. tostring(c.totalQuantity)
-            end
-        end
-    end
-
-    -- Fallback: first criterion with a meaningful totalQuantity
+    local lines = {}
     for i = 1, stepInfo.numCriteria do
         local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
         if ok and c and c.totalQuantity and c.totalQuantity > 0 then
-            return "Nemesis: " .. tostring(c.quantity) .. "/" .. tostring(c.totalQuantity)
+            local label = (c.description and AbbreviateLabel(c.description)) or ("Obj" .. i)
+            table.insert(lines, label .. ": " .. tostring(c.quantity) .. "/" .. tostring(c.totalQuantity))
         end
     end
-    return ""
+    return table.concat(lines, "\n")
 end
 
 -------------------------------------------------------------------------------
@@ -958,9 +970,11 @@ function ns:UpdateCompanionData(event)
             local _, newlines = boonText:gsub("\n", "\n")
             height = height + (newlines + 1) * 16
         end
-        -- Nemesis label (one line)
+        -- Nemesis label (may be multi-line)
         if ns.nemesisLabel and ns.nemesisLabel:IsShown() then
-            height = height + 16
+            local nemText = ns.nemesisLabel:GetText() or ""
+            local _, newlines = nemText:gsub("\n", "\n")
+            height = height + (newlines + 1) * 16
         end
         ns.frame:SetHeight(height)
     end
