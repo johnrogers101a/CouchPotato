@@ -1,5 +1,5 @@
 -- spec/DelveCompanionStats_spec.lua
--- Tests for DelveCompanionStats: companion name lookup, SavedVariables fallback, level extraction
+-- Tests for DelveCompanionStats: dynamic companion name/level resolution via WoW API
 
 require("spec/wow_mock")
 
@@ -13,11 +13,10 @@ describe("DelveCompanionStats", function()
         _G.DelveCompanionStatsFrame = nil
 
         -- Reset API mocks to default (no companion active)
-        C_DelvesUI.GetCompanionInfoForActivePlayer = function() return nil end
         C_DelvesUI.GetFactionForCompanion = function() return nil end
+        C_Reputation.GetFactionDataByID = function() return nil end
         C_GossipInfo.GetFriendshipReputation = function() return nil end
         C_GossipInfo.GetFriendshipReputationRanks = function() return nil end
-        C_Reputation.GetFactionDataByID = function() return nil end
 
         -- Load the addon (varargs will be empty, test fallback creates ns = {})
         dofile("DelveCompanionStats/DelveCompanionStats.lua")
@@ -27,96 +26,98 @@ describe("DelveCompanionStats", function()
         ns:OnLoad()
     end)
 
-    describe("companion name lookup table", function()
-        it("maps companion ID 1 to Brann Bronzebeard", function()
-            assert.equals("Brann Bronzebeard", ns.companionNames[1])
-        end)
-
-        it("maps companion ID 2 to Valeera Sanguinar", function()
-            assert.equals("Valeera Sanguinar", ns.companionNames[2])
-        end)
-
-        it("has all 5 known Delve companions in the lookup table", function()
-            assert.equals("Brann Bronzebeard", ns.companionNames[1])
-            assert.equals("Valeera Sanguinar", ns.companionNames[2])
-            assert.equals("Waxmonger Squick",  ns.companionNames[3])
-            assert.equals("Turalyon",          ns.companionNames[4])
-            assert.equals("Thisalee Crow",     ns.companionNames[5])
+    describe("hardcoded lookup table removed", function()
+        it("does not expose a companionNames table", function()
+            assert.is_nil(ns.companionNames)
         end)
     end)
 
     describe("UpdateCompanionData", function()
-        it("displays correct name for known companion ID 1", function()
-            C_DelvesUI.GetCompanionInfoForActivePlayer = function() return 1 end
-            C_DelvesUI.GetFactionForCompanion = function() return 100 end
+        it("shows No Companion when GetFactionForCompanion returns nil", function()
+            C_DelvesUI.GetFactionForCompanion = function() return nil end
 
             ns:UpdateCompanionData()
 
-            assert.equals("Brann Bronzebeard", ns.nameLabel._text)
+            assert.equals("No Companion", ns.nameLabel._text)
+            assert.equals("", ns.levelLabel._text)
         end)
 
-        it("displays Unknown Companion for unknown companion ID", function()
-            C_DelvesUI.GetCompanionInfoForActivePlayer = function() return 99 end
-            C_DelvesUI.GetFactionForCompanion = function() return 100 end
+        it("shows No Companion when GetFactionForCompanion returns 0", function()
+            C_DelvesUI.GetFactionForCompanion = function() return 0 end
 
             ns:UpdateCompanionData()
 
-            assert.equals("Unknown Companion", ns.nameLabel._text)
+            assert.equals("No Companion", ns.nameLabel._text)
+            assert.equals("", ns.levelLabel._text)
         end)
 
-        it("persists hardcoded name to SavedVariables (not faction name)", function()
-            -- Set up faction API to return a faction name (should NOT be used)
-            C_Reputation.GetFactionDataByID = function() return { name = "Friendship" } end
-            -- Set companion ID 2 active
-            C_DelvesUI.GetCompanionInfoForActivePlayer = function() return 2 end
-            C_DelvesUI.GetFactionForCompanion = function() return 200 end
+        it("resolves companion name from GetFactionDataByID", function()
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID = function(factionID)
+                if factionID == 2744 then return { name = "Valeera Sanguinar" } end
+                return nil
+            end
 
             ns:UpdateCompanionData()
 
-            -- UI should show the hardcoded name, not the faction name
             assert.equals("Valeera Sanguinar", ns.nameLabel._text)
-            -- SavedVariables should also use the hardcoded name
+        end)
+
+        it("shows Unknown when GetFactionDataByID returns nil", function()
+            C_DelvesUI.GetFactionForCompanion = function() return 9999 end
+            C_Reputation.GetFactionDataByID = function() return nil end
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Unknown", ns.nameLabel._text)
+        end)
+
+        it("extracts level from friendshipRank", function()
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
+            C_GossipInfo.GetFriendshipReputation = function() return { friendshipRank = 3 } end
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Valeera Sanguinar", ns.nameLabel._text)
+            assert.equals("Level 3", ns.levelLabel._text)
+        end)
+
+        it("extracts level from reaction field when friendshipRank is absent", function()
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID = function() return { name = "Brann Bronzebeard" } end
+            C_GossipInfo.GetFriendshipReputation = function() return { reaction = 5 } end
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Level 5", ns.levelLabel._text)
+        end)
+
+        it("shows empty level when GetFriendshipReputation returns nil", function()
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
+            C_GossipInfo.GetFriendshipReputation = function() return nil end
+
+            ns:UpdateCompanionData()
+
+            assert.equals("", ns.levelLabel._text)
+        end)
+
+        it("persists resolved name and level to SavedVariables", function()
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
+            C_GossipInfo.GetFriendshipReputation = function() return { friendshipRank = 3 } end
+
+            ns:UpdateCompanionData()
+
             assert.equals("Valeera Sanguinar", DelveCompanionStatsDB.companionName)
-            -- Must not be the faction name
-            assert.not_equals("Friendship", ns.nameLabel._text)
+            assert.equals(3,                   DelveCompanionStatsDB.companionLevel)
         end)
 
-        it("extracts level correctly from GetFriendshipReputationRanks", function()
-            C_DelvesUI.GetCompanionInfoForActivePlayer = function() return 1 end
-            C_DelvesUI.GetFactionForCompanion = function() return 100 end
-            C_GossipInfo.GetFriendshipReputation = function(factionID)
-                return { friendshipFactionID = factionID, reaction = 5 }
-            end
-            C_GossipInfo.GetFriendshipReputationRanks = function(factionID)
-                return { currentLevel = 7, maxLevel = 10 }
-            end
-
-            ns:UpdateCompanionData()
-
-            assert.equals("Brann Bronzebeard", ns.nameLabel._text)
-            assert.equals("Level: 7", ns.levelLabel._text)
-        end)
-
-        it("falls back to SavedVariables when no companion is active", function()
-            -- No companion active
-            C_DelvesUI.GetCompanionInfoForActivePlayer = function() return nil end
-            -- Pre-populate SavedVariables from a previous session
-            DelveCompanionStatsDB.companionName = "Brann Bronzebeard"
-            DelveCompanionStatsDB.companionLevel = 5
-
-            ns:UpdateCompanionData()
-
-            assert.equals("Brann Bronzebeard", ns.nameLabel._text)
-            assert.equals("Level: 5", ns.levelLabel._text)
-        end)
-
-        it("shows No companion data when no companion and no SavedVariables", function()
-            C_DelvesUI.GetCompanionInfoForActivePlayer = function() return nil end
-            DelveCompanionStatsDB = {}
-
-            ns:UpdateCompanionData()
-
-            assert.equals("No companion data", ns.nameLabel._text)
+        it("handles nil event without error", function()
+            assert.has_no_error(function()
+                ns:UpdateCompanionData(nil)
+            end)
         end)
     end)
 
@@ -135,15 +136,23 @@ describe("DelveCompanionStats", function()
     end)
 
     describe("UpdateCompanionData state tracking", function()
-        it("stores last-known companion state after update", function()
-            C_DelvesUI.GetCompanionInfoForActivePlayer = function() return 2 end
-            C_DelvesUI.GetFactionForCompanion = function() return 200 end
+        it("stores last-known factionID and name after update", function()
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
 
             ns:UpdateCompanionData("TEST_EVENT")
 
-            assert.equals(2, ns._lastCompanionID)
-            assert.equals(200, ns._lastFactionID)
+            assert.equals(2744,               ns._lastFactionID)
             assert.equals("Valeera Sanguinar", ns._lastName)
+        end)
+
+        it("clears state tracking when no companion is active", function()
+            C_DelvesUI.GetFactionForCompanion = function() return nil end
+
+            ns:UpdateCompanionData("TEST_EVENT")
+
+            assert.is_nil(ns._lastFactionID)
+            assert.is_nil(ns._lastName)
         end)
 
         it("UpdateCompanionData handles nil event without error", function()

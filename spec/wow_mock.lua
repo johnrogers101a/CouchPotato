@@ -13,7 +13,7 @@ setmetatable(_G.ChatFrame1, {__index = _G.UIParent})
 -- C_DelvesUI stub (used by DelveCompanionStats to fetch active companion)
 _G.C_DelvesUI = {
     GetActiveCompanion = function() return nil end,
-    GetFactionForCompanion = function(companionID) return nil end,
+    GetFactionForCompanion = function() return 2744 end,
     GetCompanionInfoForActivePlayer = function() return nil end,
 }
 
@@ -650,13 +650,19 @@ end
 
 -- C_GossipInfo stub (used by DelveCompanionStats for friendship reputation)
 _G.C_GossipInfo = _G.C_GossipInfo or {
-    GetFriendshipReputation = function(factionID) return nil end,
+    GetFriendshipReputation = function(factionID)
+        if factionID == 2744 then return { friendshipRank = 3 } end
+        return nil
+    end,
     GetFriendshipReputationRanks = function(factionID) return nil end,
 }
 
--- C_Reputation stub (used by some older addon code; not used after fix)
+-- C_Reputation stub (used by DelveCompanionStats for dynamic companion name lookup)
 _G.C_Reputation = {
-    GetFactionDataByID = function(factionID) return nil end,
+    GetFactionDataByID = function(factionID)
+        if factionID == 2744 then return { name = "Valeera Sanguinar" } end
+        return nil
+    end,
 }
 
 -- bit library (available in WoW's Lua 5.1 environment)

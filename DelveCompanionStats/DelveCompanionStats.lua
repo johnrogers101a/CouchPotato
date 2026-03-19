@@ -30,16 +30,7 @@ local function dcsprint(msg)
     end
 end
 
--- Companion ID → Display Name mapping
--- Hardcoded because WoW API provides no function to retrieve display names by companion ID
--- Known companions in WoW Delves (as of patch 12.0.x)
-ns.companionNames = {
-    [1] = "Brann Bronzebeard",
-    [2] = "Valeera Sanguinar",
-    [3] = "Waxmonger Squick",
-    [4] = "Turalyon",
-    [5] = "Thisalee Crow",
-}
+
 
 -------------------------------------------------------------------------------
 -- Slash commands: /dcs  or  /delvecompanion
@@ -90,23 +81,13 @@ function ns:PrintDebugInfo()
         end
     end
 
-    -- GetFactionForCompanion: try several args
+    -- GetFactionForCompanion: call with no args (returns active companion's faction ID)
     if C_DelvesUI and C_DelvesUI.GetFactionForCompanion then
-        local testArgs = {1, 2, 3, 4, 5, "Brann", "Valeera"}
-        for _, arg in ipairs(testArgs) do
-            local ok, result = pcall(C_DelvesUI.GetFactionForCompanion, arg)
-            dcsprint("  GetFactionForCompanion(" .. tostring(arg) .. ") => ok=" .. tostring(ok) .. " result=" .. tostring(result))
-        end
-    end
-
-    -- GetActiveCompanion: try even if we don't think it exists
-    if C_DelvesUI then
-        local ok, result = pcall(function() return C_DelvesUI.GetActiveCompanion() end)
-        dcsprint("  C_DelvesUI.GetActiveCompanion() pcall => ok=" .. tostring(ok) .. " result=" .. tostring(result))
+        local ok, result = pcall(C_DelvesUI.GetFactionForCompanion)
+        dcsprint("  GetFactionForCompanion() => ok=" .. tostring(ok) .. " result=" .. tostring(result))
     end
 
     -- Current addon state
-    dcsprint("companionID (last known): " .. tostring(ns._lastCompanionID))
     dcsprint("factionID (last known): "   .. tostring(ns._lastFactionID))
     dcsprint("name (last known): "        .. tostring(ns._lastName))
     dcsprint("level (last known): "       .. tostring(ns._lastLevel))
@@ -282,29 +263,14 @@ end
 
 -------------------------------------------------------------------------------
 -- UpdateCompanionData: Fetch active companion from C_DelvesUI and update UI
--- Called by event handlers and during initialization
+-- Uses fully dynamic API calls — no hardcoded faction ID lookup tables.
+-- Called by event handlers and during initialization.
 -------------------------------------------------------------------------------
 function ns:UpdateCompanionData(event)
     if not ns.frame then return end
     dcsprint("UpdateCompanionData triggered by: " .. tostring(event))
-    local name, level = nil, nil
 
-    -- Step 1: Get companion ID via GetCompanionInfoForActivePlayer
-    local companionID = nil
-    if C_DelvesUI and C_DelvesUI.GetCompanionInfoForActivePlayer then
-        local ok, result = pcall(C_DelvesUI.GetCompanionInfoForActivePlayer)
-        if ok and result and result ~= 0 then
-            companionID = result
-        end
-    end
-    dcsprint("  GetCompanionInfoForActivePlayer => " .. tostring(companionID))
-
-    -- Step 2: Look up companion name in hardcoded table; fall back to "Unknown Companion"
-    if companionID then
-        name = ns.companionNames[companionID] or "Unknown Companion"
-    end
-
-    -- Step 3: Get companion level from friendship reputation (needs faction ID)
+    -- Step 1: Get the active companion's faction ID directly (no args required)
     local factionID = nil
     if C_DelvesUI and C_DelvesUI.GetFactionForCompanion then
         local ok, result = pcall(C_DelvesUI.GetFactionForCompanion)
@@ -314,41 +280,51 @@ function ns:UpdateCompanionData(event)
     end
     dcsprint("  GetFactionForCompanion() => " .. tostring(factionID))
 
-    if factionID and C_GossipInfo and C_GossipInfo.GetFriendshipReputation then
+    if not factionID then
+        -- No active companion
+        ns._lastFactionID = nil
+        ns._lastName      = nil
+        ns._lastLevel     = nil
+        if ns.nameLabel then ns.nameLabel:SetText("No Companion") end
+        if ns.levelLabel then ns.levelLabel:SetText("") end
+        return
+    end
+
+    -- Step 2: Resolve companion name from faction data (dynamic — no lookup table)
+    local name = "Unknown"
+    if C_Reputation and C_Reputation.GetFactionDataByID then
+        local ok, factionData = pcall(C_Reputation.GetFactionDataByID, factionID)
+        if ok and factionData and factionData.name then
+            name = factionData.name
+        end
+    end
+    dcsprint("  GetFactionDataByID(" .. tostring(factionID) .. ") => " .. tostring(name))
+
+    -- Step 3: Get companion level from friendship reputation
+    local level = nil
+    if C_GossipInfo and C_GossipInfo.GetFriendshipReputation then
         local ok, friendData = pcall(C_GossipInfo.GetFriendshipReputation, factionID)
         if ok and friendData then
-            if C_GossipInfo.GetFriendshipReputationRanks then
-                local rok, ranks = pcall(C_GossipInfo.GetFriendshipReputationRanks, factionID)
-                if rok and ranks and ranks.currentLevel then
-                    level = ranks.currentLevel
-                end
-            end
+            level = friendData.friendshipRank or friendData.reaction or friendData.standing
         end
     end
     dcsprint("  level => " .. tostring(level))
 
-    -- Fall back to SavedVariables if live API returned nothing
-    if not name and DelveCompanionStatsDB then
-        name  = DelveCompanionStatsDB.companionName
-        level = DelveCompanionStatsDB.companionLevel
-    end
-
     -- Store last-known values for debug inspection
-    ns._lastCompanionID = companionID
-    ns._lastFactionID   = factionID
-    ns._lastName        = name
-    ns._lastLevel       = level
+    ns._lastFactionID = factionID
+    ns._lastName      = name
+    ns._lastLevel     = level
 
     -- Update UI
     if ns.nameLabel then
-        ns.nameLabel:SetText(name or "No companion data")
+        ns.nameLabel:SetText(name)
     end
     if ns.levelLabel then
-        ns.levelLabel:SetText(level and ("Level: " .. tostring(level)) or "")
+        ns.levelLabel:SetText(level and ("Level " .. tostring(level)) or "")
     end
 
     -- Persist to SavedVariables
-    if name and DelveCompanionStatsDB then
+    if DelveCompanionStatsDB then
         DelveCompanionStatsDB.companionName  = name
         DelveCompanionStatsDB.companionLevel = level
     end
