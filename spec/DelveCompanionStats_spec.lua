@@ -662,21 +662,20 @@ describe("DelveCompanionStats", function()
             assert.is_not_nil(ns.headerFrame)
         end)
 
-        it("native template path: headerFrame has .Text and .Button children", function()
-            -- Mock supports ObjectiveTrackerSectionHeaderTemplate — should use native path
-            assert.is_not_nil(ns.headerFrame.Text)
-            assert.is_not_nil(ns.headerFrame.Button)
+        it("headerTitle and collapseBtn are wired directly on ns", function()
+            -- Manual recreation: title and button live on ns directly, not as template children
+            assert.is_not_nil(ns.headerTitle)
+            assert.is_not_nil(ns.collapseBtn)
         end)
 
-        it("native template path: title text is 'Delve Companion'", function()
-            local titleChild = ns.headerFrame.Text or ns.headerFrame.Title
-            assert.is_not_nil(titleChild)
-            assert.equals("Delve Companion", titleChild:GetText())
+        it("header title text is 'Delve Companion'", function()
+            assert.is_not_nil(ns.headerTitle)
+            assert.equals("Delve Companion", ns.headerTitle:GetText())
         end)
 
         it("collapse button click hides contentFrame and sets collapsed = true", function()
             ns.contentFrame:Show()
-            local btn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            local btn = ns.collapseBtn
             assert.is_not_nil(btn)
             btn._scripts["OnClick"]()
             assert.is_false(ns.contentFrame:IsShown())
@@ -685,7 +684,7 @@ describe("DelveCompanionStats", function()
 
         it("collapse button click sets button text to '+'", function()
             ns.contentFrame:Show()
-            local btn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            local btn = ns.collapseBtn
             btn._scripts["OnClick"]()
             assert.equals("+", btn:GetText())
         end)
@@ -694,7 +693,7 @@ describe("DelveCompanionStats", function()
             -- Collapse first
             ns.contentFrame:Hide()
             DelveCompanionStatsDB.collapsed = true
-            local btn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            local btn = ns.collapseBtn
             btn:SetText("+")
             -- Click to expand
             btn._scripts["OnClick"]()
@@ -704,7 +703,7 @@ describe("DelveCompanionStats", function()
 
         it("expand button click sets button text to '–'", function()
             ns.contentFrame:Hide()
-            local btn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            local btn = ns.collapseBtn
             btn:SetText("+")
             btn._scripts["OnClick"]()
             assert.equals("–", btn:GetText())
@@ -733,30 +732,14 @@ describe("DelveCompanionStats", function()
             assert.is_true(ns2.contentFrame:IsShown())
         end)
 
-        it("falls back to custom header when template creation errors", function()
-            local origCreateFrame = _G.CreateFrame
-            _G.CreateFrame = function(frameType, name, parent, template)
-                if template == "ObjectiveTrackerSectionHeaderTemplate" then
-                    error("template not available in this environment")
-                end
-                return origCreateFrame(frameType, name, parent, template)
-            end
-
-            _G.DelveCompanionStatsDB  = {}
-            _G.DelveCompanionStatsNS  = nil
-            _G.DelveCompanionStatsFrame  = nil
-            _G.DelveCompanionStatsHeader = nil
-            dofile("DelveCompanionStats/DelveCompanionStats.lua")
-            local ns2 = _G.DelveCompanionStatsNS
-            ns2:OnLoad()
-
-            _G.CreateFrame = origCreateFrame
-
-            -- Fallback still provides a valid headerFrame
-            assert.is_not_nil(ns2.headerFrame)
-            -- Custom path creates ns.headerLabel as a FontString (no .Button child)
-            assert.is_nil(ns2.headerFrame.Button)
-            assert.is_not_nil(ns2.headerLabel)
+        it("manual header is always used (no template dependency)", function()
+            -- No fallback path needed: header is always built manually.
+            -- Verify the manual creation result is valid.
+            assert.is_not_nil(ns.headerFrame)
+            -- Manual header has no .Button child; button lives on ns.collapseBtn
+            assert.is_nil(ns.headerFrame.Button)
+            assert.is_not_nil(ns.collapseBtn)
+            assert.is_not_nil(ns.headerLabel)
         end)
 
     end)
@@ -767,13 +750,13 @@ describe("DelveCompanionStats", function()
     describe("collapse button (native header)", function()
 
         it("collapse button has initial text '–'", function()
-            local collapseBtn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            local collapseBtn = ns.collapseBtn
             assert.is_not_nil(collapseBtn)
             assert.equals("–", collapseBtn:GetText())
         end)
 
         it("collapse button text color is gold", function()
-            local collapseBtn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            local collapseBtn = ns.collapseBtn
             assert.is_not_nil(collapseBtn)
             local r, g, b, a = collapseBtn:GetTextColor()
             assert.is_not_nil(r, "text color R should be set")
@@ -784,7 +767,7 @@ describe("DelveCompanionStats", function()
         end)
 
         it("collapse button is positioned on right side of header", function()
-            local collapseBtn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            local collapseBtn = ns.collapseBtn
             assert.is_not_nil(collapseBtn)
             local hasRight = false
             for _, pt in ipairs(collapseBtn._points or {}) do
@@ -797,7 +780,7 @@ describe("DelveCompanionStats", function()
         end)
 
         it("collapse button click hides content and updates text", function()
-            local collapseBtn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            local collapseBtn = ns.collapseBtn
             assert.is_not_nil(collapseBtn)
             ns.contentFrame:Show()
             collapseBtn._scripts["OnClick"]()
@@ -807,7 +790,7 @@ describe("DelveCompanionStats", function()
         end)
 
         it("collapse button click again shows content and updates text", function()
-            local collapseBtn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            local collapseBtn = ns.collapseBtn
             assert.is_not_nil(collapseBtn)
             -- First click: collapse
             ns.contentFrame:Show()
@@ -828,7 +811,7 @@ describe("DelveCompanionStats", function()
             local ns2 = _G.DelveCompanionStatsNS
             ns2:OnLoad()
             assert.is_false(ns2.contentFrame:IsShown())
-            local collapseBtn = ns2.headerFrame.Button or ns2.headerFrame.CollapseButton
+            local collapseBtn = ns2.collapseBtn
             assert.is_not_nil(collapseBtn)
             assert.equals("+", collapseBtn:GetText())
         end)
@@ -1070,9 +1053,8 @@ describe("DelveCompanionStats", function()
         -- ── Fonts ─────────────────────────────────────────────────────────────
         describe("fonts", function()
 
-            it("header label uses ObjectiveTitleFont (native path)", function()
-                -- In the native path ns.headerLabel == headerFrame.Text, which now has
-                -- SetFontObject support; ObjectiveTitleFont is defined in wow_mock.
+            it("header label uses ObjectiveTitleFont", function()
+                -- ns.headerLabel is aliased to ns.headerTitle on the manual header
                 assert.is_not_nil(ns.headerLabel)
                 local fontPath = ns.headerLabel:GetFont()
                 assert.equals("ObjectiveTitleFont", fontPath)
@@ -1103,27 +1085,10 @@ describe("DelveCompanionStats", function()
                 assert.equals("ObjectiveFont", fontPath)
             end)
 
-            it("fallback header uses ObjectiveTitleFont when template unavailable", function()
-                local origCreateFrame = _G.CreateFrame
-                _G.CreateFrame = function(frameType, name, parent, template)
-                    if template == "ObjectiveTrackerSectionHeaderTemplate" then
-                        error("template not available in this environment")
-                    end
-                    return origCreateFrame(frameType, name, parent, template)
-                end
-
-                _G.DelveCompanionStatsDB     = {}
-                _G.DelveCompanionStatsNS     = nil
-                _G.DelveCompanionStatsFrame  = nil
-                _G.DelveCompanionStatsHeader = nil
-                dofile("DelveCompanionStats/DelveCompanionStats.lua")
-                local ns2 = _G.DelveCompanionStatsNS
-                ns2:OnLoad()
-
-                _G.CreateFrame = origCreateFrame
-
-                assert.is_not_nil(ns2.headerLabel)
-                local fontPath = ns2.headerLabel:GetFont()
+            it("header always uses ObjectiveTitleFont (manual header, no template)", function()
+                -- Since header is always built manually, font is always ObjectiveTitleFont
+                assert.is_not_nil(ns.headerLabel)
+                local fontPath = ns.headerLabel:GetFont()
                 assert.equals("ObjectiveTitleFont", fontPath)
             end)
 
@@ -1132,11 +1097,11 @@ describe("DelveCompanionStats", function()
         -- ── Colors ────────────────────────────────────────────────────────────
         describe("colors", function()
 
-            it("header label colour is muted gold {0.9, 0.75, 0.3}", function()
+            it("header label colour is bright gold {1, 0.82, 0.0}", function()
                 local r, g, b = ns.headerLabel:GetTextColor()
-                assert.is_true(math.abs(r - 0.9)  < 0.001, "expected r≈0.9, got " .. tostring(r))
-                assert.is_true(math.abs(g - 0.75) < 0.001, "expected g≈0.75, got " .. tostring(g))
-                assert.is_true(math.abs(b - 0.3)  < 0.001, "expected b≈0.3, got " .. tostring(b))
+                assert.is_true(math.abs(r - 1.0)  < 0.001, "expected r≈1.0, got " .. tostring(r))
+                assert.is_true(math.abs(g - 0.82) < 0.001, "expected g≈0.82, got " .. tostring(g))
+                assert.is_true(math.abs(b - 0.0)  < 0.001, "expected b≈0.0, got " .. tostring(b))
             end)
 
             it("boonHeaderLabel colour is muted gold {0.9, 0.75, 0.3}", function()
@@ -1174,40 +1139,22 @@ describe("DelveCompanionStats", function()
                 assert.is_true(math.abs(b - 1) < 0.001)
             end)
 
-            it("fallback header line colour is {1, 0.82, 0.05} (decorative gold)", function()
-                -- Force the fallback path so we can inspect the header line texture
-                local origCreateFrame = _G.CreateFrame
-                _G.CreateFrame = function(frameType, name, parent, template)
-                    if template == "ObjectiveTrackerSectionHeaderTemplate" then
-                        error("template not available")
-                    end
-                    return origCreateFrame(frameType, name, parent, template)
-                end
-
-                _G.DelveCompanionStatsDB     = {}
-                _G.DelveCompanionStatsNS     = nil
-                _G.DelveCompanionStatsFrame  = nil
-                _G.DelveCompanionStatsHeader = nil
-                dofile("DelveCompanionStats/DelveCompanionStats.lua")
-                local ns2 = _G.DelveCompanionStatsNS
-                ns2:OnLoad()
-                _G.CreateFrame = origCreateFrame
-
-                -- The ARTWORK texture on headerFrame is the bottom line (3rd texture: bg, glow, line)
-                local hf = ns2.headerFrame
+            it("header border line colour is {1, 0.78, 0.1} (bright gold)", function()
+                -- Manual header always has top+bottom gold border lines
+                local hf = ns.headerFrame
                 assert.is_not_nil(hf)
-                -- Find the line texture by looking for one with r≈1, g≈0.82, b≈0.05
+                -- Find the border line texture by looking for one with r≈1, g≈0.78, b≈0.1
                 local found = false
                 for _, tex in ipairs(hf._textures or {}) do
                     local c = tex._color
                     if c and math.abs(c[1] - 1) < 0.001
-                          and math.abs(c[2] - 0.82) < 0.001
-                          and math.abs(c[3] - 0.05) < 0.001 then
+                          and math.abs(c[2] - 0.78) < 0.001
+                          and math.abs(c[3] - 0.1) < 0.001 then
                         found = true
                         break
                     end
                 end
-                assert.is_true(found, "expected header line texture with colour {1, 0.82, 0.05}")
+                assert.is_true(found, "expected header border texture with colour {1, 0.78, 0.1}")
             end)
 
         end)

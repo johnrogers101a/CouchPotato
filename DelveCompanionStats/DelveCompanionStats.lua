@@ -578,6 +578,19 @@ function ns:UpdateFrameVisibility()
 end
 
 -------------------------------------------------------------------------------
+-- UpdateFrameHeight: Resize the outer frame to header + visible content.
+-- Called after expanding collapsed state.
+-------------------------------------------------------------------------------
+function ns:UpdateFrameHeight()
+    local headerH = ns.headerFrame and ns.headerFrame:GetHeight() or 28
+    if ns.contentFrame and ns.contentFrame:IsShown() then
+        ns.frame:SetHeight(headerH + (ns.contentFrame:GetHeight() or 0))
+    else
+        ns.frame:SetHeight(headerH)
+    end
+end
+
+-------------------------------------------------------------------------------
 -- OnLoad: Frame creation + UI setup + SavedVars init + position restore
 -- Called exactly once from ADDON_LOADED handler above.
 -- Guard: if ns.frame already exists, skip (idempotent safety).
@@ -646,124 +659,77 @@ function ns:OnLoad()
         ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 130)
     end
 
-    -- 4a. Header frame — use Blizzard's ObjectiveTrackerSectionHeaderTemplate for a
-    -- native look (gradient + collapse/expand button + gold text).  Wrapped in pcall
-    -- so we fall back to a fully custom header if the template is unavailable.
-    local headerFrame
-    local useNativeHeader = false
-    local nativeOk = pcall(function()
-        headerFrame = CreateFrame("Button", "DelveCompanionStatsHeader", ns.frame,
-            "ObjectiveTrackerSectionHeaderTemplate")
+    -- 4a. Header frame — manual recreation of Blizzard ObjectiveTracker section header.
+    -- Dark olive background, bright gold top+bottom border lines, ObjectiveTitleFont title
+    -- left-aligned, gold en-dash collapse button far right. Matches Blizzard "Delves" header.
+    local header = CreateFrame("Button", nil, ns.frame)
+    header:SetHeight(28)
+    header:SetPoint("TOPLEFT",  ns.frame, "TOPLEFT",  0, 0)
+    header:SetPoint("TOPRIGHT", ns.frame, "TOPRIGHT", 0, 0)
+
+    -- Background: dark olive/brown gradient
+    local headerBg = header:CreateTexture(nil, "BACKGROUND")
+    headerBg:SetAllPoints(header)
+    headerBg:SetColorTexture(0.15, 0.12, 0.03, 0.95)
+
+    -- Top border: bright gold line
+    local headerTopLine = header:CreateTexture(nil, "BORDER")
+    headerTopLine:SetHeight(1)
+    headerTopLine:SetPoint("TOPLEFT",  header, "TOPLEFT",  0, 0)
+    headerTopLine:SetPoint("TOPRIGHT", header, "TOPRIGHT", 0, 0)
+    headerTopLine:SetColorTexture(1, 0.78, 0.1, 1)
+
+    -- Bottom border: bright gold line
+    local headerBottomLine = header:CreateTexture(nil, "BORDER")
+    headerBottomLine:SetHeight(1)
+    headerBottomLine:SetPoint("BOTTOMLEFT",  header, "BOTTOMLEFT",  0, 0)
+    headerBottomLine:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
+    headerBottomLine:SetColorTexture(1, 0.78, 0.1, 1)
+
+    -- Title: large bright gold, left-aligned, ObjectiveTitleFont
+    local headerTitle = header:CreateFontString(nil, "OVERLAY", "ObjectiveTitleFont")
+    headerTitle:SetPoint("LEFT", header, "LEFT", 8, 0)
+    headerTitle:SetText("Delve Companion")
+    local titleFontOk = pcall(function() headerTitle:SetFontObject(ObjectiveTitleFont) end)
+    if not titleFontOk or not headerTitle:GetFont() then
+        headerTitle:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 14, "")
+    end
+    headerTitle:SetTextColor(1, 0.82, 0.0, 1)
+
+    -- Collapse button: gold en-dash, far right, vertically centred
+    local collapseBtn = CreateFrame("Button", nil, header)
+    collapseBtn:SetSize(20, 28)
+    collapseBtn:SetPoint("RIGHT", header, "RIGHT", -6, 0)
+    local collapseBtnText = collapseBtn:CreateFontString(nil, "OVERLAY", "ObjectiveTitleFont")
+    collapseBtnText:SetAllPoints(collapseBtn)
+    collapseBtnText:SetTextColor(1, 0.78, 0.1, 1)
+    collapseBtnText:SetText("–")
+    collapseBtn:SetFontString(collapseBtnText)
+
+    collapseBtn:SetScript("OnClick", function()
+        if ns.contentFrame:IsShown() then
+            ns.contentFrame:Hide()
+            collapseBtnText:SetText("+")
+            if DelveCompanionStatsDB then
+                DelveCompanionStatsDB.collapsed = true
+            end
+            ns.frame:SetHeight(header:GetHeight())
+        else
+            ns.contentFrame:Show()
+            collapseBtnText:SetText("–")
+            if DelveCompanionStatsDB then
+                DelveCompanionStatsDB.collapsed = false
+            end
+            ns:UpdateFrameHeight()
+        end
     end)
 
-    if nativeOk and headerFrame then
-        -- ── Native Blizzard template path ────────────────────────────────────
-        useNativeHeader = true
-        headerFrame:SetHeight(28)
-        headerFrame:SetPoint("TOPLEFT",  ns.frame, "TOPLEFT",  0, 0)
-        headerFrame:SetPoint("TOPRIGHT", ns.frame, "TOPRIGHT", 0, 0)
-
-        -- Set the section title (template exposes .Text or .Title child)
-        local titleChild = headerFrame.Text or headerFrame.Title
-        if titleChild then
-            titleChild:SetText("Delve Companion")
-        end
-        -- Keep a stable reference on ns for debug/test access
-        ns.headerLabel = titleChild
-
-        -- Apply Blizzard ObjectiveTitleFont + muted-gold colour to the title child
-        if ns.headerLabel then
-            local ok = pcall(function() ns.headerLabel:SetFontObject(ObjectiveTitleFont) end)
-            if not ok or not ns.headerLabel:GetFont() then
-                ns.headerLabel:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 14, "")
-            end
-            pcall(function() ns.headerLabel:SetTextColor(0.9, 0.75, 0.3, 1) end)
-        end
-
-        -- Wire the collapse/expand button.
-        -- Try child keys in order: dashButton (TWW), Button, CollapseButton, MinusButton.
-        -- Fall back to iterating all children when none of the known keys match.
-        local collapseBtn = headerFrame.dashButton
-            or headerFrame.Button
-            or headerFrame.CollapseButton
-            or headerFrame.MinusButton
-        if not collapseBtn then
-            for _, v in pairs(headerFrame) do
-                if type(v) == "table" and v.SetScript then
-                    collapseBtn = v
-                    break
-                end
-            end
-        end
-        if collapseBtn then
-            -- Explicit styling so the button is visible over the Blizzard template background
-            pcall(function() collapseBtn:SetFont(STANDARD_TEXT_FONT, 12, "OUTLINE") end)
-            collapseBtn:SetTextColor(1, 0.78, 0.1, 1.0)     -- gold
-            collapseBtn:SetShadowOffset(1, -1)
-            collapseBtn:SetShadowColor(0, 0, 0, 1)
-            collapseBtn:ClearAllPoints()
-            collapseBtn:SetPoint("RIGHT", headerFrame, "RIGHT", -6, 0)
-            collapseBtn:SetText("–")                         -- default: expanded state
-            collapseBtn:SetScript("OnClick", function()
-                if ns.contentFrame:IsShown() then
-                    ns.contentFrame:Hide()
-                    collapseBtn:SetText("+")
-                    if DelveCompanionStatsDB then
-                        DelveCompanionStatsDB.collapsed = true
-                    end
-                else
-                    ns.contentFrame:Show()
-                    collapseBtn:SetText("–")
-                    if DelveCompanionStatsDB then
-                        DelveCompanionStatsDB.collapsed = false
-                    end
-                end
-                ns.frame:SetHeight(headerFrame:GetHeight() +
-                    (ns.contentFrame:IsShown() and ns.contentFrame:GetHeight() or 0))
-            end)
-        end
-    else
-        -- ── Fallback: custom header matching the Blizzard style ───────────────
-        headerFrame = CreateFrame("Frame", nil, ns.frame)
-        headerFrame:SetHeight(28)
-        headerFrame:SetPoint("TOPLEFT",  ns.frame, "TOPLEFT",  0, 0)
-        headerFrame:SetPoint("TOPRIGHT", ns.frame, "TOPRIGHT", 0, 0)
-
-        -- Deep navy/purple solid base
-        local headerBg = headerFrame:CreateTexture(nil, "BACKGROUND")
-        headerBg:SetAllPoints()
-        headerBg:SetColorTexture(0.08, 0.06, 0.18, 0.95)
-
-        -- Warm brown/amber centre-left glow overlay
-        local headerGlow = headerFrame:CreateTexture(nil, "BACKGROUND", nil, 1)
-        headerGlow:SetPoint("LEFT", headerFrame, "LEFT", 0, 0)
-        headerGlow:SetSize(frameWidth * 0.6, 28)
-        headerGlow:SetColorTexture(0.28, 0.14, 0.04, 0.6)
-
-        -- Muted-gold 2-px rule along the bottom edge (slightly brighter than text for decoration)
-        local headerLine = headerFrame:CreateTexture(nil, "ARTWORK")
-        headerLine:SetHeight(2)
-        headerLine:SetPoint("BOTTOMLEFT",  headerFrame, "BOTTOMLEFT",  0, 0)
-        headerLine:SetPoint("BOTTOMRIGHT", headerFrame, "BOTTOMRIGHT", 0, 0)
-        headerLine:SetColorTexture(1, 0.82, 0.05, 1)
-
-        -- Section header label — ObjectiveTitleFont, muted-gold colour
-        ns.headerLabel = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-        ns.headerLabel:SetPoint("LEFT", headerFrame, "LEFT", 8, 0)
-        ns.headerLabel:SetWidth(contentWidth)
-        ns.headerLabel:SetJustifyH("LEFT")
-        local headerFontOk = pcall(function() ns.headerLabel:SetFontObject(ObjectiveTitleFont) end)
-        if not headerFontOk or not ns.headerLabel:GetFont() then
-            ns.headerLabel:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 14, "")
-        end
-        ns.headerLabel:SetTextColor(0.9, 0.75, 0.3, 1)
-        ns.headerLabel:SetShadowOffset(1, -1)
-        ns.headerLabel:SetShadowColor(0, 0, 0, 1)
-        ns.headerLabel:SetText("Delve Companion")
-    end
-
-    -- Store on ns for test access and OnClick height calculations
-    ns.headerFrame = headerFrame
+    -- Store references on ns for test access and height calculations
+    ns.headerFrame      = header
+    ns.headerTitle      = headerTitle
+    ns.headerLabel      = headerTitle   -- alias for backward-compat
+    ns.collapseBtn      = collapseBtn
+    ns.collapseBtnText  = collapseBtnText
 
     -- 4b. Content frame — plain semi-transparent dark background (no backdrop/border),
     -- matching the Blizzard ObjectiveTracker content area style.
@@ -776,8 +742,8 @@ function ns:OnLoad()
     else
         contentFrame = CreateFrame("Frame", nil, ns.frame)
     end
-    contentFrame:SetPoint("TOPLEFT",     headerFrame, "BOTTOMLEFT",  0,  0)
-    contentFrame:SetPoint("BOTTOMRIGHT", ns.frame,    "BOTTOMRIGHT", 0,  0)
+    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",  0, 0)
+    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT", 0, 0)
     -- Simple semi-transparent dark background; no border texture
     local contentBg = contentFrame:CreateTexture(nil, "BACKGROUND")
     contentBg:SetAllPoints()
@@ -785,60 +751,25 @@ function ns:OnLoad()
     -- Store on ns so UpdateCompanionData can resize it
     ns.contentFrame = contentFrame
 
-    -- 5. Name label — ObjectiveFont white text, matching tracker objective style
+    -- 5. Name label — GameFontHighlightSmall (11pt) white text, matching tracker body style
     ns.nameLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ns.nameLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 6, -4)
     ns.nameLabel:SetWidth(contentWidth)
     ns.nameLabel:SetJustifyH("LEFT")
+    ns.nameLabel:SetFontObject("GameFontHighlightSmall")
+    pcall(function() ns.nameLabel:SetFontObject(ObjectiveFont) end)
     ns.nameLabel:SetTextColor(1, 1, 1, 1)
-    local nameFontOk = pcall(function() ns.nameLabel:SetFontObject(ObjectiveFont) end)
-    if not nameFontOk or not ns.nameLabel:GetFont() then
-        ns.nameLabel:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 13, "")
-    end
     ns.nameLabel:SetText("No companion data")
     ns.nameLabel:SetShadowOffset(1, -1)
     ns.nameLabel:SetShadowColor(0, 0, 0, 1)
     ns.nameLabel:SetWordWrap(false)
 
-    -- 6. Level label — kept for backward-compat / testability; hidden in normal operation
-    -- (level is now part of the combined Line 1 in nameLabel)
-    ns.levelLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.levelLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -4)
-    ns.levelLabel:SetWidth(contentWidth)
-    ns.levelLabel:SetJustifyH("LEFT")
-    ns.levelLabel:SetTextColor(1, 1, 1, 1)
-    local levelFontOk = pcall(function() ns.levelLabel:SetFontObject("GameFontHighlightSmall") end)
-    if not levelFontOk or not ns.levelLabel:GetFont() then
-        ns.levelLabel:SetFont(STANDARD_TEXT_FONT, 10, "")
-    end
-    ns.levelLabel:SetText("")
-    ns.levelLabel:SetShadowOffset(1, -1)
-    ns.levelLabel:SetShadowColor(0, 0, 0, 1)
-    ns.levelLabel:Hide()
-
-    -- 6b. XP label — kept for backward-compat / testability; hidden in normal operation
-    -- (XP is now part of the combined Line 1 in nameLabel)
-    ns.xpLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    ns.xpLabel:SetPoint("TOPLEFT", ns.levelLabel, "BOTTOMLEFT", 0, -4)
-    ns.xpLabel:SetWidth(contentWidth)
-    ns.xpLabel:SetJustifyH("LEFT")
-    local xpFontOk = pcall(function() ns.xpLabel:SetFontObject("GameFontHighlight") end)
-    if not xpFontOk or not ns.xpLabel:GetFont() then
-        ns.xpLabel:SetFont(STANDARD_TEXT_FONT, 12, "")
-    end
-    ns.xpLabel:SetTextColor(1, 1, 1, 1)
-    ns.xpLabel:SetShadowColor(0, 0, 0, 1)
-    ns.xpLabel:SetShadowOffset(1, -1)
-    ns.xpLabel:SetText("")
-    ns.xpLabel:Hide()
-
     -- 6c. Boon header label — "Boons" sub-header, shown only when boons are present
+    -- GameFontNormalSmall (11pt, slightly bolder) in muted gold
     ns.boonHeaderLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ns.boonHeaderLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -3)
-    local boonHdrFontOk = pcall(function() ns.boonHeaderLabel:SetFontObject(ObjectiveFont) end)
-    if not boonHdrFontOk or not ns.boonHeaderLabel:GetFont() then
-        ns.boonHeaderLabel:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 13, "")
-    end
+    ns.boonHeaderLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -4)
+    ns.boonHeaderLabel:SetFontObject("GameFontNormalSmall")
+    pcall(function() ns.boonHeaderLabel:SetFontObject(ObjectiveFont) end)
     ns.boonHeaderLabel:SetWidth(contentWidth)
     ns.boonHeaderLabel:SetJustifyH("LEFT")
     ns.boonHeaderLabel:SetTextColor(0.9, 0.75, 0.3, 1)
@@ -848,12 +779,11 @@ function ns:OnLoad()
     ns.boonHeaderLabel:Hide()
 
     -- 6d. Boon label — one boon per line, positioned below the Boons sub-header
+    -- GameFontHighlightSmall (11pt) in white
     ns.boonLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.boonLabel:SetPoint("TOPLEFT", ns.boonHeaderLabel, "BOTTOMLEFT", 0, -3)
-    local boonFontOk = pcall(function() ns.boonLabel:SetFontObject(ObjectiveFont) end)
-    if not boonFontOk or not ns.boonLabel:GetFont() then
-        ns.boonLabel:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 13, "")
-    end
+    ns.boonLabel:SetPoint("TOPLEFT", ns.boonHeaderLabel, "BOTTOMLEFT", 0, -2)
+    ns.boonLabel:SetFontObject("GameFontHighlightSmall")
+    pcall(function() ns.boonLabel:SetFontObject(ObjectiveFont) end)
     ns.boonLabel:SetWidth(contentWidth)
     ns.boonLabel:SetJustifyH("LEFT")
     ns.boonLabel:SetTextColor(1, 1, 1, 1)
@@ -861,13 +791,21 @@ function ns:OnLoad()
     ns.boonLabel:SetShadowColor(0, 0, 0, 1)
     ns.boonLabel:SetText("")
 
-    -- 6e. Nemesis label — "Nemesis Strongbox (n/n)" sub-header; styled muted-gold
+    -- Backward-compat stubs: levelLabel and xpLabel are no longer displayed
+    -- individually but tests check their text stays "" after UpdateCompanionData.
+    ns.levelLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ns.levelLabel:SetText("")
+    ns.levelLabel:Hide()
+
+    ns.xpLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ns.xpLabel:SetText("")
+    ns.xpLabel:Hide()
+
+    -- 6e. Nemesis label — "Nemesis Strongbox (n/n)" sub-header; GameFontNormalSmall muted-gold
     ns.nemesisLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -3)
-    local nemesisFontOk = pcall(function() ns.nemesisLabel:SetFontObject(ObjectiveFont) end)
-    if not nemesisFontOk or not ns.nemesisLabel:GetFont() then
-        ns.nemesisLabel:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 13, "")
-    end
+    ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -4)
+    ns.nemesisLabel:SetFontObject("GameFontNormalSmall")
+    pcall(function() ns.nemesisLabel:SetFontObject(ObjectiveFont) end)
     ns.nemesisLabel:SetWidth(contentWidth)
     ns.nemesisLabel:SetJustifyH("LEFT")
     ns.nemesisLabel:SetTextColor(0.9, 0.75, 0.3, 1)
@@ -877,12 +815,11 @@ function ns:OnLoad()
 
     -- 6f. Nemesis detail label — white body lines below the Nemesis Strongbox header;
     -- mirrors boonLabel: one line per combat criterion ("description: qty/total")
+    -- GameFontHighlightSmall (11pt) in white
     ns.nemesisDetailLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.nemesisDetailLabel:SetPoint("TOPLEFT", ns.nemesisLabel, "BOTTOMLEFT", 0, -3)
-    local nemesisDetailFontOk = pcall(function() ns.nemesisDetailLabel:SetFontObject(ObjectiveFont) end)
-    if not nemesisDetailFontOk or not ns.nemesisDetailLabel:GetFont() then
-        ns.nemesisDetailLabel:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 13, "")
-    end
+    ns.nemesisDetailLabel:SetPoint("TOPLEFT", ns.nemesisLabel, "BOTTOMLEFT", 0, -2)
+    ns.nemesisDetailLabel:SetFontObject("GameFontHighlightSmall")
+    pcall(function() ns.nemesisDetailLabel:SetFontObject(ObjectiveFont) end)
     ns.nemesisDetailLabel:SetWidth(contentWidth)
     ns.nemesisDetailLabel:SetJustifyH("LEFT")
     ns.nemesisDetailLabel:SetTextColor(1, 1, 1, 1)  -- WHITE, same as boonLabel
@@ -924,16 +861,8 @@ function ns:OnLoad()
     -- 8b. Restore collapsed state from SavedVariables
     if db.collapsed then
         if ns.contentFrame then ns.contentFrame:Hide() end
-        -- Update header height (collapsed = header only)
         ns.frame:SetHeight(ns.headerFrame and ns.headerFrame:GetHeight() or 28)
-        -- Update collapse button text when using native template
-        if ns.headerFrame then
-            local collapseBtn = ns.headerFrame.dashButton
-                or ns.headerFrame.Button
-                or ns.headerFrame.CollapseButton
-                or ns.headerFrame.MinusButton
-            if collapseBtn and collapseBtn.SetText then collapseBtn:SetText("+") end
-        end
+        if ns.collapseBtnText then ns.collapseBtnText:SetText("+") end
     end
 
     -- 9. Determine frame visibility based on active delve state
@@ -1004,7 +933,6 @@ function ns:OnLoad()
     end
 
     -- Explicitly show nameLabel (belt-and-suspenders: ensures visibility even if parent Show() is pending)
-    -- levelLabel and xpLabel are intentionally kept hidden (content merged into nameLabel Line 1)
     if ns.nameLabel then ns.nameLabel:Show() end
 
     -- Polling fallbacks: data may not be ready immediately on ADDON_LOADED
@@ -1217,7 +1145,6 @@ function ns:UpdateCompanionData(event)
         ns._lastName      = nil
         ns._lastLevel     = nil
         if ns.nameLabel  then ns.nameLabel:SetText("No Companion") end
-        if ns.levelLabel then ns.levelLabel:SetText("") end
         if ns.boonHeaderLabel then ns.boonHeaderLabel:Hide() end
         if ns.boonLabel  then ns.boonLabel:SetText(""); ns.boonLabel:Hide() end
         if ns.nemesisLabel then ns.nemesisLabel:SetText(""); ns.nemesisLabel:Hide() end
@@ -1259,15 +1186,16 @@ function ns:UpdateCompanionData(event)
             levelStr = tostring(level):gsub("^[Ll]evel%s+", "")
         end
 
-        -- Build XP fragment
+        -- Build XP fragment — treat nil reactionThreshold as 0 (TWW may omit it)
         local xpText = ""
-        if friendData and friendData.standing and friendData.reactionThreshold
-            and friendData.nextThreshold
-            and friendData.nextThreshold > friendData.reactionThreshold then
-            local currentXP = friendData.standing - friendData.reactionThreshold
-            local maxXP     = friendData.nextThreshold - friendData.reactionThreshold
-            local percent   = math.floor((currentXP / maxXP) * 100)
-            xpText = FormatNumber(currentXP) .. "/" .. FormatNumber(maxXP) .. " (" .. percent .. "%)"
+        if friendData and friendData.standing and friendData.nextThreshold then
+            local threshold = friendData.reactionThreshold or 0
+            local currentXP = friendData.standing - threshold
+            local maxXP     = friendData.nextThreshold - threshold
+            if maxXP > 0 then
+                local percent = math.floor((currentXP / maxXP) * 100)
+                xpText = FormatNumber(currentXP) .. "/" .. FormatNumber(maxXP) .. " (" .. percent .. "%)"
+            end
         end
 
         local parts = { name }
@@ -1275,8 +1203,6 @@ function ns:UpdateCompanionData(event)
         if xpText   ~= "" then parts[#parts + 1] = xpText end
         ns.nameLabel:SetText(table.concat(parts, "  "))
     end
-    if ns.levelLabel  then ns.levelLabel:Hide() end
-    if ns.xpLabel     then ns.xpLabel:Hide() end
 
     -- Boon display — sub-header "Boons" + body lines; both shown/hidden together
     if ns.boonLabel then
