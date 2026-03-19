@@ -161,6 +161,11 @@ local function IsInDelve()
     return false
 end
 
+-- Forward declarations so PrintDebugInfo (below) can call these local functions
+-- which are defined later in the file.
+local GetBoonsDisplayText
+local GetNemesisProgress
+
 -------------------------------------------------------------------------------
 -- PrintDebugInfo: Dump C_DelvesUI API state and last-known addon values.
 -- Output goes into a scrollable popup instead of spamming the chat frame.
@@ -626,7 +631,7 @@ end
 -- otherwise returns "".
 -- Queries C_Scenario criteria to find the nemesis strongbox kill objective.
 -------------------------------------------------------------------------------
-local function GetNemesisProgress()
+GetNemesisProgress = function()
     local numCriteria = 0
     local ok = pcall(function()
         if C_Scenario and C_Scenario.GetNumCriteria then
@@ -635,14 +640,28 @@ local function GetNemesisProgress()
     end)
     if not ok or numCriteria == 0 then return "" end
 
+    -- Primary: case-insensitive name match
     for i = 1, numCriteria do
         local info = nil
         pcall(function()
             info = C_Scenario.GetCriteriaInfo(i)
         end)
-        if info and info.name and info.name:find("Enemy group") then
+        if info and info.name and info.name:lower():find("enemy group") then
             local cur   = info.quantity or 0
             local total = info.totalQuantity or 0
+            return "Nemesis: " .. cur .. "/" .. total
+        end
+    end
+
+    -- Fallback: first criterion with a meaningful totalQuantity
+    for i = 1, numCriteria do
+        local info = nil
+        pcall(function()
+            info = C_Scenario.GetCriteriaInfo(i)
+        end)
+        if info and info.totalQuantity and info.totalQuantity > 0 then
+            local cur   = info.quantity or 0
+            local total = info.totalQuantity
             return "Nemesis: " .. cur .. "/" .. total
         end
     end
