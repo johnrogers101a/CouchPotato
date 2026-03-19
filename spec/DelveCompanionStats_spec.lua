@@ -78,7 +78,7 @@ describe("DelveCompanionStats", function()
         it("extracts level from friendshipRank (combined into nameLabel Line 1)", function()
             C_DelvesUI.GetFactionForCompanion = function() return 2744 end
             C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
-            C_GossipInfo.GetFriendshipReputation = function() return { friendshipRank = 3 } end
+            C_GossipInfo.GetFriendshipReputation = function() return { reaction = 3 } end
 
             ns:UpdateCompanionData()
 
@@ -116,7 +116,7 @@ describe("DelveCompanionStats", function()
         it("persists resolved name and level to SavedVariables", function()
             C_DelvesUI.GetFactionForCompanion = function() return 2744 end
             C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
-            C_GossipInfo.GetFriendshipReputation = function() return { friendshipRank = 3 } end
+            C_GossipInfo.GetFriendshipReputation = function() return { reaction = 3 } end
 
             ns:UpdateCompanionData()
 
@@ -132,7 +132,7 @@ describe("DelveCompanionStats", function()
                     standing          = 491930,
                     reactionThreshold = 460435,
                     nextThreshold     = 499810,
-                    friendshipRank    = 24,
+                    reaction          = 24,
                 }
             end
 
@@ -154,7 +154,7 @@ describe("DelveCompanionStats", function()
             C_DelvesUI.GetFactionForCompanion = function() return 2744 end
             C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
             C_GossipInfo.GetFriendshipReputation = function()
-                return { friendshipRank = 3 }   -- no standing/thresholds
+                return { reaction = 3 }   -- no standing/thresholds
             end
 
             ns:UpdateCompanionData()

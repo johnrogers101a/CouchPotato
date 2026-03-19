@@ -317,10 +317,10 @@ function ns:PrintDebugInfo()
         pcall(function()
             local fr = C_GossipInfo.GetFriendshipReputation(factionID)
             if fr then
-                rank          = tostring(fr.friendshipRank  or "nil")
+                rank          = tostring(fr.reaction  or "nil")
                 standing      = tostring(fr.standing        or "nil")
                 nextThreshold = tostring(fr.nextThreshold   or fr.reactionThreshold or "nil")
-                table.insert(lines, ("C_GossipInfo.GetFriendshipReputation(%d) => {friendshipRank=%s, standing=%s, nextThreshold=%s, ...}"):format(
+                table.insert(lines, ("C_GossipInfo.GetFriendshipReputation(%d) => {reaction=%s, standing=%s, nextThreshold=%s, ...}"):format(
                     factionID, rank, standing, nextThreshold))
             else
                 table.insert(lines, ("C_GossipInfo.GetFriendshipReputation(%d) => nil"):format(factionID))
@@ -1309,7 +1309,7 @@ function ns:UpdateCompanionData(event)
         local ok, fd = pcall(C_GossipInfo.GetFriendshipReputation, factionID)
         if ok and fd then
             friendData = fd
-            level = fd.friendshipRank or fd.reaction or fd.standing
+            level = fd.reaction or fd.standing
         end
     end
 
