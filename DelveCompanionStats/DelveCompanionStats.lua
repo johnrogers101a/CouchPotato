@@ -378,6 +378,32 @@ function ns:PrintDebugInfo()
             table.insert(lines, "Aura 1280098 found? no")
         end
     end
+    -- Dump all fields of the boon aura struct
+    do
+        local boonAura2 = nil
+        pcall(function() boonAura2 = C_UnitAuras.GetPlayerAuraBySpellID(1280098) end)
+        if boonAura2 then
+            table.insert(lines, "--- Aura 1280098 fields ---")
+            for k, v in pairs(boonAura2) do
+                table.insert(lines, ("  %s = %s"):format(tostring(k), tostring(v)))
+            end
+        end
+    end
+
+    -- Dump tooltip lines for spell 1280098
+    table.insert(lines, "--- Tooltip for 1280098 ---")
+    pcall(function()
+        GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+        GameTooltip:SetSpellByID(1280098)
+        for i = 1, GameTooltip:NumLines() do
+            local left = _G["GameTooltipTextLeft" .. i]
+            if left and left:GetText() then
+                table.insert(lines, ("  L%d: %s"):format(i, left:GetText()))
+            end
+        end
+        GameTooltip:Hide()
+    end)
+
     local boonText = ""
     pcall(function() boonText = GetBoonsDisplayText() end)
     table.insert(lines, ("GetBoonsDisplayText() returns: %q"):format(boonText))
