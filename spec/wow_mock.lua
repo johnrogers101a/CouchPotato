@@ -277,6 +277,16 @@ local function createMockFrame(frameType, name, parent, template)
         self.SetTextColor = function(self2, r, g, b, a) self2._labelFS:SetTextColor(r, g, b, a) end
     end
 
+    -- Texture methods for Button (SetNormalTexture, SetPushedTexture, SetHighlightTexture, SetNormalAtlas)
+    function frame:SetNormalTexture(tex) self._normalTexture = tex end
+    function frame:GetNormalTexture() return self._normalTexture end
+    function frame:SetPushedTexture(tex) self._pushedTexture = tex end
+    function frame:GetPushedTexture() return self._pushedTexture end
+    function frame:SetHighlightTexture(tex, blendMode) self._highlightTexture = tex; self._highlightBlend = blendMode end
+    function frame:GetHighlightTexture() return self._highlightTexture end
+    function frame:SetNormalAtlas(atlas) self._normalAtlas = atlas end
+    function frame:GetNormalAtlas() return self._normalAtlas end
+
     -- Cooldown frame support
     if template and template:find("CooldownFrameTemplate") then
         function frame:SetDrawEdge(v) end
