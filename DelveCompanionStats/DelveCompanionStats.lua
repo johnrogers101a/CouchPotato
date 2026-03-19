@@ -673,7 +673,40 @@ function ns:OnLoad()
         ns.frame:RegisterEvent("UNIT_NAME_UPDATE")
         -- SCENARIO_CRITERIA_UPDATE fires when nemesis kill count changes
         pcall(function() ns.frame:RegisterEvent("SCENARIO_CRITERIA_UPDATE") end)
+        -- UNIT_AURA fires when buffs/debuffs change on a unit; used to detect
+        -- when the boon aura (spell 1280098) becomes active after zone-in.
+        ns.frame:RegisterEvent("UNIT_AURA")
         ns.frame:SetScript("OnEvent", function(self, event, ...)
+            -- UNIT_AURA: only refresh boon data when player's own auras change in a delve.
+            -- Avoids redundant updates for non-player units (party members, NPCs, etc.).
+            if event == "UNIT_AURA" then
+                local unitID = ...
+                if unitID == "player" and IsInDelve() then
+                    ns:UpdateCompanionData(event)
+                end
+                return
+            end
+
+            -- PLAYER_ENTERING_WORLD: run normal visibility + data update, then schedule
+            -- two delayed refreshes so boons (which may not be applied immediately on
+            -- zone-in) have time to activate before we query the tooltip.
+            if event == "PLAYER_ENTERING_WORLD" then
+                ns:UpdateFrameVisibility()
+                if ns.frame:IsShown() then
+                    ns:UpdateCompanionData(event)
+                end
+                if C_Timer and C_Timer.After then
+                    C_Timer.After(2, function()
+                        if IsInDelve() then ns:UpdateCompanionData("TIMER_2S_PEW") end
+                    end)
+                    C_Timer.After(5, function()
+                        if IsInDelve() then ns:UpdateCompanionData("TIMER_5S_PEW") end
+                    end)
+                end
+                return
+            end
+
+            -- All other events: refresh visibility then data.
             ns:UpdateFrameVisibility()
             if ns.frame:IsShown() then
                 ns:UpdateCompanionData(event)
@@ -763,7 +796,9 @@ GetBoonsDisplayText = function()
         local numLines = GameTooltip:NumLines()
         for i = 1, numLines do
             local lineText = _G["GameTooltipTextLeft"..i] and _G["GameTooltipTextLeft"..i]:GetText()
-            if lineText then
+            -- Guard: if the tooltip still contains unresolved spell template variables
+            -- (e.g. "$w1%"), the boon aura hasn't been applied yet; skip the line.
+            if lineText and not lineText:find("%$w%d") then
                 for subline in (lineText .. "\n"):gmatch("([^\n]*)\n") do
                     local stat, pct = subline:match("^(.+): (%d+)%%.?%s*$")
                     local n = tonumber(pct)

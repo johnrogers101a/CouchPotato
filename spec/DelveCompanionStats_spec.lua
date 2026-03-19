@@ -468,6 +468,174 @@ describe("DelveCompanionStats", function()
     end)
 
     -- -------------------------------------------------------------------------
+    -- Boon timing / event-driven refresh tests
+    -- -------------------------------------------------------------------------
+    describe("Boon timing and event-driven refresh", function()
+
+        before_each(function()
+            -- Set up a valid companion so UpdateCompanionData proceeds past early return
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID   = function() return { name = "Brann Bronzebeard" } end
+            C_GossipInfo.GetFriendshipReputation = function()
+                return { friendshipRank = 12, standing = 100, reactionThreshold = 0, nextThreshold = 200 }
+            end
+            _ClearMockBoonTooltip()
+            C_ScenarioInfo._criteria = {}
+            C_Timer._Reset()
+            -- Be in a delve for visibility tests
+            _G._isInInstanceType = "scenario"
+            ns:UpdateFrameVisibility()
+        end)
+
+        after_each(function()
+            _ClearMockBoonTooltip()
+            C_ScenarioInfo._criteria = {}
+            C_Timer._Reset()
+            _G._isInInstanceType = "none"
+            C_DelvesUI._SetHasActiveDelve(false)
+        end)
+
+        it("GetBoonsDisplayText returns empty string when tooltip has unresolved $w template vars", function()
+            -- Simulate early zone-in: WoW tooltip returns "$w1%" placeholders
+            _SetMockBoonTooltip({
+                "Boons",
+                "",
+                "",
+                "Maximum Health: $w1%.\nMovement Speed: $w2%.",
+            })
+            ns:UpdateCompanionData()
+            -- Template vars must not be shown — label stays empty
+            assert.equals("", ns.boonLabel._text)
+            assert.is_false(ns.boonLabel:IsShown())
+        end)
+
+        it("GetBoonsDisplayText returns real values when tooltip has resolved stats", function()
+            -- Simulate boon fully applied: real numeric values
+            _SetMockBoonTooltip({
+                "Boons",
+                "",
+                "",
+                "Maximum Health: 6%.\nMovement Speed: 10%.",
+            })
+            ns:UpdateCompanionData()
+            assert.equals("Max HP: 6%\nMove Spd: 10%", ns.boonLabel._text)
+            assert.is_true(ns.boonLabel:IsShown())
+        end)
+
+        it("PLAYER_ENTERING_WORLD schedules two delayed C_Timer.After calls", function()
+            -- Count how many timers are registered before the event
+            local timersBefore = 0
+            do
+                local originalAfter = C_Timer.After
+                local timerCount = 0
+                C_Timer.After = function(delay, cb)
+                    timerCount = timerCount + 1
+                    return originalAfter(delay, cb)
+                end
+                ns.frame._scripts["OnEvent"](ns.frame, "PLAYER_ENTERING_WORLD")
+                timersBefore = timerCount
+                C_Timer.After = originalAfter
+            end
+            -- Must schedule exactly 2 delayed refreshes on PLAYER_ENTERING_WORLD
+            assert.equals(2, timersBefore)
+        end)
+
+        it("delayed timers from PLAYER_ENTERING_WORLD call UpdateCompanionData when in delve", function()
+            -- Ensure in a delve so timers fire an update
+            _G._isInInstanceType = "scenario"
+            _SetMockBoonTooltip({
+                "Boons", "", "",
+                "Maximum Health: 8%.",
+            })
+
+            ns.frame._scripts["OnEvent"](ns.frame, "PLAYER_ENTERING_WORLD")
+
+            -- Fire all pending timers (simulates 2s and 5s passing)
+            C_Timer._FireAll()
+
+            -- After timers fire, boon label should have resolved data
+            assert.equals("Max HP: 8%", ns.boonLabel._text)
+        end)
+
+        it("delayed timers from PLAYER_ENTERING_WORLD do NOT call UpdateCompanionData when not in delve", function()
+            -- Leave delve before timers fire
+            _G._isInInstanceType = "none"
+            C_DelvesUI._SetHasActiveDelve(false)
+
+            local callCount = 0
+            local originalUCD = ns.UpdateCompanionData
+            ns.UpdateCompanionData = function(self, event)
+                callCount = callCount + 1
+                return originalUCD(self, event)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "PLAYER_ENTERING_WORLD")
+            local countAfterEvent = callCount  -- may be 0 (frame hidden) or 1
+
+            C_Timer._FireAll()
+
+            -- Timers should NOT have fired an update since not in a delve
+            assert.equals(countAfterEvent, callCount)
+
+            ns.UpdateCompanionData = originalUCD
+        end)
+
+        it("UNIT_AURA for 'player' triggers UpdateCompanionData when in delve", function()
+            _G._isInInstanceType = "scenario"
+            _SetMockBoonTooltip({
+                "Boons", "", "",
+                "Versatility: 5%.",
+            })
+
+            local callCount = 0
+            local originalUCD = ns.UpdateCompanionData
+            ns.UpdateCompanionData = function(self, event)
+                callCount = callCount + 1
+                return originalUCD(self, event)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "player")
+
+            assert.is_true(callCount >= 1)
+            ns.UpdateCompanionData = originalUCD
+        end)
+
+        it("UNIT_AURA for non-player unit does NOT trigger UpdateCompanionData", function()
+            _G._isInInstanceType = "scenario"
+
+            local callCount = 0
+            local originalUCD = ns.UpdateCompanionData
+            ns.UpdateCompanionData = function(self, event)
+                callCount = callCount + 1
+                return originalUCD(self, event)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "party1")
+
+            assert.equals(0, callCount)
+            ns.UpdateCompanionData = originalUCD
+        end)
+
+        it("UNIT_AURA for 'player' does NOT trigger UpdateCompanionData when not in delve", function()
+            _G._isInInstanceType = "none"
+            C_DelvesUI._SetHasActiveDelve(false)
+
+            local callCount = 0
+            local originalUCD = ns.UpdateCompanionData
+            ns.UpdateCompanionData = function(self, event)
+                callCount = callCount + 1
+                return originalUCD(self, event)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "player")
+
+            assert.equals(0, callCount)
+            ns.UpdateCompanionData = originalUCD
+        end)
+
+    end)
+
+    -- -------------------------------------------------------------------------
     -- Nemesis progress tests
     -- -------------------------------------------------------------------------
     describe("Nemesis progress", function()
