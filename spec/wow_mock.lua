@@ -10,6 +10,12 @@ _G.ChatFrame1 = {
 }
 setmetatable(_G.ChatFrame1, {__index = _G.UIParent})
 
+-- IsInInstance mock (mutable for tests)
+_G._isInInstanceType = "none"   -- default: not in any instance
+_G.IsInInstance = function()
+    return nil, _G._isInInstanceType
+end
+
 -- C_DelvesUI stub (used by DelveCompanionStats to fetch active companion)
 _G.C_DelvesUI = {
     GetActiveCompanion = function() return nil end,
