@@ -40,6 +40,11 @@ _G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 _G.ObjectiveTitleFont = { _name = "ObjectiveTitleFont" }
 _G.ObjectiveFont      = { _name = "ObjectiveFont" }
 
+-- ScenarioObjectiveTracker stub (used by AnchorFrame and pin/unpin logic)
+-- Intentionally nil so tests see the "no tracker" code path, matching the usual
+-- test environment where no Blizzard tracker frame exists.
+_G.ScenarioObjectiveTracker = nil
+
 -- WoW string utility globals
 _G.strlower  = function(s) return (s or ""):lower() end
 _G.strupper  = function(s) return (s or ""):upper() end
@@ -153,6 +158,8 @@ local function createMockFrame(frameType, name, parent, template)
     function frame:SetMovable(v) self._movable = v end
     function frame:EnableMouse(v) self._mouseEnabled = v end
     function frame:RegisterForDrag(...) end
+    function frame:StartMoving() end
+    function frame:StopMovingOrSizing() end
     function frame:GetPoint(index)
         return "BOTTOMLEFT", nil, "BOTTOMLEFT", 0, 0
     end
@@ -233,6 +240,7 @@ local function createMockFrame(frameType, name, parent, template)
         function fs:SetTextColor(r,g,b,a) self._r = r; self._g = g; self._b = b; self._a = a end
         function fs:GetTextColor() return self._r or 1, self._g or 1, self._b or 1, self._a or 1 end
         function fs:SetFont(font, size, flags) self._fontPath = font; self._fontSize = size; self._fontFlags = flags end
+        function fs:SetVerticalAlign(v) self._verticalAlign = v end
         function fs:SetFontObject(obj)
             if type(obj) == "table" and obj._name then
                 self._fontPath = obj._name

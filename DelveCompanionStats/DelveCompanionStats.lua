@@ -610,6 +610,7 @@ function ns:OnLoad()
     db.companionName  = db.companionName  -- keep existing or nil
     db.companionLevel = db.companionLevel -- keep existing or nil
     db.collapsed      = db.collapsed      -- keep existing or nil (nil = expanded)
+    db.pinned         = db.pinned         -- keep existing or nil (nil = treat as pinned)
 
     -- 2. Create the main display frame
     -- Wrapped in pcall: guards against any unexpected frame creation failures.
@@ -686,22 +687,25 @@ function ns:OnLoad()
     headerBottomLine:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
     headerBottomLine:SetColorTexture(1, 0.78, 0.1, 1)
 
-    -- Title: large bright gold, left-aligned, ObjectiveTitleFont
-    local headerTitle = header:CreateFontString(nil, "OVERLAY", "ObjectiveTitleFont")
+    -- Title: large bright gold, left-aligned; font set explicitly (not as CreateFontString
+    -- 3rd-arg) to guarantee it renders even if ObjectiveTitleFont is not yet loaded.
+    local headerTitle = header:CreateFontString(nil, "OVERLAY")
+    headerTitle:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
     headerTitle:SetPoint("LEFT", header, "LEFT", 8, 0)
+    headerTitle:SetVerticalAlign("MIDDLE")
     headerTitle:SetText("Delve Companion")
-    local titleFontOk = pcall(function() headerTitle:SetFontObject(ObjectiveTitleFont) end)
-    if not titleFontOk or not headerTitle:GetFont() then
-        headerTitle:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 14, "")
-    end
     headerTitle:SetTextColor(1, 0.82, 0.0, 1)
 
     -- Collapse button: gold en-dash, far right, vertically centred
     local collapseBtn = CreateFrame("Button", nil, header)
     collapseBtn:SetSize(20, 28)
     collapseBtn:SetPoint("RIGHT", header, "RIGHT", -6, 0)
-    local collapseBtnText = collapseBtn:CreateFontString(nil, "OVERLAY", "ObjectiveTitleFont")
+    -- Font set explicitly (not as 3rd arg) so text renders even before font objects load
+    local collapseBtnText = collapseBtn:CreateFontString(nil, "OVERLAY")
+    collapseBtnText:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
     collapseBtnText:SetAllPoints(collapseBtn)
+    collapseBtnText:SetJustifyH("CENTER")
+    collapseBtnText:SetVerticalAlign("MIDDLE")
     collapseBtnText:SetTextColor(1, 0.78, 0.1, 1)
     collapseBtnText:SetText("–")
     collapseBtn:SetFontString(collapseBtnText)
@@ -730,6 +734,61 @@ function ns:OnLoad()
     ns.headerLabel      = headerTitle   -- alias for backward-compat
     ns.collapseBtn      = collapseBtn
     ns.collapseBtnText  = collapseBtnText
+
+    -- Pin button: to the LEFT of the collapse button. Pushpin icon indicates whether
+    -- the frame is anchored to the Blizzard tracker (pinned, gold) or freely draggable
+    -- (unpinned, grey). Default: pinned.
+    local pinBtn = CreateFrame("Button", nil, header)
+    pinBtn:SetSize(20, 28)
+    pinBtn:SetPoint("RIGHT", collapseBtn, "LEFT", -4, 0)
+    local pinText = pinBtn:CreateFontString(nil, "OVERLAY")
+    pinText:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+    pinText:SetAllPoints(pinBtn)
+    pinText:SetJustifyH("CENTER")
+    pinText:SetVerticalAlign("MIDDLE")
+    ns.pinBtnText = pinText
+    ns.pinBtn     = pinBtn
+
+    -- ApplyPinnedState: anchor frame to tracker, disable dragging, gold icon.
+    local function ApplyPinnedState()
+        ns.isDraggable = false
+        ns.frame:SetMovable(false)
+        if ScenarioObjectiveTracker then
+            ns.frame:ClearAllPoints()
+            ns.frame:SetPoint("TOP", ScenarioObjectiveTracker, "BOTTOM", 0, -4)
+        end
+        ns.pinBtnText:SetText("📌")
+        ns.pinBtnText:SetTextColor(1, 0.78, 0.1, 1)   -- gold when pinned
+        DelveCompanionStatsDB.pinned = true
+    end
+
+    -- ApplyUnpinnedState: detach from tracker, enable free drag, grey icon.
+    local function ApplyUnpinnedState()
+        ns.isDraggable = true
+        ns.frame:SetMovable(true)
+        ns.frame:RegisterForDrag("LeftButton")
+        ns.frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
+        ns.frame:SetScript("OnDragStop", function(f)
+            f:StopMovingOrSizing()
+            local point, _, relPoint, x, y = f:GetPoint()
+            DelveCompanionStatsDB.position = { point = point, relPoint = relPoint, x = x, y = y }
+        end)
+        ns.pinBtnText:SetText("📌")
+        ns.pinBtnText:SetTextColor(0.6, 0.6, 0.6, 1)  -- grey when unpinned
+        DelveCompanionStatsDB.pinned = false
+    end
+
+    pinBtn:SetScript("OnClick", function()
+        if DelveCompanionStatsDB.pinned then
+            ApplyUnpinnedState()
+        else
+            ApplyPinnedState()
+        end
+    end)
+
+    -- Expose for tests and external helpers
+    ns.ApplyPinnedState   = ApplyPinnedState
+    ns.ApplyUnpinnedState = ApplyUnpinnedState
 
     -- 4b. Content frame — plain semi-transparent dark background (no backdrop/border),
     -- matching the Blizzard ObjectiveTracker content area style.
@@ -852,7 +911,8 @@ function ns:OnLoad()
         local posOk = pcall(function()
             local p = db.position
             ns.frame:ClearAllPoints()
-            ns.frame:SetPoint(p.point, UIParent, p.relativePoint, p.x, p.y)
+            -- Support both 'relativePoint' (legacy) and 'relPoint' (new pin-save format)
+            ns.frame:SetPoint(p.point, UIParent, p.relativePoint or p.relPoint, p.x, p.y)
         end)
         -- posOk == false means corrupt position data; default anchor from step 3 remains
         if not posOk then dcsprint("Could not restore saved position; using default.") end
@@ -863,6 +923,25 @@ function ns:OnLoad()
         if ns.contentFrame then ns.contentFrame:Hide() end
         ns.frame:SetHeight(ns.headerFrame and ns.headerFrame:GetHeight() or 28)
         if ns.collapseBtnText then ns.collapseBtnText:SetText("+") end
+    end
+
+    -- 8c. Restore pin/unpin state. Default (nil) is treated as pinned.
+    if db.pinned == false then
+        ApplyUnpinnedState()
+        -- Restore saved position for unpinned frames
+        local pos = db.position
+        if pos then
+            local posOk = pcall(function()
+                ns.frame:ClearAllPoints()
+                ns.frame:SetPoint(
+                    pos.point or "CENTER", UIParent,
+                    pos.relPoint or pos.relativePoint or "CENTER",
+                    pos.x or 0, pos.y or 0)
+            end)
+            if not posOk then dcsprint("Could not restore unpinned position; using default.") end
+        end
+    else
+        ApplyPinnedState()
     end
 
     -- 9. Determine frame visibility based on active delve state
