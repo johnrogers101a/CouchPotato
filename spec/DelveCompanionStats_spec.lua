@@ -420,15 +420,14 @@ describe("DelveCompanionStats", function()
         it("boon display shows abbreviated stats parsed from tooltip", function()
             _SetMockBoonTooltip({
                 "Boons",
-                "Maximum Health: 3%.",
-                "Movement Speed: 5%.",
-                "Strength: 4%.",
-                "Mastery: 3%.",
+                "Maximum Health increased by 0%.\nStrength increased by 0%.\nMovement Speed increased by 0%.\nMastery increased by 0%.",
+                "",
+                "Maximum Health: 6%.\nMovement Speed: 10%.\nStrength: 4%.\n\nMastery: 5%.\n",
             })
 
             ns:UpdateCompanionData()
 
-            assert.equals("Max HP: 3%\nMove Spd: 5%\nStrength: 4%\nMastery: 3%", ns.boonLabel._text)
+            assert.equals("Max HP: 6%\nMove Spd: 10%\nStrength: 4%\nMastery: 5%", ns.boonLabel._text)
         end)
 
         it("boon display hides label when no active boons", function()
@@ -442,8 +441,9 @@ describe("DelveCompanionStats", function()
         it("boon display excludes stats where value is 0", function()
             _SetMockBoonTooltip({
                 "Boons",
-                "Maximum Health: 3%.",
-                "Haste: 0%.",        -- zero value, must be excluded
+                "",
+                "",
+                "Maximum Health: 3%.\nHaste: 0%.",  -- zero value, must be excluded
             })
 
             ns:UpdateCompanionData()
@@ -454,6 +454,8 @@ describe("DelveCompanionStats", function()
         it("boon label is shown when tooltip has boon lines", function()
             _SetMockBoonTooltip({
                 "Boons",
+                "",
+                "",
                 "Versatility: 7%.",
             })
 
