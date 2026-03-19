@@ -398,7 +398,7 @@ function ns:PrintDebugInfo()
     table.insert(lines, "")
     table.insert(lines, "=== NEMESIS STATE ===")
     -- =========================================================================
-    local scenarioAvail = (C_ScenarioInfo and C_ScenarioInfo.GetNumCriteria) and "yes" or "no"
+    local scenarioAvail = (C_ScenarioInfo ~= nil and "yes" or "no")
     table.insert(lines, ("C_ScenarioInfo available? %s"):format(scenarioAvail))
     if scenarioAvail == "yes" then
         local numC = 0
@@ -700,17 +700,14 @@ GetBoonsDisplayText = function()
         GameTooltip:SetSpellByID(1280098)
         local numLines = GameTooltip:NumLines()
         for i = 1, numLines do
-            local lineWidget = _G["GameTooltipTextLeft" .. i]
-            if lineWidget then
-                local text = lineWidget:GetText()
-                if text then
-                    local statName, numStr = text:match("^(.+): (%d+)%%.?%s*$")
-                    if statName and numStr then
-                        local num = tonumber(numStr)
-                        if num and num > 0 then
-                            local abbrev = GetBoonAbbrev(statName)
-                            table.insert(parts, abbrev .. ": " .. num .. "%")
-                        end
+            local lineText = _G["GameTooltipTextLeft"..i] and _G["GameTooltipTextLeft"..i]:GetText()
+            if lineText then
+                for subline in (lineText .. "\n"):gmatch("([^\n]*)\n") do
+                    local stat, pct = subline:match("^(.+): (%d+)%%.?%s*$")
+                    local n = tonumber(pct)
+                    if stat and n and n > 0 then
+                        local abbrev = GetBoonAbbrev(stat)
+                        table.insert(parts, abbrev .. ": " .. n .. "%")
                     end
                 end
             end
