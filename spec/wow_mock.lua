@@ -15,6 +15,9 @@ _G.C_DelvesUI = {
     GetActiveCompanion = function() return nil end,
     GetFactionForCompanion = function() return 2744 end,
     GetCompanionInfoForActivePlayer = function() return nil end,
+    HasActiveDelve = function() return C_DelvesUI._hasActiveDelve or false end,
+    _hasActiveDelve = false,
+    _SetHasActiveDelve = function(val) C_DelvesUI._hasActiveDelve = val end,
 }
 
 -- Core UI frames
