@@ -220,8 +220,8 @@ function ns:PrintDebugInfo()
     lines[#lines+1] = "Strata: " .. tostring(ns.frame:GetFrameStrata()) .. "  Level: " .. tostring(ns.frame:GetFrameLevel())
 
     -- Full GetFriendshipReputation dump
-    if ns.lastFactionID then
-        local ok, fd = pcall(C_GossipInfo.GetFriendshipReputation, ns.lastFactionID)
+    if ns._lastFactionID then
+        local ok, fd = pcall(C_GossipInfo.GetFriendshipReputation, ns._lastFactionID)
         if ok and fd then
             lines[#lines+1] = "--- GetFriendshipReputation ---"
             for k, v in pairs(fd) do
