@@ -836,11 +836,17 @@ describe("DelveCompanionStats", function()
             end
             _ClearMockBoonTooltip()
             C_ScenarioInfo._criteria = {}
+            C_ScenarioInfo._bonusSteps = {}
+            C_ScenarioInfo._bonusCriteria = {}
+            C_DelvesUI._SetDelveTier(8)  -- Tier 8 — above nemesis threshold
         end)
 
         after_each(function()
             _ClearMockBoonTooltip()
             C_ScenarioInfo._criteria = {}
+            C_ScenarioInfo._bonusSteps = {}
+            C_ScenarioInfo._bonusCriteria = {}
+            C_DelvesUI._delveTier = nil
         end)
 
         it("nemesis progress displays 'Nemesis Strongbox (n/n)' format", function()
@@ -1048,6 +1054,76 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.boonLabel:IsShown())
             assert.is_false(ns.nemesisLabel:IsShown())
             assert.is_false(ns.nemesisDetailLabel:IsShown())
+        end)
+
+        -- -------------------------------------------------------------------------
+        -- Tier gating tests
+        -- -------------------------------------------------------------------------
+        it("nemesis section hidden when delve tier is below NEMESIS_MIN_TIER", function()
+            C_DelvesUI._SetDelveTier(3)  -- below threshold (4)
+            _SetMockNemesis(2, 4)
+            ns:UpdateCompanionData()
+            assert.equals("", ns.nemesisLabel._text)
+            assert.is_false(ns.nemesisLabel:IsShown())
+            assert.is_false(ns.nemesisDetailLabel:IsShown())
+        end)
+
+        it("nemesis section shown when delve tier is at NEMESIS_MIN_TIER", function()
+            C_DelvesUI._SetDelveTier(4)  -- at threshold
+            _SetMockNemesis(2, 4)
+            ns:UpdateCompanionData()
+            assert.equals("Nemesis Strongbox (2/4)", ns.nemesisLabel._text)
+            assert.is_true(ns.nemesisLabel:IsShown())
+        end)
+
+        it("nemesis section shown when delve tier is above NEMESIS_MIN_TIER", function()
+            C_DelvesUI._SetDelveTier(8)
+            _SetMockNemesis(2, 4)
+            ns:UpdateCompanionData()
+            assert.equals("Nemesis Strongbox (2/4)", ns.nemesisLabel._text)
+            assert.is_true(ns.nemesisLabel:IsShown())
+        end)
+
+        it("nemesis gracefully degrades when tier API unavailable (nil tier)", function()
+            C_DelvesUI._delveTier = nil
+            _SetMockNemesis(2, 4)
+            ns:UpdateCompanionData()
+            -- When tier is unknown, still show if bonus criteria exist
+            assert.equals("Nemesis Strongbox (2/4)", ns.nemesisLabel._text)
+        end)
+
+        -- -------------------------------------------------------------------------
+        -- Criteria isolation tests
+        -- -------------------------------------------------------------------------
+        it("nemesis section ignores main-step combat objectives", function()
+            C_DelvesUI._SetDelveTier(8)
+            -- Set regular objectives on main step only
+            _SetMockObjectives({
+                { description = "Devouring Host slain", quantity = 100, totalQuantity = 160 },
+            })
+            -- No nemesis bonus criteria
+            C_ScenarioInfo._bonusSteps = {}
+            C_ScenarioInfo._bonusCriteria = {}
+            ns:UpdateCompanionData()
+            -- Nemesis section must be empty — must NOT show "100/160"
+            assert.equals("", ns.nemesisLabel._text)
+            assert.is_false(ns.nemesisLabel:IsShown())
+        end)
+
+        it("nemesis shows bonus criteria while ignoring main objectives", function()
+            C_DelvesUI._SetDelveTier(8)
+            -- Regular objectives on main step
+            _SetMockObjectives({
+                { description = "Devouring Host slain", quantity = 100, totalQuantity = 160 },
+            })
+            -- Nemesis bonus criteria
+            _SetMockNemesis({
+                { description = "Nemesis Captain slain", quantity = 1, totalQuantity = 1 },
+                { description = "Nemesis Scout slain",   quantity = 2, totalQuantity = 3 },
+            })
+            ns:UpdateCompanionData()
+            assert.equals("Nemesis Strongbox (3/4)", ns.nemesisLabel._text)
+            assert.equals("Nemesis Captain slain: 1/1\nNemesis Scout slain: 2/3", ns.nemesisDetailLabel._text)
         end)
 
     end)

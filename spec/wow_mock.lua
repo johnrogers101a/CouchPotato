@@ -24,6 +24,10 @@ _G.C_DelvesUI = {
     HasActiveDelve = function() return C_DelvesUI._hasActiveDelve or false end,
     _hasActiveDelve = false,
     _SetHasActiveDelve = function(val) C_DelvesUI._hasActiveDelve = val end,
+    -- Tier support for nemesis gating
+    _delveTier = nil,
+    GetDelveTier = function() return C_DelvesUI._delveTier end,
+    _SetDelveTier = function(tier) C_DelvesUI._delveTier = tier end,
 }
 
 -- Core UI frames
@@ -920,9 +924,12 @@ _G.UnitAura = function(unit, index, filter)
 end
 
 -- C_ScenarioInfo stub (TWW API — used by DelveCompanionStats for nemesis progress)
--- _criteria is a list of {description, quantity, totalQuantity}
+-- _criteria is a list of {description, quantity, totalQuantity} for the main step.
+-- _bonusSteps is a list of bonus step indices; _bonusCriteria is keyed by step index.
 _G.C_ScenarioInfo = {
     _criteria = {},
+    _bonusSteps = {},
+    _bonusCriteria = {},  -- keyed by step index: { [stepIndex] = { {desc, qty, total}, ... } }
 
     GetInfo = function()
         return nil, nil, false  -- name, description, isInScenario
@@ -936,6 +943,21 @@ _G.C_ScenarioInfo = {
         local c = _G.C_ScenarioInfo._criteria[i]
         if not c then return nil end
         return c
+    end,
+
+    GetBonusSteps = function()
+        return _G.C_ScenarioInfo._bonusSteps
+    end,
+
+    GetCriteriaInfoByStep = function(stepIndex, criteriaIndex)
+        local stepCriteria = _G.C_ScenarioInfo._bonusCriteria[stepIndex]
+        if not stepCriteria then return nil end
+        return stepCriteria[criteriaIndex]
+    end,
+
+    GetStepInfo = function(stepIndex)
+        local stepCriteria = _G.C_ScenarioInfo._bonusCriteria[stepIndex]
+        return { numCriteria = stepCriteria and #stepCriteria or 0 }
     end,
 }
 
@@ -953,13 +975,25 @@ end
 -- Two calling forms:
 --   _SetMockNemesis(current, total)           -- single criterion (legacy)
 --   _SetMockNemesis({ {desc, qty, total}, … }) -- explicit criteria table
+-- Nemesis criteria are stored as BONUS step criteria (step index 99) so they
+-- are sourced from the bonus step path, not the main scenario objectives.
 _G._SetMockNemesis = function(criteriaOrCurrent, total)
+    local criteria
     if type(criteriaOrCurrent) == "table" then
-        _G.C_ScenarioInfo._criteria = criteriaOrCurrent
+        criteria = criteriaOrCurrent
     else
         -- Legacy single-criterion form
-        _G.C_ScenarioInfo._criteria = {
+        criteria = {
             { description = "Enemy group kills", quantity = criteriaOrCurrent, totalQuantity = total }
         }
     end
+    -- Nemesis minions are tracked as bonus objectives (bonus step 99)
+    _G.C_ScenarioInfo._bonusSteps = { 99 }
+    _G.C_ScenarioInfo._bonusCriteria = { [99] = criteria }
+end
+
+-- Test helper: set main-step objectives (regular delve criteria, NOT nemesis).
+-- Use this to verify that regular objectives never bleed into the nemesis section.
+_G._SetMockObjectives = function(criteria)
+    _G.C_ScenarioInfo._criteria = criteria
 end
