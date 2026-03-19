@@ -1291,24 +1291,16 @@ describe("DelveCompanionStats", function()
             assert.is_not_nil(ns.pinBtn)
         end)
 
-        it("ns.pinBtnText is not nil after OnLoad", function()
-            assert.is_not_nil(ns.pinBtnText)
+        it("ns.pinBtnText is nil after OnLoad (replaced by texture)", function()
+            assert.is_nil(ns.pinBtnText)
         end)
 
         it("default pin state is pinned (db.pinned = true after fresh OnLoad)", function()
             assert.is_true(DelveCompanionStatsDB.pinned)
         end)
 
-        it("pin button text is '*' after OnLoad (both pinned and unpinned use same icon)", function()
-            assert.equals("*", ns.pinBtnText:GetText())
-        end)
-
-        it("pin button text color is gold when pinned", function()
-            -- Default state after OnLoad is pinned
-            local r, g, b = ns.pinBtnText:GetTextColor()
-            assert.near(1.0,  r, 0.01, "R should be ~1.0 (gold)")
-            assert.near(0.78, g, 0.01, "G should be ~0.78 (gold)")
-            assert.near(0.1,  b, 0.01, "B should be ~0.1 (gold)")
+        it("pin button shows locked texture when pinned (default)", function()
+            assert.equals("Interface\\Buttons\\LockButton-Locked-Up", ns.pinBtn:GetNormalTexture())
         end)
 
         it("frame is not movable when pinned (default)", function()
@@ -1326,12 +1318,9 @@ describe("DelveCompanionStats", function()
             assert.is_true(ns.frame._movable)
         end)
 
-        it("pin button text color is grey when unpinned", function()
+        it("pin button shows unlocked texture when unpinned", function()
             ns.pinBtn._scripts["OnClick"]()   -- unpin
-            local r, g, b = ns.pinBtnText:GetTextColor()
-            assert.near(0.5, r, 0.01, "R should be ~0.5 (grey)")
-            assert.near(0.5, g, 0.01, "G should be ~0.5 (grey)")
-            assert.near(0.5, b, 0.01, "B should be ~0.5 (grey)")
+            assert.equals("Interface\\Buttons\\LockButton-Unlocked-Up", ns.pinBtn:GetNormalTexture())
         end)
 
         it("clicking pin button when unpinned switches back to pinned state", function()
@@ -1347,13 +1336,10 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.frame._movable)
         end)
 
-        it("pin button text color is gold after re-pinning", function()
+        it("pin button shows locked texture after re-pinning", function()
             ns.pinBtn._scripts["OnClick"]()   -- unpin
             ns.pinBtn._scripts["OnClick"]()   -- re-pin
-            local r, g, b = ns.pinBtnText:GetTextColor()
-            assert.near(1.0,  r, 0.01)
-            assert.near(0.78, g, 0.01)
-            assert.near(0.1,  b, 0.01)
+            assert.equals("Interface\\Buttons\\LockButton-Locked-Up", ns.pinBtn:GetNormalTexture())
         end)
 
         it("pin button is positioned LEFT of the collapse button", function()

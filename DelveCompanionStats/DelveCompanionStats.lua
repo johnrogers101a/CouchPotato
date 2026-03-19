@@ -512,22 +512,18 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         -- All initialization happens here, atomically, before any other events fire
         ns:OnLoad()
 
-        -- Delayed resize to match tracker width (tracker may not be fully sized on ADDON_LOADED)
+        -- Delayed resize: use fixed 235 px (avoids picking up "All Objectives" ~460 px width)
         C_Timer.After(0.5, function()
-            if ScenarioObjectiveTracker and ScenarioObjectiveTracker.GetWidth then
-                local w = ScenarioObjectiveTracker:GetWidth()
-                if w and w > 100 then
-                    ns.frame:SetWidth(w)
-                    if ns.headerFrame then ns.headerFrame:SetWidth(w) end
-                    if ns.header then ns.header:SetWidth(w) end
-                    local cw = w - 12
-                    if ns.nameLabel then ns.nameLabel:SetWidth(cw) end
-                    if ns.boonLabel then ns.boonLabel:SetWidth(cw) end
-                    if ns.boonHeaderLabel then ns.boonHeaderLabel:SetWidth(cw) end
-                    if ns.nemesisLabel then ns.nemesisLabel:SetWidth(cw) end
-                    if ns.nemesisDetailLabel then ns.nemesisDetailLabel:SetWidth(cw) end
-                end
-            end
+            local w = 235
+            if ns.frame then ns.frame:SetWidth(w) end
+            if ns.headerFrame then ns.headerFrame:SetWidth(w) end
+            if ns.header then ns.header:SetWidth(w) end
+            local cw = w - 12
+            if ns.nameLabel then ns.nameLabel:SetWidth(cw) end
+            if ns.boonLabel then ns.boonLabel:SetWidth(cw) end
+            if ns.boonHeaderLabel then ns.boonHeaderLabel:SetWidth(cw) end
+            if ns.nemesisLabel then ns.nemesisLabel:SetWidth(cw) end
+            if ns.nemesisDetailLabel then ns.nemesisDetailLabel:SetWidth(cw) end
         end)
     end
 end)
@@ -769,21 +765,17 @@ function ns:OnLoad()
     ns.collapseBtn      = collapseBtn
     ns.collapseBtnText  = collapseBtnText
 
-    -- Pin button: to the LEFT of the collapse button. Pushpin icon indicates whether
-    -- the frame is anchored to the Blizzard tracker (pinned, gold) or freely draggable
-    -- (unpinned, grey). Default: pinned.
+    -- Pin button: to the LEFT of the collapse button. Lock icon indicates whether
+    -- the frame is anchored to the Blizzard tracker (locked/pinned) or freely draggable
+    -- (unlocked/unpinned). Default: pinned (locked icon).
     local pinBtn = CreateFrame("Button", nil, header)
-    pinBtn:SetSize(16, 28)
-    pinBtn:SetPoint("RIGHT", collapseBtn, "LEFT", -4, 0)
-    local pinText = pinBtn:CreateFontString(nil, "OVERLAY")
-    pinText:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
-    pinText:SetAllPoints(pinBtn)
-    pinText:SetJustifyH("CENTER")
-    pinText:SetJustifyV("MIDDLE")
-    ns.pinBtnText = pinText
-    ns.pinBtn     = pinBtn
+    pinBtn:SetSize(16, 16)
+    pinBtn:SetPoint("RIGHT", collapseBtn, "LEFT", -6, 0)
+    pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
+    pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
+    pinBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight", "ADD")
     pinBtn:EnableMouse(true)
-    pinBtn:SetFontString(pinText)
+    ns.pinBtn = pinBtn
 
     -- ApplyPinnedState: anchor frame to tracker, disable dragging, gold icon.
     local function ApplyPinnedState()
@@ -793,8 +785,8 @@ function ns:OnLoad()
             ns.frame:ClearAllPoints()
             ns.frame:SetPoint("TOP", ScenarioObjectiveTracker, "BOTTOM", 0, -4)
         end
-        ns.pinBtnText:SetText("*")
-        ns.pinBtnText:SetTextColor(1, 0.78, 0.1, 1)   -- gold when pinned
+        ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
+        ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
         DelveCompanionStatsDB.pinned = true
     end
 
@@ -802,8 +794,8 @@ function ns:OnLoad()
     local function ApplyUnpinnedState()
         ns.isDraggable = true
         ns.frame:SetMovable(true)
-        ns.pinBtnText:SetText("*")
-        ns.pinBtnText:SetTextColor(0.5, 0.5, 0.5, 1)  -- grey when unpinned
+        ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Unlocked-Up")
+        ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Unlocked-Down")
         DelveCompanionStatsDB.pinned = false
     end
 
@@ -820,17 +812,17 @@ function ns:OnLoad()
             else
                 ns.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
             end
-            if ns.pinBtnText then
-                ns.pinBtnText:SetText("*")
-                ns.pinBtnText:SetTextColor(1, 0.78, 0.1, 1)
+            if ns.pinBtn then
+                ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
+                ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
             end
         else
             -- currently pinned (or nil) → unpin it
             db.pinned = false
             ns.frame:SetMovable(true)
-            if ns.pinBtnText then
-                ns.pinBtnText:SetText("*")
-                ns.pinBtnText:SetTextColor(0.5, 0.5, 0.5, 1)
+            if ns.pinBtn then
+                ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Unlocked-Up")
+                ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Unlocked-Down")
             end
         end
     end)
@@ -986,14 +978,14 @@ function ns:OnLoad()
             ns.frame:ClearAllPoints()
             ns.frame:SetPoint(pos.point, UIParent, pos.relPoint or pos.point, pos.x or 0, pos.y or 0)
         end
-        if ns.pinBtnText then ns.pinBtnText:SetTextColor(0.5, 0.5, 0.5, 1) end
+        if ns.pinBtn then ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Unlocked-Up") end
     else
-        -- pinned (true or nil) → immovable, gold icon, normalise db value to true
+        -- pinned (true or nil) → immovable, locked icon, normalise db value to true
         DelveCompanionStatsDB.pinned = true
         ns.frame:SetMovable(false)
-        if ns.pinBtnText then
-            ns.pinBtnText:SetText("*")
-            ns.pinBtnText:SetTextColor(1, 0.78, 0.1, 1)
+        if ns.pinBtn then
+            ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
+            ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
         end
     end
 
