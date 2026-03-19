@@ -504,9 +504,8 @@ function ns:OnLoad()
             ns.frame:ClearAllPoints()
             ns.frame:SetPoint(p.point, UIParent, p.relativePoint, p.x, p.y)
         end)
-        if not posOk then
-            -- Corrupt position data — silently fall back to default anchor
-        end
+        -- posOk == false means corrupt position data; default anchor from step 3 remains
+        if not posOk then dcsprint("Could not restore saved position; using default.") end
     end
 
     -- 9. Determine frame visibility based on active delve state
