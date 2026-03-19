@@ -418,14 +418,14 @@ describe("DelveCompanionStats", function()
         end)
 
         it("boon display shows only boons with value > 0", function()
-            _SetMockAura(438104, 8)   -- Versatility 8%
-            _SetMockAura(438102, 0)   -- Critical Strike 0% — should be excluded
+            _SetMockAura(1266969, 8)   -- Versatility 8%
+            _SetMockAura(1266965, 0)   -- Crit Strike 0% — should be excluded
 
             ns:UpdateCompanionData()
 
             local text = ns.boonLabel._text
-            assert.is_truthy(text:find("Versatility", 1, true),       "expected Versatility in boon text")
-            assert.is_falsy( text:find("Critical Strike", 1, true),   "expected Critical Strike to be excluded")
+            assert.is_truthy(text:find("Versatility", 1, true),     "expected Versatility in boon text")
+            assert.is_falsy( text:find("Crit Strike", 1, true),     "expected Crit Strike to be excluded")
         end)
 
         it("boon display hides label when no active boons", function()
@@ -437,7 +437,7 @@ describe("DelveCompanionStats", function()
         end)
 
         it("boon values are formatted as integers (math.floor applied)", function()
-            _SetMockAura(438104, 8.7)  -- Versatility 8.7 → should display as 8
+            _SetMockAura(1266969, 8.7)  -- Versatility 8.7 → should display as 8
 
             ns:UpdateCompanionData()
 
@@ -447,7 +447,7 @@ describe("DelveCompanionStats", function()
         end)
 
         it("boon label is shown when at least one boon is active", function()
-            _SetMockAura(438104, 5)  -- Versatility 5%
+            _SetMockAura(1266969, 5)  -- Versatility 5%
 
             ns:UpdateCompanionData()
 
