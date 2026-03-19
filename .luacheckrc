@@ -93,6 +93,7 @@ globals = {
 
     -- Delves
     "C_DelvesUI", "ChatFrame1", "C_Reputation", "IsInInstance",
+    "ScenarioObjectiveTracker", "ObjectiveTrackerFrame",
 
     -- Unit Auras and Scenario APIs
     "C_UnitAuras", "C_ScenarioInfo", "UnitAura",
