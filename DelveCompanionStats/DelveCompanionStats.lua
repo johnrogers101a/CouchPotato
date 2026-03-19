@@ -388,15 +388,15 @@ function ns:PrintDebugInfo()
     table.insert(lines, "")
     table.insert(lines, "=== NEMESIS STATE ===")
     -- =========================================================================
-    local scenarioAvail = (C_Scenario and C_Scenario.GetNumCriteria) and "yes" or "no"
-    table.insert(lines, ("C_Scenario available? %s"):format(scenarioAvail))
+    local scenarioAvail = (C_ScenarioInfo and C_ScenarioInfo.GetNumCriteria) and "yes" or "no"
+    table.insert(lines, ("C_ScenarioInfo available? %s"):format(scenarioAvail))
     if scenarioAvail == "yes" then
         local numC = 0
-        pcall(function() numC = C_Scenario.GetNumCriteria() or 0 end)
+        pcall(function() numC = C_ScenarioInfo.GetNumCriteria() or 0 end)
         table.insert(lines, ("GetNumCriteria() returns: %d"):format(numC))
         for i = 1, numC do
             local ci = nil
-            pcall(function() ci = C_Scenario.GetCriteriaInfo(i) end)
+            pcall(function() ci = C_ScenarioInfo.GetCriteriaInfo(i) end)
             if ci then
                 table.insert(lines, ("  Criteria[%d]: name=%q, quantity=%s, totalQuantity=%s"):format(
                     i, tostring(ci.name), tostring(ci.quantity), tostring(ci.totalQuantity)))
@@ -678,13 +678,13 @@ end
 -------------------------------------------------------------------------------
 -- GetNemesisProgress: Returns "Nemesis: X/Y" if an Enemy group criterion exists,
 -- otherwise returns "".
--- Queries C_Scenario criteria to find the nemesis strongbox kill objective.
+-- Queries C_ScenarioInfo criteria to find the nemesis strongbox kill objective.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
     local numCriteria = 0
     local ok = pcall(function()
-        if C_Scenario and C_Scenario.GetNumCriteria then
-            numCriteria = C_Scenario.GetNumCriteria() or 0
+        if C_ScenarioInfo and C_ScenarioInfo.GetNumCriteria then
+            numCriteria = C_ScenarioInfo.GetNumCriteria() or 0
         end
     end)
     if not ok or numCriteria == 0 then return "" end
@@ -693,7 +693,7 @@ GetNemesisProgress = function()
     for i = 1, numCriteria do
         local info = nil
         pcall(function()
-            info = C_Scenario.GetCriteriaInfo(i)
+            info = C_ScenarioInfo.GetCriteriaInfo(i)
         end)
         if info and info.name and info.name:lower():find("enemy group") then
             local cur   = info.quantity or 0
@@ -706,7 +706,7 @@ GetNemesisProgress = function()
     for i = 1, numCriteria do
         local info = nil
         pcall(function()
-            info = C_Scenario.GetCriteriaInfo(i)
+            info = C_ScenarioInfo.GetCriteriaInfo(i)
         end)
         if info and info.totalQuantity and info.totalQuantity > 0 then
             local cur   = info.quantity or 0

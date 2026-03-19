@@ -95,7 +95,7 @@ globals = {
     "C_DelvesUI", "ChatFrame1", "C_Reputation", "IsInInstance",
 
     -- Unit Auras and Scenario APIs
-    "C_UnitAuras", "C_Scenario", "C_ScenarioInfo", "UnitAura",
+    "C_UnitAuras", "C_ScenarioInfo", "UnitAura",
 
     -- Addon globals
     "ControllerCompanion", "ControllerCompanionDB", "ControllerCompanionLoaderDB",

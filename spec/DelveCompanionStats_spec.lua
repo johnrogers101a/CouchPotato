@@ -409,12 +409,12 @@ describe("DelveCompanionStats", function()
             end
             _ClearMockAuras()
             -- Clear nemesis so it doesn't interfere
-            C_Scenario._criteria = {}
+            C_ScenarioInfo._criteria = {}
         end)
 
         after_each(function()
             _ClearMockAuras()
-            C_Scenario._criteria = {}
+            C_ScenarioInfo._criteria = {}
         end)
 
         it("boon display shows 'Boons: Active' when parent aura 1280098 is present", function()
@@ -467,12 +467,12 @@ describe("DelveCompanionStats", function()
                 return { friendshipRank = 12, standing = 100, reactionThreshold = 0, nextThreshold = 200 }
             end
             _ClearMockAuras()
-            C_Scenario._criteria = {}
+            C_ScenarioInfo._criteria = {}
         end)
 
         after_each(function()
             _ClearMockAuras()
-            C_Scenario._criteria = {}
+            C_ScenarioInfo._criteria = {}
         end)
 
         it("nemesis progress displays X/Y format", function()
