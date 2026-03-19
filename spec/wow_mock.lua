@@ -213,6 +213,7 @@ local function createMockFrame(frameType, name, parent, template)
         function tex:SetAllPoints(anchor) end
         function tex:SetPoint(...) end
         function tex:SetSize(w, h) self._width = w; self._height = h end
+        function tex:SetWidth(w) self._width = w end
         function tex:SetHeight(h) self._height = h end
         function tex:GetWidth() return self._width or 0 end
         function tex:SetTexture(t) self._texture = t; return t ~= nil end
