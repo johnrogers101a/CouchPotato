@@ -560,7 +560,6 @@ local function AnchorFrame()
     if anchor then
         ns.frame:ClearAllPoints()
         ns.frame:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
-        ns.frame:SetWidth(anchor:GetWidth())
         ns.isDraggable = false
     else
         -- Fall back to saved position; allow dragging when unanchored
