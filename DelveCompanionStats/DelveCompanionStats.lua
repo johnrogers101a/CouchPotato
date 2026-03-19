@@ -514,7 +514,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
 
         -- Delayed resize: use fixed 235 px (avoids picking up "All Objectives" ~460 px width)
         C_Timer.After(0.5, function()
-            local w = 205
+            local w = 235
             if ns.frame then ns.frame:SetWidth(w) end
             if ns.headerFrame then ns.headerFrame:SetWidth(w) end
             if ns.header then ns.header:SetWidth(w) end
@@ -660,7 +660,7 @@ function ns:OnLoad()
         frameWidth = ScenarioObjectiveTracker:GetWidth()
     end
     if frameWidth < 100 or frameWidth > 300 then
-        frameWidth = 205  -- match Delves section content box width
+        frameWidth = 235  -- match Delves section content box width
     end
     -- Inner content width: 6 px padding each side (matches ObjectiveTracker label inset)
     local contentWidth = frameWidth - 12
@@ -841,8 +841,8 @@ function ns:OnLoad()
     else
         contentFrame = CreateFrame("Frame", nil, ns.frame)
     end
-    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",  0, -2)
-    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT", 0, -2)
+    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",  10, -8)
+    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT", 0, -8)
     -- Subtle dark content background with rounded gold border
     contentFrame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -980,7 +980,7 @@ function ns:OnLoad()
     -- ResizeToTracker: re-measure ScenarioObjectiveTracker width and apply to all labels.
     -- Called on PLAYER_ENTERING_WORLD so the tracker is fully sized before we read it.
     local function ResizeToTracker()
-        local w = 205  -- Fixed width for Delves section content box
+        local w = 235  -- Fixed width for Delves section content box
         if ns.frame then ns.frame:SetWidth(w) end
         if ns.header then ns.header:SetWidth(w) end
         if ns.headerFrame then ns.headerFrame:SetWidth(w) end
