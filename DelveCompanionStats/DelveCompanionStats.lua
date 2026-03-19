@@ -165,6 +165,7 @@ end
 -- which are defined later in the file.
 local GetBoonsDisplayText
 local GetNemesisProgress
+local GetBoonAbbrev
 
 -------------------------------------------------------------------------------
 -- PrintDebugInfo: Dump C_DelvesUI API state and last-known addon values.
@@ -374,7 +375,14 @@ function ns:PrintDebugInfo()
         for i = 1, GameTooltip:NumLines() do
             local left = _G["GameTooltipTextLeft" .. i]
             if left and left:GetText() then
-                table.insert(lines, ("  L%d: %s"):format(i, left:GetText()))
+                local rawText = left:GetText()
+                table.insert(lines, ("  L%d: %s"):format(i, rawText))
+                -- Debug: show raw captured stat name and its resolved abbreviation
+                local rawStat, rawNum = rawText:match("^(.+): (%d+)%%.?%s*$")
+                if rawStat then
+                    table.insert(lines, ("    [boon] raw stat=%q  abbrev=%q"):format(
+                        rawStat, GetBoonAbbrev(rawStat)))
+                end
             end
         end
         GameTooltip:Hide()
@@ -656,6 +664,31 @@ local BOON_ABBREV = {
 }
 
 -------------------------------------------------------------------------------
+-- GetBoonAbbrev: Resolves a raw tooltip stat name (which may contain WoW color
+-- escape codes or extra whitespace) to its short display label.
+-- Resolution order:
+--   1. Strip color codes / whitespace, then exact key match in BOON_ABBREV.
+--   2. Case-insensitive substring match against every key in BOON_ABBREV.
+--   3. Fallback: first word of the cleaned name (or first 6 chars).
+-------------------------------------------------------------------------------
+GetBoonAbbrev = function(statName)
+    -- Strip WoW color escape codes and trim surrounding whitespace.
+    local clean = statName
+        :gsub("|c%x%x%x%x%x%x%x%x", "")
+        :gsub("|r", "")
+        :match("^%s*(.-)%s*$")
+    local lower = clean:lower()
+    -- 1. Exact match.
+    if BOON_ABBREV[clean] then return BOON_ABBREV[clean] end
+    -- 2. Case-insensitive substring match.
+    for k, v in pairs(BOON_ABBREV) do
+        if lower:find(k:lower(), 1, true) then return v end
+    end
+    -- 3. Fallback: first word or first 6 chars.
+    return clean:match("^(%S+)") or clean:sub(1, 6)
+end
+
+-------------------------------------------------------------------------------
 -- GetBoonsDisplayText: Reads the tooltip for boon spell 1280098 and returns a
 -- one-per-line summary of non-zero stats, e.g. "Max HP: 6%\nMove Spd: 10%".
 -- Returns "" if no boon lines are found (hides the boon label).
@@ -675,7 +708,7 @@ GetBoonsDisplayText = function()
                     if statName and numStr then
                         local num = tonumber(numStr)
                         if num and num > 0 then
-                            local abbrev = BOON_ABBREV[statName] or statName:sub(1, 4)
+                            local abbrev = GetBoonAbbrev(statName)
                             table.insert(parts, abbrev .. ": " .. num .. "%")
                         end
                     end
