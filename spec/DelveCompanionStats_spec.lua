@@ -182,6 +182,9 @@ describe("DelveCompanionStats", function()
         end)
 
         it("debug text contains expected substrings: C_DelvesUI, factionID, name", function()
+            -- Set up an active companion so the COMPANION STATE section includes factionID
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
             ns:PrintDebugInfo()
             local text = ns.debugPopup._editBox:GetText()
             assert.is_not_nil(text:find("C_DelvesUI",  1, true), "expected 'C_DelvesUI' in debug text")
@@ -240,6 +243,67 @@ describe("DelveCompanionStats", function()
                 ns:UpdateCompanionData(nil)
             end)
         end)
+    end)
+
+    -- -------------------------------------------------------------------------
+    -- Slash command execution tests
+    -- -------------------------------------------------------------------------
+    describe("slash command execution", function()
+
+        it("shows the frame when /dcs show is called", function()
+            -- hide it first so we have a known starting state
+            ns.frame:Hide()
+            assert.is_false(ns.frame:IsShown())
+            SlashCmdList["DCS"]("show")
+            assert.is_true(ns.frame:IsShown())
+        end)
+
+        it("hides the frame when /dcs hide is called", function()
+            ns.frame:Show()
+            assert.is_true(ns.frame:IsShown())
+            SlashCmdList["DCS"]("hide")
+            assert.is_false(ns.frame:IsShown())
+        end)
+
+        it("resets frame position to default on /dcs reset", function()
+            -- Give it a saved position first
+            DelveCompanionStatsDB.position = { point = "CENTER", relativePoint = "CENTER", x = 100, y = 100 }
+            SlashCmdList["DCS"]("reset")
+            assert.is_nil(DelveCompanionStatsDB.position)
+            -- Verify frame has a point set (was repositioned)
+            local pt = ns.frame:GetPoint(1)
+            assert.is_not_nil(pt)
+        end)
+
+        it("/dcs reset is idempotent (calling twice gives same state)", function()
+            SlashCmdList["DCS"]("reset")
+            local pt1 = ns.frame:GetPoint(1)
+            SlashCmdList["DCS"]("reset")
+            local pt2 = ns.frame:GetPoint(1)
+            assert.equals(pt1, pt2)
+            assert.is_nil(DelveCompanionStatsDB.position)
+        end)
+
+        it("/dcs debug does not raise an error when companion data is missing", function()
+            -- before_each already sets GetFactionForCompanion to return nil,
+            -- so companion data is absent by default.
+            assert.has_no.errors(function()
+                SlashCmdList["DCS"]("debug")
+            end)
+        end)
+
+        it("debug output contains all required section headers", function()
+            SlashCmdList["DCS"]("debug")
+            local text = ns.debugPopup._editBox:GetText()
+            assert.is_not_nil(text)
+            assert.is_truthy(text:find("INSTANCE STATE",    1, true), "expected 'INSTANCE STATE' in debug text")
+            assert.is_truthy(text:find("FRAME VISIBILITY",  1, true), "expected 'FRAME VISIBILITY' in debug text")
+            assert.is_truthy(text:find("FRAME PROPERTIES",  1, true), "expected 'FRAME PROPERTIES' in debug text")
+            assert.is_truthy(text:find("COMPANION STATE",   1, true), "expected 'COMPANION STATE' in debug text")
+            assert.is_truthy(text:find("FRAME CONTENT",     1, true), "expected 'FRAME CONTENT' in debug text")
+            assert.is_truthy(text:find("LAST KNOWN STATE",  1, true), "expected 'LAST KNOWN STATE' in debug text")
+        end)
+
     end)
 
     -- -------------------------------------------------------------------------
