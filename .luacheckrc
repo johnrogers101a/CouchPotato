@@ -86,6 +86,7 @@ globals = {
 
     -- Slash command globals (set by Loader.lua)
     "SLASH_CP1", "SLASH_CP2", "SLASH_CPLOAD1",
+    "SLASH_DCS1", "SLASH_DCS2",
 
     -- Ace3 (embedded)
     "LibStub",
