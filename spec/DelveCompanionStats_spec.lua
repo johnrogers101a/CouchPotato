@@ -139,7 +139,7 @@ describe("DelveCompanionStats", function()
             -- All three pieces appear on the single combined nameLabel line
             assert.is_truthy(ns.nameLabel._text:find("Valeera Sanguinar", 1, true))
             assert.is_truthy(ns.nameLabel._text:find("L24", 1, true))
-            assert.is_truthy(ns.nameLabel._text:find("31,495 / 39,375 XP (79%)", 1, true))
+            assert.is_truthy(ns.nameLabel._text:find("31,495/39,375 (79%)", 1, true))
             -- xpLabel is hidden/unused
             assert.equals("", ns.xpLabel._text)
         end)

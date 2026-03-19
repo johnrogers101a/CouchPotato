@@ -235,6 +235,8 @@ local function createMockFrame(frameType, name, parent, template)
         function fs:IsShown() return self._shown end
         function fs:SetShadowOffset(x, y) end
         function fs:SetShadowColor(r, g, b, a) end
+        function fs:SetWordWrap(v) self._wordWrap = v end
+        function fs:GetWordWrap() return self._wordWrap end
         table.insert(frame._fontstrings, fs)
         return fs
     end
