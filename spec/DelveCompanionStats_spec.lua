@@ -60,6 +60,7 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
+            -- No friendship data → name only on Line 1
             assert.equals("Valeera Sanguinar", ns.nameLabel._text)
         end)
 
@@ -72,15 +73,17 @@ describe("DelveCompanionStats", function()
             assert.equals("Unknown", ns.nameLabel._text)
         end)
 
-        it("extracts level from friendshipRank", function()
+        it("extracts level from friendshipRank (combined into nameLabel Line 1)", function()
             C_DelvesUI.GetFactionForCompanion = function() return 2744 end
             C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
             C_GossipInfo.GetFriendshipReputation = function() return { friendshipRank = 3 } end
 
             ns:UpdateCompanionData()
 
-            assert.equals("Valeera Sanguinar", ns.nameLabel._text)
-            assert.equals("Level 3", ns.levelLabel._text)
+            -- Level is now part of the combined nameLabel text; levelLabel stays hidden/empty
+            assert.is_truthy(ns.nameLabel._text:find("Valeera Sanguinar", 1, true))
+            assert.is_truthy(ns.nameLabel._text:find("Level 3", 1, true))
+            assert.equals("", ns.levelLabel._text)
         end)
 
         it("extracts level from reaction field when friendshipRank is absent", function()
@@ -90,16 +93,19 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("Level 5", ns.levelLabel._text)
+            assert.is_truthy(ns.nameLabel._text:find("Level 5", 1, true))
+            assert.equals("", ns.levelLabel._text)
         end)
 
-        it("shows empty level when GetFriendshipReputation returns nil", function()
+        it("shows no Level fragment when GetFriendshipReputation returns nil", function()
             C_DelvesUI.GetFactionForCompanion = function() return 2744 end
             C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
             C_GossipInfo.GetFriendshipReputation = function() return nil end
 
             ns:UpdateCompanionData()
 
+            -- No level data → nameLabel is just the name, no "Level" fragment
+            assert.equals("Valeera Sanguinar", ns.nameLabel._text)
             assert.equals("", ns.levelLabel._text)
         end)
 
@@ -114,7 +120,7 @@ describe("DelveCompanionStats", function()
             assert.equals(3,                   DelveCompanionStatsDB.companionLevel)
         end)
 
-        it("calculates XP as standing minus reactionThreshold over range", function()
+        it("includes XP in nameLabel Line 1 combined text", function()
             C_DelvesUI.GetFactionForCompanion = function() return 2744 end
             C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
             C_GossipInfo.GetFriendshipReputation = function()
@@ -130,10 +136,15 @@ describe("DelveCompanionStats", function()
 
             -- currentXP = 491930 - 460435 = 31,495
             -- maxXP     = 499810 - 460435 = 39,375
-            assert.equals("31,495 / 39,375 XP (79%)", ns.xpLabel._text)
+            -- All three pieces appear on the single combined nameLabel line
+            assert.is_truthy(ns.nameLabel._text:find("Valeera Sanguinar", 1, true))
+            assert.is_truthy(ns.nameLabel._text:find("Level 24", 1, true))
+            assert.is_truthy(ns.nameLabel._text:find("31,495 / 39,375 XP (79%)", 1, true))
+            -- xpLabel is hidden/unused
+            assert.equals("", ns.xpLabel._text)
         end)
 
-        it("shows empty xpLabel when standing is missing from friendData", function()
+        it("omits XP fragment when standing is missing from friendData", function()
             C_DelvesUI.GetFactionForCompanion = function() return 2744 end
             C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
             C_GossipInfo.GetFriendshipReputation = function()
@@ -142,6 +153,9 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
+            -- No XP data → nameLabel contains name + level only, no "XP" fragment
+            assert.is_truthy(ns.nameLabel._text:find("Level 3", 1, true))
+            assert.is_nil(ns.nameLabel._text:find("XP", 1, true))
             assert.equals("", ns.xpLabel._text)
         end)
 
@@ -436,6 +450,7 @@ describe("DelveCompanionStats", function()
 
             assert.equals("", ns.boonLabel._text)
             assert.is_false(ns.boonLabel:IsShown())
+            assert.is_false(ns.boonHeaderLabel:IsShown())
         end)
 
         it("boon display excludes stats where value is 0", function()
@@ -463,6 +478,9 @@ describe("DelveCompanionStats", function()
 
             assert.is_true(ns.boonLabel:IsShown())
             assert.equals("Vers: 7%", ns.boonLabel._text)
+            -- boonHeaderLabel must also be shown
+            assert.is_true(ns.boonHeaderLabel:IsShown())
+            assert.equals("Boons", ns.boonHeaderLabel._text)
         end)
 
     end)
@@ -760,12 +778,12 @@ describe("DelveCompanionStats", function()
             C_ScenarioInfo._criteria = {}
         end)
 
-        it("nemesis progress displays abbreviated label with X/Y format", function()
+        it("nemesis progress displays 'Nemesis Strongbox (n/n)' format", function()
             _SetMockNemesis(2, 4)
 
             ns:UpdateCompanionData()
 
-            assert.equals("Group: 2/4", ns.nemesisLabel._text)
+            assert.equals("Nemesis Strongbox (2/4)", ns.nemesisLabel._text)
         end)
 
         it("nemesis progress hides label if criterion not found", function()
@@ -784,7 +802,7 @@ describe("DelveCompanionStats", function()
             assert.is_true(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesis progress shows all criteria as separate lines", function()
+        it("nemesis progress sums multiple criteria into one 'Nemesis Strongbox (n/n)' header", function()
             _SetMockNemesis({
                 { description = "Vilebranch Skeleton Charmers slain", quantity = 0, totalQuantity = 5 },
                 { description = "Totems destroyed",                   quantity = 1, totalQuantity = 6 },
@@ -792,7 +810,8 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("Charmers: 0/5\nTotems: 1/6", ns.nemesisLabel._text)
+            -- 0+1 = 1 current, 5+6 = 11 total
+            assert.equals("Nemesis Strongbox (1/11)", ns.nemesisLabel._text)
         end)
 
         it("nemesis progress skips criteria with zero totalQuantity", function()
@@ -803,17 +822,17 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("Totems: 2/3", ns.nemesisLabel._text)
+            assert.equals("Nemesis Strongbox (2/3)", ns.nemesisLabel._text)
         end)
 
-        it("nemesis label abbreviates 'Enemy groups remaining' to 'Groups'", function()
+        it("nemesis counts 'Enemy groups remaining' criterion in header total", function()
             _SetMockNemesis({
                 { description = "Enemy groups remaining", quantity = 1, totalQuantity = 3 },
             })
 
             ns:UpdateCompanionData()
 
-            assert.equals("Groups: 1/3", ns.nemesisLabel._text)
+            assert.equals("Nemesis Strongbox (1/3)", ns.nemesisLabel._text)
         end)
 
         it("nemesis hides non-combat criteria (Speak with)", function()
@@ -837,6 +856,19 @@ describe("DelveCompanionStats", function()
 
             assert.equals("", ns.nemesisLabel._text)
             assert.is_false(ns.nemesisLabel:IsShown())
+        end)
+
+        it("nemesis sums across mixed combat + non-combat (only combat contribute)", function()
+            _SetMockNemesis({
+                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
+                { description = "Cultists slain",                 quantity = 2, totalQuantity = 5 },
+                { description = "Totems destroyed",               quantity = 1, totalQuantity = 3 },
+            })
+
+            ns:UpdateCompanionData()
+
+            -- Only combat criteria: 2+1=3 current, 5+3=8 total; non-combat excluded
+            assert.equals("Nemesis Strongbox (3/8)", ns.nemesisLabel._text)
         end)
 
         -- -------------------------------------------------------------------------

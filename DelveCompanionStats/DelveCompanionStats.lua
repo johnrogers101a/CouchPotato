@@ -765,7 +765,8 @@ function ns:OnLoad()
     ns.nameLabel:SetShadowOffset(1, -1)
     ns.nameLabel:SetShadowColor(0, 0, 0, 1)
 
-    -- 6. Level label
+    -- 6. Level label — kept for backward-compat / testability; hidden in normal operation
+    -- (level is now part of the combined Line 1 in nameLabel)
     ns.levelLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ns.levelLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -4)
     ns.levelLabel:SetWidth(contentWidth)
@@ -778,8 +779,10 @@ function ns:OnLoad()
     ns.levelLabel:SetText("")
     ns.levelLabel:SetShadowOffset(1, -1)
     ns.levelLabel:SetShadowColor(0, 0, 0, 1)
+    ns.levelLabel:Hide()
 
-    -- 6b. XP label — slightly larger than body text, matching tracker XP readout
+    -- 6b. XP label — kept for backward-compat / testability; hidden in normal operation
+    -- (XP is now part of the combined Line 1 in nameLabel)
     ns.xpLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     ns.xpLabel:SetPoint("TOPLEFT", ns.levelLabel, "BOTTOMLEFT", 0, -4)
     ns.xpLabel:SetWidth(contentWidth)
@@ -792,10 +795,26 @@ function ns:OnLoad()
     ns.xpLabel:SetShadowColor(0, 0, 0, 1)
     ns.xpLabel:SetShadowOffset(1, -1)
     ns.xpLabel:SetText("")
+    ns.xpLabel:Hide()
 
-    -- 6c. Boon label
+    -- 6c. Boon header label — "Boons" sub-header, shown only when boons are present
+    ns.boonHeaderLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ns.boonHeaderLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -4)
+    local boonHdrFontOk = pcall(function() ns.boonHeaderLabel:SetFontObject("GameFontNormalSmall") end)
+    if not boonHdrFontOk or not ns.boonHeaderLabel:GetFont() then
+        ns.boonHeaderLabel:SetFont(STANDARD_TEXT_FONT, 10, "")
+    end
+    ns.boonHeaderLabel:SetWidth(contentWidth)
+    ns.boonHeaderLabel:SetJustifyH("LEFT")
+    ns.boonHeaderLabel:SetTextColor(1, 0.78, 0.1, 1.0)
+    ns.boonHeaderLabel:SetShadowOffset(1, -1)
+    ns.boonHeaderLabel:SetShadowColor(0, 0, 0, 1)
+    ns.boonHeaderLabel:SetText("Boons")
+    ns.boonHeaderLabel:Hide()
+
+    -- 6d. Boon label — one boon per line, positioned below the Boons sub-header
     ns.boonLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.boonLabel:SetPoint("TOPLEFT", ns.xpLabel, "BOTTOMLEFT", 0, -4)
+    ns.boonLabel:SetPoint("TOPLEFT", ns.boonHeaderLabel, "BOTTOMLEFT", 0, -2)
     local boonFontOk = pcall(function() ns.boonLabel:SetFontObject("GameFontHighlightSmall") end)
     if not boonFontOk or not ns.boonLabel:GetFont() then
         ns.boonLabel:SetFont(STANDARD_TEXT_FONT, 10, "")
@@ -807,16 +826,16 @@ function ns:OnLoad()
     ns.boonLabel:SetShadowColor(0, 0, 0, 1)
     ns.boonLabel:SetText("")
 
-    -- 6d. Nemesis label
-    ns.nemesisLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    -- 6e. Nemesis label — "Nemesis Strongbox (n/n)" sub-header; styled gold
+    ns.nemesisLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -4)
-    local nemesisFontOk = pcall(function() ns.nemesisLabel:SetFontObject("GameFontHighlightSmall") end)
+    local nemesisFontOk = pcall(function() ns.nemesisLabel:SetFontObject("GameFontNormalSmall") end)
     if not nemesisFontOk or not ns.nemesisLabel:GetFont() then
         ns.nemesisLabel:SetFont(STANDARD_TEXT_FONT, 10, "")
     end
     ns.nemesisLabel:SetWidth(contentWidth)
     ns.nemesisLabel:SetJustifyH("LEFT")
-    ns.nemesisLabel:SetTextColor(1, 1, 1, 1)
+    ns.nemesisLabel:SetTextColor(1, 0.78, 0.1, 1.0)
     ns.nemesisLabel:SetShadowOffset(1, -1)
     ns.nemesisLabel:SetShadowColor(0, 0, 0, 1)
     ns.nemesisLabel:SetText("")
@@ -931,9 +950,9 @@ function ns:OnLoad()
         end)
     end
 
-    -- Explicitly show fontstrings (belt-and-suspenders: ensures visibility even if parent Show() is pending)
+    -- Explicitly show nameLabel (belt-and-suspenders: ensures visibility even if parent Show() is pending)
+    -- levelLabel and xpLabel are intentionally kept hidden (content merged into nameLabel Line 1)
     if ns.nameLabel then ns.nameLabel:Show() end
-    if ns.levelLabel then ns.levelLabel:Show() end
 
     -- Polling fallbacks: data may not be ready immediately on ADDON_LOADED
     if C_Timer and C_Timer.After then
@@ -1079,26 +1098,26 @@ end
 -- Expose for unit testing
 ns.IsCombatCriteria = IsCombatCriteria
 
--- GetNemesisProgress: Returns combat/kill scenario criteria (totalQuantity > 0)
--- as separate "Label: X/Y" lines joined by "\n", or "" when none qualify.
+-- GetNemesisProgress: Returns "Nemesis Strongbox (current/max)" by summing
+-- quantity and totalQuantity across all combat criteria, or "" when none qualify.
 -- Non-combat objectives (Speak with, Find, Collect, etc.) are excluded so
--- only enemy-kill trackers appear in the nemesis display.
+-- only enemy-kill trackers contribute to the count.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
     if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
     local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
     if not stepInfo or not stepInfo.numCriteria then return "" end
 
-    local lines = {}
+    local currentTotal, maxTotal = 0, 0
     for i = 1, stepInfo.numCriteria do
         local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and c.totalQuantity and c.totalQuantity > 0
-           and IsCombatCriteria(c.description) then
-            local label = (c.description and AbbreviateLabel(c.description)) or ("Obj" .. i)
-            table.insert(lines, label .. ": " .. tostring(c.quantity) .. "/" .. tostring(c.totalQuantity))
+        if ok and c and IsCombatCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
+            currentTotal = currentTotal + (c.quantity or 0)
+            maxTotal     = maxTotal + c.totalQuantity
         end
     end
-    return table.concat(lines, "\n")
+    if maxTotal == 0 then return "" end
+    return string.format("Nemesis Strongbox (%d/%d)", currentTotal, maxTotal)
 end
 
 -------------------------------------------------------------------------------
@@ -1123,8 +1142,11 @@ function ns:UpdateCompanionData(event)
         ns._lastFactionID = nil
         ns._lastName      = nil
         ns._lastLevel     = nil
-        if ns.nameLabel then ns.nameLabel:SetText("No Companion") end
+        if ns.nameLabel  then ns.nameLabel:SetText("No Companion") end
         if ns.levelLabel then ns.levelLabel:SetText("") end
+        if ns.boonHeaderLabel then ns.boonHeaderLabel:Hide() end
+        if ns.boonLabel  then ns.boonLabel:SetText(""); ns.boonLabel:Hide() end
+        if ns.nemesisLabel then ns.nemesisLabel:SetText(""); ns.nemesisLabel:Hide() end
         return
     end
 
@@ -1153,46 +1175,51 @@ function ns:UpdateCompanionData(event)
     ns._lastName      = name
     ns._lastLevel     = level
 
-    -- Update UI
+    -- Update UI — Line 1: combined "Name  Level N  XP (pct%)" on nameLabel
+    -- levelLabel and xpLabel are kept as hidden labels for backward-compat/testability
     if ns.nameLabel then
-        ns.nameLabel:SetText(name)
-    end
-    if ns.levelLabel then
+        -- Build level fragment
+        local levelStr = ""
         if level then
-            -- Strip any existing "Level " prefix the API may have returned before prepending
-            local levelStr = tostring(level):gsub("^[Ll]evel%s+", "")
-            ns.levelLabel:SetText("Level " .. levelStr)
-        else
-            ns.levelLabel:SetText("")
+            levelStr = tostring(level):gsub("^[Ll]evel%s+", "")
         end
-    end
 
-    -- XP display (currentXP = standing - reactionThreshold, maxXP = nextThreshold - reactionThreshold)
-    if ns.xpLabel then
+        -- Build XP fragment
         local xpText = ""
         if friendData and friendData.standing and friendData.reactionThreshold
             and friendData.nextThreshold
             and friendData.nextThreshold > friendData.reactionThreshold then
             local currentXP = friendData.standing - friendData.reactionThreshold
             local maxXP     = friendData.nextThreshold - friendData.reactionThreshold
-            local percent = math.floor((currentXP / maxXP) * 100)
+            local percent   = math.floor((currentXP / maxXP) * 100)
             xpText = FormatNumber(currentXP) .. " / " .. FormatNumber(maxXP) .. " XP (" .. percent .. "%)"
         end
-        ns.xpLabel:SetText(xpText)
-    end
 
-    -- Boon display
+        local parts = { name }
+        if levelStr ~= "" then parts[#parts + 1] = "Level " .. levelStr end
+        if xpText   ~= "" then parts[#parts + 1] = xpText end
+        ns.nameLabel:SetText(table.concat(parts, "  "))
+    end
+    if ns.levelLabel  then ns.levelLabel:Hide() end
+    if ns.xpLabel     then ns.xpLabel:Hide() end
+
+    -- Boon display — sub-header "Boons" + body lines; both shown/hidden together
     if ns.boonLabel then
         local boonText = GetBoonsDisplayText()
         ns.boonLabel:SetText(boonText)
         if boonText == "" then
+            if ns.boonHeaderLabel then ns.boonHeaderLabel:Hide() end
             ns.boonLabel:Hide()
         else
+            if ns.boonHeaderLabel then
+                ns.boonHeaderLabel:SetText("Boons")
+                ns.boonHeaderLabel:Show()
+            end
             ns.boonLabel:Show()
         end
     end
 
-    -- Nemesis progress display
+    -- Nemesis progress display — "Nemesis Strongbox (n/n)" sub-header (gold)
     if ns.nemesisLabel then
         local nemesisText = GetNemesisProgress()
         ns.nemesisLabel:SetText(nemesisText)
@@ -1205,20 +1232,20 @@ function ns:UpdateCompanionData(event)
 
     -- Dynamic frame height based on visible content
     if ns.frame then
-        -- Content frame base height:
-        --   top-pad(8) + name(18) + gap(4) + level(18) + gap(4) + xp(18) + gap(4) + bottom-pad(8) = 82
-        local contentHeight = 82
-        -- Count boon lines (each separated by \n)
+        -- Content frame base height: 8px top-pad + nameLabel(16) + 8px bottom-pad
+        local contentHeight = 32
+        -- Boons sub-header (16) + boon body lines (16 each)
+        if ns.boonHeaderLabel and ns.boonHeaderLabel:IsShown() then
+            contentHeight = contentHeight + 16
+        end
         if ns.boonLabel and ns.boonLabel:IsShown() then
             local boonText = ns.boonLabel:GetText() or ""
             local _, newlines = boonText:gsub("\n", "\n")
             contentHeight = contentHeight + (newlines + 1) * 16
         end
-        -- Nemesis label (may be multi-line)
+        -- Nemesis Strongbox sub-header (16)
         if ns.nemesisLabel and ns.nemesisLabel:IsShown() then
-            local nemText = ns.nemesisLabel:GetText() or ""
-            local _, newlines = nemText:gsub("\n", "\n")
-            contentHeight = contentHeight + (newlines + 1) * 16
+            contentHeight = contentHeight + 16
         end
         -- Resize contentFrame then total frame (header height + content, or header only when collapsed)
         if ns.contentFrame then ns.contentFrame:SetHeight(contentHeight) end
