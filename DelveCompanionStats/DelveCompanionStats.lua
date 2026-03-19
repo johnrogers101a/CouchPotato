@@ -511,6 +511,24 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
 
         -- All initialization happens here, atomically, before any other events fire
         ns:OnLoad()
+
+        -- Delayed resize to match tracker width (tracker may not be fully sized on ADDON_LOADED)
+        C_Timer.After(0.5, function()
+            if ScenarioObjectiveTracker and ScenarioObjectiveTracker.GetWidth then
+                local w = ScenarioObjectiveTracker:GetWidth()
+                if w and w > 100 then
+                    ns.frame:SetWidth(w)
+                    if ns.headerFrame then ns.headerFrame:SetWidth(w) end
+                    if ns.header then ns.header:SetWidth(w) end
+                    local cw = w - 12
+                    if ns.nameLabel then ns.nameLabel:SetWidth(cw) end
+                    if ns.boonLabel then ns.boonLabel:SetWidth(cw) end
+                    if ns.boonHeaderLabel then ns.boonHeaderLabel:SetWidth(cw) end
+                    if ns.nemesisLabel then ns.nemesisLabel:SetWidth(cw) end
+                    if ns.nemesisDetailLabel then ns.nemesisDetailLabel:SetWidth(cw) end
+                end
+            end
+        end)
     end
 end)
 
@@ -664,10 +682,25 @@ function ns:OnLoad()
     -- Dark olive background, bright gold top+bottom border lines, ObjectiveTitleFont title
     -- left-aligned, gold en-dash collapse button far right. Matches Blizzard "Delves" header.
     local header = CreateFrame("Button", nil, ns.frame)
+    ns.header = header
+    ns.headerFrame = header
     header:SetHeight(28)
     header:SetPoint("TOPLEFT",  ns.frame, "TOPLEFT",  0, 0)
     header:SetPoint("TOPRIGHT", ns.frame, "TOPRIGHT", 0, 0)
     header:EnableMouse(true)
+    header:RegisterForDrag("LeftButton")
+    header:SetScript("OnDragStart", function()
+        if DelveCompanionStatsDB and DelveCompanionStatsDB.pinned == false then
+            ns.frame:StartMoving()
+        end
+    end)
+    header:SetScript("OnDragStop", function()
+        ns.frame:StopMovingOrSizing()
+        if DelveCompanionStatsDB then
+            local point, _, relPoint, x, y = ns.frame:GetPoint()
+            DelveCompanionStatsDB.position = {point=point, relPoint=relPoint, x=x, y=y}
+        end
+    end)
 
     -- Background: dark olive/brown gradient
     local headerBg = header:CreateTexture(nil, "BACKGROUND")
@@ -768,13 +801,6 @@ function ns:OnLoad()
     local function ApplyUnpinnedState()
         ns.isDraggable = true
         ns.frame:SetMovable(true)
-        ns.frame:RegisterForDrag("LeftButton")
-        ns.frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
-        ns.frame:SetScript("OnDragStop", function(f)
-            f:StopMovingOrSizing()
-            local point, _, relPoint, x, y = f:GetPoint()
-            DelveCompanionStatsDB.position = { point = point, relPoint = relPoint, x = x, y = y }
-        end)
         ns.pinBtnText:SetText("*")
         ns.pinBtnText:SetTextColor(0.5, 0.5, 0.5, 1)  -- grey when unpinned
         DelveCompanionStatsDB.pinned = false
@@ -787,8 +813,6 @@ function ns:OnLoad()
             -- currently unpinned → pin it
             db.pinned = true
             ns.frame:SetMovable(false)
-            ns.frame:SetScript("OnDragStart", nil)
-            ns.frame:SetScript("OnDragStop", nil)
             ns.frame:ClearAllPoints()
             if ScenarioObjectiveTracker then
                 ns.frame:SetPoint("TOP", ScenarioObjectiveTracker, "BOTTOM", 0, -4)
@@ -803,13 +827,6 @@ function ns:OnLoad()
             -- currently pinned (or nil) → unpin it
             db.pinned = false
             ns.frame:SetMovable(true)
-            ns.frame:RegisterForDrag("LeftButton")
-            ns.frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
-            ns.frame:SetScript("OnDragStop", function(f)
-                f:StopMovingOrSizing()
-                local point, _, relPoint, x, y = f:GetPoint()
-                db.position = {point=point, relPoint=relPoint, x=x, y=y}
-            end)
             if ns.pinBtnText then
                 ns.pinBtnText:SetText("*")
                 ns.pinBtnText:SetTextColor(0.5, 0.5, 0.5, 1)
@@ -940,21 +957,6 @@ function ns:OnLoad()
     -- Safe: frame created above in this same function before drag handlers registered
     ns.frame:SetMovable(true)
     ns.frame:EnableMouse(true)
-    ns.frame:RegisterForDrag("LeftButton")
-    ns.frame:SetScript("OnDragStart", function(self)
-        if ns.isDraggable then self:StartMoving() end
-    end)
-    ns.frame:SetScript("OnDragStop", function(self)
-        if not ns.isDraggable then return end
-        self:StopMovingOrSizing()
-        local point, _, relativePoint, x, y = self:GetPoint()
-        DelveCompanionStatsDB.position = {
-            point         = point,
-            relativePoint = relativePoint,
-            x             = x,
-            y             = y,
-        }
-    end)
 
     -- 8. Restore saved position (wrapped in pcall for corrupt SavedVariables safety)
     if db and db.position then
@@ -978,13 +980,6 @@ function ns:OnLoad()
     -- 8c. Restore pin/unpin state. Default (nil) is treated as pinned.
     if DelveCompanionStatsDB.pinned == false then
         ns.frame:SetMovable(true)
-        ns.frame:RegisterForDrag("LeftButton")
-        ns.frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
-        ns.frame:SetScript("OnDragStop", function(f)
-            f:StopMovingOrSizing()
-            local point, _, relPoint, x, y = f:GetPoint()
-            DelveCompanionStatsDB.position = {point=point, relPoint=relPoint, x=x, y=y}
-        end)
         local pos = DelveCompanionStatsDB.position
         if pos and pos.point then
             ns.frame:ClearAllPoints()
@@ -995,8 +990,6 @@ function ns:OnLoad()
         -- pinned (true or nil) → immovable, gold icon, normalise db value to true
         DelveCompanionStatsDB.pinned = true
         ns.frame:SetMovable(false)
-        ns.frame:SetScript("OnDragStart", nil)
-        ns.frame:SetScript("OnDragStop", nil)
         if ns.pinBtnText then
             ns.pinBtnText:SetText("*")
             ns.pinBtnText:SetTextColor(1, 0.78, 0.1, 1)
