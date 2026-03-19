@@ -616,7 +616,7 @@ function ns:OnLoad()
     -- no BackdropTemplate mixin — the frame creation fallback above is sufficient.
     local bg = ns.frame:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetColorTexture(0.05, 0.05, 0.05, 0.85)
+    bg:SetColorTexture(0.05, 0.03, 0.02, 0.75)  -- dark warm brown-black, 75% opacity
 
     -- Set frame strata and level to ensure visibility above other UI
     ns.frame:SetFrameStrata("DIALOG")
@@ -956,9 +956,34 @@ local function AbbreviateLabel(desc)
     return lastWord
 end
 
--- GetNemesisProgress: Returns all scenario criteria (totalQuantity > 0) as
--- separate "Label: X/Y" lines joined by "\n", or "" when no criteria exist.
--- Queries C_ScenarioInfo — shows every objective so the player has full context.
+-- IsCombatCriteria: Returns true only for combat/kill-type scenario criteria.
+-- Filters out quest/interaction objectives (Speak with, Find, Collect, etc.)
+-- so only enemy-kill trackers appear in the nemesis display.
+local function IsCombatCriteria(description)
+    if not description then return false end
+    local desc = description:lower()
+    -- Positive matches (combat/kill objectives)
+    if desc:find("slain") or desc:find("killed") or desc:find("destroyed") or
+       desc:find("defeated") or desc:find("enemy group") or desc:find("nemesis") then
+        return true
+    end
+    -- Negative matches (interaction/quest objectives)
+    if desc:find("^speak") or desc:find("^talk") or desc:find("^find ") or
+       desc:find("^collect") or desc:find("^interact") or desc:find("^use ") or
+       desc:find("^activate") or desc:find("^escort") or desc:find("^protect") or
+       desc:find("^survive") or desc:find("^reach ") or desc:find("^enter ") then
+        return false
+    end
+    -- Default: don't show ambiguous criteria
+    return false
+end
+-- Expose for unit testing
+ns.IsCombatCriteria = IsCombatCriteria
+
+-- GetNemesisProgress: Returns combat/kill scenario criteria (totalQuantity > 0)
+-- as separate "Label: X/Y" lines joined by "\n", or "" when none qualify.
+-- Non-combat objectives (Speak with, Find, Collect, etc.) are excluded so
+-- only enemy-kill trackers appear in the nemesis display.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
     if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
@@ -968,7 +993,8 @@ GetNemesisProgress = function()
     local lines = {}
     for i = 1, stepInfo.numCriteria do
         local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and c.totalQuantity and c.totalQuantity > 0 then
+        if ok and c and c.totalQuantity and c.totalQuantity > 0
+           and IsCombatCriteria(c.description) then
             local label = (c.description and AbbreviateLabel(c.description)) or ("Obj" .. i)
             table.insert(lines, label .. ": " .. tostring(c.quantity) .. "/" .. tostring(c.totalQuantity))
         end
