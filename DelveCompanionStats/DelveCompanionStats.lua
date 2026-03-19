@@ -607,20 +607,18 @@ local DELVE_BOONS = {
 -- Format: "Boons: Stat1 X%, Stat2 Y%"
 -------------------------------------------------------------------------------
 local function GetBoonsDisplayText()
-    local parts = {}
-    for spellID, boonName in pairs(DELVE_BOONS) do
-        local aura = nil
-        local ok = pcall(function()
-            if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
-                aura = C_UnitAuras.GetPlayerAuraBySpellID(spellID, "HELPFUL")
-            end
-        end)
-        if ok and aura and aura.value1 and aura.value1 > 0 then
-            table.insert(parts, boonName .. " " .. math.floor(aura.value1) .. "%")
+    -- Individual boon spell IDs (1279750, etc.) are "Consume on Pick-Up" effects that
+    -- don't persist as player auras. Check only the parent "Boons" aura (1280098).
+    local aura = nil
+    local ok = pcall(function()
+        if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+            aura = C_UnitAuras.GetPlayerAuraBySpellID(1280098)
         end
+    end)
+    if ok and aura and aura.value1 and aura.value1 > 0 then
+        return "Boons: Active"
     end
-    if #parts == 0 then return "" end
-    return "Boons: " .. table.concat(parts, ", ")
+    return ""
 end
 
 -------------------------------------------------------------------------------
@@ -725,7 +723,8 @@ function ns:UpdateCompanionData(event)
             and friendData.nextThreshold > friendData.reactionThreshold then
             local currentXP = friendData.standing - friendData.reactionThreshold
             local maxXP     = friendData.nextThreshold - friendData.reactionThreshold
-            xpText = FormatNumber(currentXP) .. " / " .. FormatNumber(maxXP) .. " XP"
+            local percent = math.floor((currentXP / maxXP) * 100)
+            xpText = FormatNumber(currentXP) .. " / " .. FormatNumber(maxXP) .. " XP (" .. percent .. "%)"
         end
         ns.xpLabel:SetText(xpText)
     end

@@ -130,7 +130,7 @@ describe("DelveCompanionStats", function()
 
             -- currentXP = 491930 - 460435 = 31,495
             -- maxXP     = 499810 - 460435 = 39,375
-            assert.equals("31,495 / 39,375 XP", ns.xpLabel._text)
+            assert.equals("31,495 / 39,375 XP (79%)", ns.xpLabel._text)
         end)
 
         it("shows empty xpLabel when standing is missing from friendData", function()
@@ -417,15 +417,13 @@ describe("DelveCompanionStats", function()
             C_Scenario._criteria = {}
         end)
 
-        it("boon display shows only boons with value > 0", function()
-            _SetMockAura(1266969, 8)   -- Versatility 8%
-            _SetMockAura(1266965, 0)   -- Crit Strike 0% — should be excluded
+        it("boon display shows 'Boons: Active' when parent aura 1280098 is present", function()
+            _SetMockAura(1280098, 8)   -- parent "Boons" aura active
 
             ns:UpdateCompanionData()
 
             local text = ns.boonLabel._text
-            assert.is_truthy(text:find("Versatility", 1, true),     "expected Versatility in boon text")
-            assert.is_falsy( text:find("Crit Strike", 1, true),     "expected Crit Strike to be excluded")
+            assert.equals("Boons: Active", text)
         end)
 
         it("boon display hides label when no active boons", function()
@@ -436,22 +434,22 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.boonLabel:IsShown())
         end)
 
-        it("boon values are formatted as integers (math.floor applied)", function()
-            _SetMockAura(1266969, 8.7)  -- Versatility 8.7 → should display as 8
+        it("boon display hides label when parent aura 1280098 has value1 == 0", function()
+            _SetMockAura(1280098, 0)   -- aura present but value1 == 0 → should hide
 
             ns:UpdateCompanionData()
 
-            local text = ns.boonLabel._text
-            assert.is_truthy(text:find("8%%"),  "expected integer value 8 in boon text")
-            assert.is_falsy( text:find("8%.7"), "expected decimal to be stripped")
+            assert.equals("", ns.boonLabel._text)
+            assert.is_false(ns.boonLabel:IsShown())
         end)
 
-        it("boon label is shown when at least one boon is active", function()
-            _SetMockAura(1266969, 5)  -- Versatility 5%
+        it("boon label is shown when parent aura 1280098 is active", function()
+            _SetMockAura(1280098, 5)   -- parent "Boons" aura active
 
             ns:UpdateCompanionData()
 
             assert.is_true(ns.boonLabel:IsShown())
+            assert.equals("Boons: Active", ns.boonLabel._text)
         end)
 
     end)
