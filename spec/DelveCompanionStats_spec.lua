@@ -288,12 +288,12 @@ describe("DelveCompanionStats", function()
             assert.equals(false, ns.frame:IsShown())
         end)
 
-        it("shows frame when IsInInstance returns 'party' even if HasActiveDelve returns false", function()
+        it("shows frame when IsInInstance returns 'scenario' even if HasActiveDelve returns false", function()
             -- Simulate being inside a delve instance where HasActiveDelve is unreliable
-            _G._isInInstanceType = "party"
+            _G._isInInstanceType = "scenario"
             C_DelvesUI._SetHasActiveDelve(false)  -- HasActiveDelve returns false
 
-            -- Frame should show because instanceType == "party"
+            -- Frame should show because instanceType == "scenario"
             ns:UpdateFrameVisibility()
             assert.equals(true, ns.frame:IsShown())
         end)
