@@ -655,21 +655,15 @@ local DELVE_BOONS = {
 }
 
 -------------------------------------------------------------------------------
--- GetBoonsDisplayText: Returns a formatted string of active boons, or "" if none.
--- Iterates DELVE_BOONS registry, queries each spell's aura via C_UnitAuras,
--- and includes only boons with value1 > 0.
--- Format: "Boons: Stat1 X%, Stat2 Y%"
+-- GetBoonsDisplayText: Returns "Boons: Active" if the parent boon aura (1280098)
+-- is present on the player, or "" if it is not.
+-- Note: aura.value1 is nil in practice; presence of the aura is sufficient.
 -------------------------------------------------------------------------------
 GetBoonsDisplayText = function()
     -- Individual boon spell IDs (1279750, etc.) are "Consume on Pick-Up" effects that
     -- don't persist as player auras. Check only the parent "Boons" aura (1280098).
-    local aura = nil
-    local ok = pcall(function()
-        if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
-            aura = C_UnitAuras.GetPlayerAuraBySpellID(1280098)
-        end
-    end)
-    if ok and aura and aura.value1 and aura.value1 > 0 then
+    local aura = C_UnitAuras.GetPlayerAuraBySpellID(1280098)
+    if aura then
         return "Boons: Active"
     end
     return ""
