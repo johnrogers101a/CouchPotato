@@ -514,7 +514,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
 
         -- Delayed resize: use fixed 235 px (avoids picking up "All Objectives" ~460 px width)
         C_Timer.After(0.5, function()
-            local w = 235
+            local w = 213
             if ns.frame then ns.frame:SetWidth(w) end
             if ns.headerFrame then ns.headerFrame:SetWidth(w) end
             if ns.header then ns.header:SetWidth(w) end
@@ -660,8 +660,8 @@ function ns:OnLoad()
     if ScenarioObjectiveTracker and ScenarioObjectiveTracker.GetWidth then
         frameWidth = ScenarioObjectiveTracker:GetWidth()
     end
-    if frameWidth < 100 then
-        frameWidth = 235  -- fallback width for Delves section
+    if frameWidth < 100 or frameWidth > 300 then
+        frameWidth = 213  -- match Delves section width (not All Objectives ~460px)
     end
     -- Inner content width: 6 px padding each side (matches ObjectiveTracker label inset)
     local contentWidth = frameWidth - 12
@@ -835,38 +835,24 @@ function ns:OnLoad()
     -- matching the Blizzard ObjectiveTracker content area style.
     local contentFrame
     local contentOk, contentResult = pcall(function()
-        return CreateFrame("Frame", nil, ns.frame)
+        return CreateFrame("Frame", nil, ns.frame, "BackdropTemplate")
     end)
     if contentOk and contentResult then
         contentFrame = contentResult
     else
         contentFrame = CreateFrame("Frame", nil, ns.frame)
     end
-    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",  0, 0)
-    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT", 0, 0)
-    -- Subtle dark content background
-    local contentBg = contentFrame:CreateTexture(nil, "BACKGROUND")
-    contentBg:SetAllPoints(contentFrame)
-    contentBg:SetColorTexture(0.05, 0.04, 0.01, 0.95)  -- very dark brown, slightly lighter than header
-
-    -- Thin gold border lines (left, right, bottom only — top is header bottom line)
-    local borderLeft = contentFrame:CreateTexture(nil, "BORDER")
-    borderLeft:SetWidth(1)
-    borderLeft:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 0, 0)
-    borderLeft:SetPoint("BOTTOMLEFT", contentFrame, "BOTTOMLEFT", 0, 0)
-    borderLeft:SetColorTexture(1, 0.78, 0.1, 1.0)
-
-    local borderRight = contentFrame:CreateTexture(nil, "BORDER")
-    borderRight:SetWidth(1)
-    borderRight:SetPoint("TOPRIGHT", contentFrame, "TOPRIGHT", 0, 0)
-    borderRight:SetPoint("BOTTOMRIGHT", contentFrame, "BOTTOMRIGHT", 0, 0)
-    borderRight:SetColorTexture(1, 0.78, 0.1, 1.0)
-
-    local borderBottom = contentFrame:CreateTexture(nil, "BORDER")
-    borderBottom:SetHeight(1)
-    borderBottom:SetPoint("BOTTOMLEFT", contentFrame, "BOTTOMLEFT", 0, 0)
-    borderBottom:SetPoint("BOTTOMRIGHT", contentFrame, "BOTTOMRIGHT", 0, 0)
-    borderBottom:SetColorTexture(1, 0.78, 0.1, 1.0)
+    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",  0, -2)
+    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT", 0, -2)
+    -- Subtle dark content background with rounded gold border
+    contentFrame:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 12,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    contentFrame:SetBackdropColor(0.05, 0.04, 0.01, 0.95)
+    contentFrame:SetBackdropBorderColor(1, 0.78, 0.1, 0.8)
     -- Store on ns so UpdateCompanionData can resize it
     ns.contentFrame = contentFrame
 
@@ -995,7 +981,7 @@ function ns:OnLoad()
     -- ResizeToTracker: re-measure ScenarioObjectiveTracker width and apply to all labels.
     -- Called on PLAYER_ENTERING_WORLD so the tracker is fully sized before we read it.
     local function ResizeToTracker()
-        local w = 235  -- Fixed width for Delves section
+        local w = 213  -- Fixed width for Delves section
         if ns.frame then ns.frame:SetWidth(w) end
         if ns.header then ns.header:SetWidth(w) end
         if ns.headerFrame then ns.headerFrame:SetWidth(w) end
