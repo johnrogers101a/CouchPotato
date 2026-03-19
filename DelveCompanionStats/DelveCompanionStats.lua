@@ -1175,7 +1175,7 @@ function ns:UpdateCompanionData(event)
     ns._lastName      = name
     ns._lastLevel     = level
 
-    -- Update UI — Line 1: combined "Name  Level N  XP (pct%)" on nameLabel
+    -- Update UI — Line 1: combined "Name  LN  XP (pct%)" on nameLabel
     -- levelLabel and xpLabel are kept as hidden labels for backward-compat/testability
     if ns.nameLabel then
         -- Build level fragment
@@ -1196,7 +1196,7 @@ function ns:UpdateCompanionData(event)
         end
 
         local parts = { name }
-        if levelStr ~= "" then parts[#parts + 1] = "Level " .. levelStr end
+        if levelStr ~= "" then parts[#parts + 1] = "L" .. levelStr end
         if xpText   ~= "" then parts[#parts + 1] = xpText end
         ns.nameLabel:SetText(table.concat(parts, "  "))
     end
