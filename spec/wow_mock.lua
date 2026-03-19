@@ -126,6 +126,7 @@ local function createMockFrame(frameType, name, parent, template)
     }
     
     function frame:SetSize(w, h) self._width = w; self._height = h end
+    function frame:SetWidth(w) self._width = w end
     function frame:SetHeight(h) self._height = h end
     function frame:GetWidth() return self._width end
     function frame:GetHeight() return self._height end

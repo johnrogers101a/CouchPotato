@@ -665,7 +665,7 @@ function ns:OnLoad()
         frameWidth = ScenarioObjectiveTracker:GetWidth()
     end
     if frameWidth < 100 then
-        frameWidth = 260  -- fallback
+        frameWidth = 235  -- fallback width for Delves section
     end
     -- Inner content width: 6 px padding each side (matches ObjectiveTracker label inset)
     local contentWidth = frameWidth - 12
@@ -773,7 +773,7 @@ function ns:OnLoad()
     -- the frame is anchored to the Blizzard tracker (pinned, gold) or freely draggable
     -- (unpinned, grey). Default: pinned.
     local pinBtn = CreateFrame("Button", nil, header)
-    pinBtn:SetSize(20, 28)
+    pinBtn:SetSize(16, 28)
     pinBtn:SetPoint("RIGHT", collapseBtn, "LEFT", -4, 0)
     local pinText = pinBtn:CreateFontString(nil, "OVERLAY")
     pinText:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
@@ -783,6 +783,7 @@ function ns:OnLoad()
     ns.pinBtnText = pinText
     ns.pinBtn     = pinBtn
     pinBtn:EnableMouse(true)
+    pinBtn:SetFontString(pinText)
 
     -- ApplyPinnedState: anchor frame to tracker, disable dragging, gold icon.
     local function ApplyPinnedState()
@@ -1002,19 +1003,16 @@ function ns:OnLoad()
     -- ResizeToTracker: re-measure ScenarioObjectiveTracker width and apply to all labels.
     -- Called on PLAYER_ENTERING_WORLD so the tracker is fully sized before we read it.
     local function ResizeToTracker()
-        if ScenarioObjectiveTracker and ScenarioObjectiveTracker.GetWidth then
-            local w = ScenarioObjectiveTracker:GetWidth()
-            if w and w > 100 then
-                ns.frame:SetWidth(w)
-                if ns.headerFrame then ns.headerFrame:SetWidth(w) end
-                local cw = w - 12
-                if ns.nameLabel         then ns.nameLabel:SetWidth(cw) end
-                if ns.boonLabel         then ns.boonLabel:SetWidth(cw) end
-                if ns.boonHeaderLabel   then ns.boonHeaderLabel:SetWidth(cw) end
-                if ns.nemesisLabel      then ns.nemesisLabel:SetWidth(cw) end
-                if ns.nemesisDetailLabel then ns.nemesisDetailLabel:SetWidth(cw) end
-            end
-        end
+        local w = 235  -- Fixed width for Delves section
+        if ns.frame then ns.frame:SetWidth(w) end
+        if ns.header then ns.header:SetWidth(w) end
+        if ns.headerFrame then ns.headerFrame:SetWidth(w) end
+        local cw = w - 12
+        if ns.nameLabel         then ns.nameLabel:SetWidth(cw) end
+        if ns.boonLabel         then ns.boonLabel:SetWidth(cw) end
+        if ns.boonHeaderLabel   then ns.boonHeaderLabel:SetWidth(cw) end
+        if ns.nemesisLabel      then ns.nemesisLabel:SetWidth(cw) end
+        if ns.nemesisDetailLabel then ns.nemesisDetailLabel:SetWidth(cw) end
     end
 
     -- 11. Register events for companion data updates
