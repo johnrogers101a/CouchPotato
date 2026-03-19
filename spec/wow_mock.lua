@@ -768,3 +768,57 @@ if not _G.bit then
         }
     end
 end
+
+-- C_UnitAuras stub (used by DelveCompanionStats for boon detection)
+-- _auras[spellID] = { value1 = N } or nil
+_G.C_UnitAuras = {
+    _auras = {},
+
+    GetPlayerAuraBySpellID = function(spellID, filter)
+        return _G.C_UnitAuras._auras[spellID]
+    end,
+}
+
+_G.UnitAura = function(unit, index, filter)
+    return nil  -- legacy fallback; not used in primary code path
+end
+
+-- C_Scenario stub (used by DelveCompanionStats for nemesis progress)
+-- _criteria is a list of {name, quantity, totalQuantity}
+_G.C_Scenario = {
+    _criteria = {},
+
+    GetNumCriteria = function()
+        return #(_G.C_Scenario._criteria)
+    end,
+
+    GetCriteriaInfo = function(i)
+        local c = _G.C_Scenario._criteria[i]
+        if not c then return nil end
+        return c
+    end,
+}
+
+-- C_ScenarioInfo stub
+_G.C_ScenarioInfo = {
+    GetInfo = function()
+        return nil, nil, false  -- name, description, isInScenario
+    end,
+}
+
+-- Test helper: set a single boon aura by spell ID + value
+_G._SetMockAura = function(spellID, value1)
+    _G.C_UnitAuras._auras[spellID] = { value1 = value1 }
+end
+
+-- Test helper: clear all mock auras
+_G._ClearMockAuras = function()
+    _G.C_UnitAuras._auras = {}
+end
+
+-- Test helper: set nemesis progress (replaces entire criteria list)
+_G._SetMockNemesis = function(current, total)
+    _G.C_Scenario._criteria = {
+        { name = "Enemy group kills", quantity = current, totalQuantity = total }
+    }
+end
