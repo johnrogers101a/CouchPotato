@@ -251,6 +251,7 @@ local function createMockFrame(frameType, name, parent, template)
         function fs:GetFont() return self._fontPath or "GameFontNormal", self._fontSize or 12, self._fontFlags or "" end
         function fs:SetWidth(w) self._width = w end
         function fs:SetJustifyH(j) end
+        function fs:SetJustifyV(j) end
         function fs:Show() self._shown = true end
         function fs:Hide() self._shown = false end
         function fs:IsShown() return self._shown end
