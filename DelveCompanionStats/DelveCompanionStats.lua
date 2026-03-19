@@ -362,6 +362,55 @@ function ns:PrintDebugInfo()
         table.insert(lines, "DelveCompanionStatsDB => nil")
     end
 
+    -- =========================================================================
+    table.insert(lines, "")
+    table.insert(lines, "=== BOON STATE ===")
+    -- =========================================================================
+    local boonAuraAvail = (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) and "yes" or "no"
+    table.insert(lines, ("C_UnitAuras available? %s"):format(boonAuraAvail))
+    if boonAuraAvail == "yes" then
+        local boonAura = nil
+        pcall(function() boonAura = C_UnitAuras.GetPlayerAuraBySpellID(1280098) end)
+        if boonAura then
+            table.insert(lines, "Aura 1280098 found? yes")
+            table.insert(lines, ("  aura.value1 => %s"):format(tostring(boonAura.value1)))
+        else
+            table.insert(lines, "Aura 1280098 found? no")
+        end
+    end
+    local boonText = ""
+    pcall(function() boonText = GetBoonsDisplayText() end)
+    table.insert(lines, ("GetBoonsDisplayText() returns: %q"):format(boonText))
+    table.insert(lines, "--- boonLabel ---")
+    dumpLabel(ns.boonLabel, "boonLabel", lines)
+
+    -- =========================================================================
+    table.insert(lines, "")
+    table.insert(lines, "=== NEMESIS STATE ===")
+    -- =========================================================================
+    local scenarioAvail = (C_Scenario and C_Scenario.GetNumCriteria) and "yes" or "no"
+    table.insert(lines, ("C_Scenario available? %s"):format(scenarioAvail))
+    if scenarioAvail == "yes" then
+        local numC = 0
+        pcall(function() numC = C_Scenario.GetNumCriteria() or 0 end)
+        table.insert(lines, ("GetNumCriteria() returns: %d"):format(numC))
+        for i = 1, numC do
+            local ci = nil
+            pcall(function() ci = C_Scenario.GetCriteriaInfo(i) end)
+            if ci then
+                table.insert(lines, ("  Criteria[%d]: name=%q, quantity=%s, totalQuantity=%s"):format(
+                    i, tostring(ci.name), tostring(ci.quantity), tostring(ci.totalQuantity)))
+            else
+                table.insert(lines, ("  Criteria[%d]: <nil>"):format(i))
+            end
+        end
+    end
+    local nemText = ""
+    pcall(function() nemText = GetNemesisProgress() end)
+    table.insert(lines, ("GetNemesisProgress() returns: %q"):format(nemText))
+    table.insert(lines, "--- nemesisLabel ---")
+    dumpLabel(ns.nemesisLabel, "nemesisLabel", lines)
+
     local text = table.concat(lines, "\n")
     popup._editBox:SetText(text)
     popup:Show()
@@ -611,7 +660,7 @@ local DELVE_BOONS = {
 -- and includes only boons with value1 > 0.
 -- Format: "Boons: Stat1 X%, Stat2 Y%"
 -------------------------------------------------------------------------------
-local function GetBoonsDisplayText()
+GetBoonsDisplayText = function()
     -- Individual boon spell IDs (1279750, etc.) are "Consume on Pick-Up" effects that
     -- don't persist as player auras. Check only the parent "Boons" aura (1280098).
     local aura = nil
