@@ -428,7 +428,7 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("HP:3% Spd:5% Str:4% Mast:3%", ns.boonLabel._text)
+            assert.equals("Max HP: 3%\nMove Spd: 5%\nStrength: 4%\nMastery: 3%", ns.boonLabel._text)
         end)
 
         it("boon display hides label when no active boons", function()
@@ -448,7 +448,7 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("HP:3%", ns.boonLabel._text)
+            assert.equals("Max HP: 3%", ns.boonLabel._text)
         end)
 
         it("boon label is shown when tooltip has boon lines", function()
@@ -460,7 +460,7 @@ describe("DelveCompanionStats", function()
             ns:UpdateCompanionData()
 
             assert.is_true(ns.boonLabel:IsShown())
-            assert.equals("Vers:7%", ns.boonLabel._text)
+            assert.equals("Vers: 7%", ns.boonLabel._text)
         end)
 
     end)

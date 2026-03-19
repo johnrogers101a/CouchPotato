@@ -642,22 +642,22 @@ end
 
 -------------------------------------------------------------------------------
 -- BOON_ABBREV: Maps tooltip stat names (from spell 1280098) to short labels.
--- Used by GetBoonsDisplayText() to build a compact single-line summary.
+-- Used by GetBoonsDisplayText() to build a one-per-line summary.
 -------------------------------------------------------------------------------
 local BOON_ABBREV = {
-    ["Maximum Health"]         = "HP",
-    ["Movement Speed"]         = "Spd",
-    ["Strength"]               = "Str",
-    ["Haste"]                  = "Hst",
+    ["Maximum Health"]         = "Max HP",
+    ["Movement Speed"]         = "Move Spd",
+    ["Strength"]               = "Strength",
+    ["Haste"]                  = "Haste",
     ["Critical Strike"]        = "Crit",
-    ["Mastery"]                = "Mast",
+    ["Mastery"]                = "Mastery",
     ["Versatility"]            = "Vers",
-    ["Reduce incoming damage"] = "DR",
+    ["Reduce incoming damage"] = "Dmg Red",
 }
 
 -------------------------------------------------------------------------------
 -- GetBoonsDisplayText: Reads the tooltip for boon spell 1280098 and returns a
--- compact summary of non-zero stats, e.g. "HP:3% Spd:5% Str:4% Mast:3%".
+-- one-per-line summary of non-zero stats, e.g. "Max HP: 6%\nMove Spd: 10%".
 -- Returns "" if no boon lines are found (hides the boon label).
 -------------------------------------------------------------------------------
 GetBoonsDisplayText = function()
@@ -671,12 +671,12 @@ GetBoonsDisplayText = function()
             if lineWidget then
                 local text = lineWidget:GetText()
                 if text then
-                    local statName, numStr = text:match("^(.+): (%d+)%%.%s*$")
+                    local statName, numStr = text:match("^(.+): (%d+)%%.?%s*$")
                     if statName and numStr then
                         local num = tonumber(numStr)
                         if num and num > 0 then
                             local abbrev = BOON_ABBREV[statName] or statName:sub(1, 4)
-                            table.insert(parts, abbrev .. ":" .. num .. "%")
+                            table.insert(parts, abbrev .. ": " .. num .. "%")
                         end
                     end
                 end
@@ -685,7 +685,7 @@ GetBoonsDisplayText = function()
         GameTooltip:Hide()
     end)
     if not ok or #parts == 0 then return "" end
-    return table.concat(parts, " ")
+    return table.concat(parts, "\n")
 end
 
 -------------------------------------------------------------------------------
@@ -830,6 +830,23 @@ function ns:UpdateCompanionData(event)
         else
             ns.nemesisLabel:Show()
         end
+    end
+
+    -- Dynamic frame height based on visible content
+    if ns.frame then
+        -- Base: top-pad(8) + name(14) + gap(4) + level(14) + gap(4) + xp(14) + gap(4) + bottom-pad(8) = 70
+        local height = 70
+        -- Count boon lines (each separated by \n)
+        if ns.boonLabel and ns.boonLabel:IsShown() then
+            local boonText = ns.boonLabel:GetText() or ""
+            local _, newlines = boonText:gsub("\n", "\n")
+            height = height + (newlines + 1) * 16
+        end
+        -- Nemesis label (one line)
+        if ns.nemesisLabel and ns.nemesisLabel:IsShown() then
+            height = height + 16
+        end
+        ns.frame:SetHeight(height)
     end
 
     -- Persist to SavedVariables
