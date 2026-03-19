@@ -545,9 +545,18 @@ function ns:OnLoad()
     -- Wrapped in pcall: guards against any unexpected frame creation failures.
     -- If CreateFrame fails, ns.frame = nil and addon disables gracefully.
     local frameOk, frameResult = pcall(function()
-        return CreateFrame("Frame", "DelveCompanionStatsFrame", UIParent)
+        return CreateFrame("Frame", "DelveCompanionStatsFrame", UIParent, "BackdropTemplate")
     end)
-
+    if not frameOk or not frameResult then
+        -- Fallback: plain Frame without BackdropTemplate
+        local ok2, f2 = pcall(function()
+            return CreateFrame("Frame", "DelveCompanionStatsFrame", UIParent)
+        end)
+        if ok2 and f2 then
+            frameResult = f2
+            frameOk = true
+        end
+    end
     if not frameOk or not frameResult then
         print("|cffff4444DelveCompanionStats:|r Could not create display frame. Addon disabled.")
         ns.frame = nil
@@ -556,26 +565,52 @@ function ns:OnLoad()
 
     ns.frame = frameResult
 
+    -- Apply Blizzard Dialog-box backdrop (pcall: guards against missing BackdropTemplate)
+    pcall(function()
+        ns.frame:SetBackdrop({
+            bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true, tileSize = 32, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 },
+        })
+        ns.frame:SetBackdropColor(0, 0, 0, 0.80)
+        ns.frame:SetBackdropBorderColor(1, 1, 1, 0.5)
+    end)
+
     -- Set frame strata and level to ensure visibility above other UI
     ns.frame:SetFrameStrata("DIALOG")
     ns.frame:SetFrameLevel(100)
 
     -- 3. Set size and default anchor (above ChatFrame1 when available)
-    ns.frame:SetSize(200, 160)
+    ns.frame:SetSize(240, 160)
     if ChatFrame1 then
         ns.frame:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 10)
     else
         ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 130)
     end
 
+    -- 4b. Create section header label ("Delve Companion")
+    ns.headerLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    ns.headerLabel:SetPoint("TOPLEFT", ns.frame, "TOPLEFT", 12, -8)
+    ns.headerLabel:SetWidth(216)
+    ns.headerLabel:SetJustifyH("LEFT")
+    local headerFontOk = pcall(function() ns.headerLabel:SetFontObject("GameFontHighlight") end)
+    if not headerFontOk or not ns.headerLabel:GetFont() then
+        ns.headerLabel:SetFont(STANDARD_TEXT_FONT, 12, "OUTLINE")
+    end
+    ns.headerLabel:SetTextColor(1.0, 0.85, 0.0, 1)
+    ns.headerLabel:SetShadowOffset(2, -2)
+    ns.headerLabel:SetShadowColor(0, 0, 0, 1)
+    ns.headerLabel:SetText("Delve Companion")
+
     -- 5. Create name label (guarded: frame confirmed non-nil above)
     ns.nameLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ns.nameLabel:SetPoint("TOPLEFT", ns.frame, "TOPLEFT", 8, -8)
-    ns.nameLabel:SetWidth(184)
+    ns.nameLabel:SetPoint("TOPLEFT", ns.headerLabel, "BOTTOMLEFT", 0, -4)
+    ns.nameLabel:SetWidth(216)
     ns.nameLabel:SetJustifyH("LEFT")
-    ns.nameLabel:SetTextColor(1, 1, 1, 1)  -- Explicit white text color
-    -- Validate font; fall back to STANDARD_TEXT_FONT if GameFontNormal didn't load
-    if not ns.nameLabel:GetFont() then
+    ns.nameLabel:SetTextColor(1, 1, 1, 1)
+    local nameFontOk = pcall(function() ns.nameLabel:SetFontObject("GameFontNormal") end)
+    if not nameFontOk or not ns.nameLabel:GetFont() then
         ns.nameLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
     end
     ns.nameLabel:SetText("No companion data")
@@ -585,11 +620,11 @@ function ns:OnLoad()
     -- 6. Create level label
     ns.levelLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ns.levelLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -4)
-    ns.levelLabel:SetWidth(184)
+    ns.levelLabel:SetWidth(216)
     ns.levelLabel:SetJustifyH("LEFT")
-    ns.levelLabel:SetTextColor(1, 1, 1, 1)  -- Explicit white text color
-    -- Validate font; fall back to STANDARD_TEXT_FONT if GameFontNormal didn't load
-    if not ns.levelLabel:GetFont() then
+    ns.levelLabel:SetTextColor(1, 1, 1, 1)
+    local levelFontOk = pcall(function() ns.levelLabel:SetFontObject("GameFontNormal") end)
+    if not levelFontOk or not ns.levelLabel:GetFont() then
         ns.levelLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
     end
     ns.levelLabel:SetText("")
@@ -598,18 +633,22 @@ function ns:OnLoad()
 
     -- 6b. Create XP label (below levelLabel)
     ns.xpLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ns.xpLabel:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+    ns.xpLabel:SetPoint("TOPLEFT", ns.levelLabel, "BOTTOMLEFT", 0, -4)
+    ns.xpLabel:SetWidth(216)
+    ns.xpLabel:SetJustifyH("LEFT")
+    local xpFontOk = pcall(function() ns.xpLabel:SetFontObject("GameFontNormal") end)
+    if not xpFontOk or not ns.xpLabel:GetFont() then
+        ns.xpLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+    end
     ns.xpLabel:SetTextColor(1, 1, 1, 1)
     ns.xpLabel:SetShadowColor(0, 0, 0, 1)
-    ns.xpLabel:SetShadowOffset(1, -1)
-    ns.xpLabel:SetJustifyH("LEFT")
-    ns.xpLabel:SetPoint("TOPLEFT", ns.levelLabel, "BOTTOMLEFT", 0, -4)
+    ns.xpLabel:SetShadowOffset(2, -2)
     ns.xpLabel:SetText("")
 
     -- 6c. Create boon label (below xpLabel)
     ns.boonLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ns.boonLabel:SetPoint("TOPLEFT", ns.xpLabel, "BOTTOMLEFT", 0, -4)
-    ns.boonLabel:SetWidth(184)
+    ns.boonLabel:SetWidth(216)
     ns.boonLabel:SetJustifyH("LEFT")
     ns.boonLabel:SetTextColor(1, 1, 1, 1)
     ns.boonLabel:SetShadowOffset(2, -2)
@@ -619,7 +658,7 @@ function ns:OnLoad()
     -- 6d. Create nemesis label (below boonLabel)
     ns.nemesisLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -4)
-    ns.nemesisLabel:SetWidth(184)
+    ns.nemesisLabel:SetWidth(216)
     ns.nemesisLabel:SetJustifyH("LEFT")
     ns.nemesisLabel:SetTextColor(1, 1, 1, 1)
     ns.nemesisLabel:SetShadowOffset(2, -2)
@@ -962,8 +1001,8 @@ function ns:UpdateCompanionData(event)
 
     -- Dynamic frame height based on visible content
     if ns.frame then
-        -- Base: top-pad(8) + name(14) + gap(4) + level(14) + gap(4) + xp(14) + gap(4) + bottom-pad(8) = 70
-        local height = 70
+        -- Base: top-pad(8) + header(20) + gap(4) + name(18) + gap(4) + level(18) + gap(4) + xp(18) + gap(4) + bottom-pad(8) ≈ 100
+        local height = 100
         -- Count boon lines (each separated by \n)
         if ns.boonLabel and ns.boonLabel:IsShown() then
             local boonText = ns.boonLabel:GetText() or ""
