@@ -827,6 +827,25 @@ describe("DelveCompanionStats", function()
 
     describe("Nemesis progress", function()
 
+        -- -------------------------------------------------------------------------
+        -- Constants and API surface
+        -- -------------------------------------------------------------------------
+        it("NEMESIS_MIN_TIER constant is exported and equals 4", function()
+            assert.equals(4, ns.NEMESIS_MIN_TIER)
+        end)
+
+        it("GetDelveTier delegates to C_DelvesUI.GetDelveTier", function()
+            C_DelvesUI._SetDelveTier(7)
+            assert.equals(7, ns.GetDelveTier())
+        end)
+
+        it("GetDelveTier returns nil when C_DelvesUI.GetDelveTier is unavailable", function()
+            local saved = C_DelvesUI.GetDelveTier
+            C_DelvesUI.GetDelveTier = nil
+            assert.is_nil(ns.GetDelveTier())
+            C_DelvesUI.GetDelveTier = saved
+        end)
+
         before_each(function()
             -- Set up a valid companion
             C_DelvesUI.GetFactionForCompanion = function() return 2744 end
@@ -1090,6 +1109,42 @@ describe("DelveCompanionStats", function()
             ns:UpdateCompanionData()
             -- When tier is unknown, still show if bonus criteria exist
             assert.equals("Nemesis Strongbox (2/4)", ns.nemesisLabel._text)
+        end)
+
+        it("nemesis section hidden at tier 1 (well below threshold)", function()
+            C_DelvesUI._SetDelveTier(1)
+            _SetMockNemesis(2, 4)
+            ns:UpdateCompanionData()
+            assert.equals("", ns.nemesisLabel._text)
+            assert.is_false(ns.nemesisLabel:IsShown())
+            assert.is_false(ns.nemesisDetailLabel:IsShown())
+        end)
+
+        it("nemesis section hidden at tier 2 (below threshold)", function()
+            C_DelvesUI._SetDelveTier(2)
+            _SetMockNemesis(2, 4)
+            ns:UpdateCompanionData()
+            assert.equals("", ns.nemesisLabel._text)
+            assert.is_false(ns.nemesisLabel:IsShown())
+            assert.is_false(ns.nemesisDetailLabel:IsShown())
+        end)
+
+        it("nemesis section shown at tier 11 (well above threshold)", function()
+            C_DelvesUI._SetDelveTier(11)
+            _SetMockNemesis(2, 4)
+            ns:UpdateCompanionData()
+            assert.equals("Nemesis Strongbox (2/4)", ns.nemesisLabel._text)
+            assert.is_true(ns.nemesisLabel:IsShown())
+        end)
+
+        it("nemesis section hidden when bonus criteria empty despite high tier", function()
+            C_DelvesUI._SetDelveTier(8)
+            -- No bonus criteria set (but tier is high)
+            C_ScenarioInfo._bonusSteps = {}
+            C_ScenarioInfo._bonusCriteria = {}
+            ns:UpdateCompanionData()
+            assert.equals("", ns.nemesisLabel._text)
+            assert.is_false(ns.nemesisLabel:IsShown())
         end)
 
         -- -------------------------------------------------------------------------
