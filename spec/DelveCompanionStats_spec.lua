@@ -947,8 +947,60 @@ describe("DelveCompanionStats", function()
         end)
 
         -- -------------------------------------------------------------------------
-        -- IsCombatCriteria direct unit tests
+        -- nemesisDetailLabel: white body lines below the Nemesis Strongbox header
         -- -------------------------------------------------------------------------
+        it("nemesisDetailLabel shows one white line per combat criterion", function()
+            _SetMockNemesis({
+                { description = "Infiltrator Garand slain", quantity = 0, totalQuantity = 1 },
+            })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Infiltrator Garand slain: 0/1", ns.nemesisDetailLabel._text)
+            assert.is_true(ns.nemesisDetailLabel:IsShown())
+        end)
+
+        it("nemesisDetailLabel shows multiple lines for multiple combat criteria", function()
+            _SetMockNemesis({
+                { description = "Cultists slain",  quantity = 2, totalQuantity = 5 },
+                { description = "Totems destroyed", quantity = 1, totalQuantity = 3 },
+            })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Cultists slain: 2/5\nTotems destroyed: 1/3", ns.nemesisDetailLabel._text)
+        end)
+
+        it("nemesisDetailLabel excludes non-combat criteria from detail lines", function()
+            _SetMockNemesis({
+                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
+                { description = "Cultists slain",                 quantity = 1, totalQuantity = 3 },
+            })
+
+            ns:UpdateCompanionData()
+
+            -- Only the combat criterion appears in detail lines
+            assert.equals("Cultists slain: 1/3", ns.nemesisDetailLabel._text)
+        end)
+
+        it("nemesisDetailLabel is hidden when no combat criteria qualify", function()
+            -- No criteria at all
+            ns:UpdateCompanionData()
+
+            assert.is_false(ns.nemesisDetailLabel:IsShown())
+        end)
+
+        it("nemesisDetailLabel is hidden when all criteria are non-combat", function()
+            _SetMockNemesis({
+                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
+            })
+
+            ns:UpdateCompanionData()
+
+            assert.is_false(ns.nemesisDetailLabel:IsShown())
+        end)
+
+
         describe("IsCombatCriteria", function()
             it("returns false for 'Speak with X'", function()
                 assert.is_false(ns.IsCombatCriteria("Speak with Celoenus Blackflame"))
@@ -1005,6 +1057,7 @@ describe("DelveCompanionStats", function()
 
             assert.is_false(ns.boonLabel:IsShown())
             assert.is_false(ns.nemesisLabel:IsShown())
+            assert.is_false(ns.nemesisDetailLabel:IsShown())
         end)
 
     end)
@@ -1042,6 +1095,11 @@ describe("DelveCompanionStats", function()
 
             it("nemesisLabel uses ObjectiveFont", function()
                 local fontPath = ns.nemesisLabel:GetFont()
+                assert.equals("ObjectiveFont", fontPath)
+            end)
+
+            it("nemesisDetailLabel uses ObjectiveFont", function()
+                local fontPath = ns.nemesisDetailLabel:GetFont()
                 assert.equals("ObjectiveFont", fontPath)
             end)
 
@@ -1109,6 +1167,13 @@ describe("DelveCompanionStats", function()
                 assert.is_true(math.abs(b - 1) < 0.001)
             end)
 
+            it("nemesisDetailLabel colour is white {1, 1, 1}", function()
+                local r, g, b = ns.nemesisDetailLabel:GetTextColor()
+                assert.is_true(math.abs(r - 1) < 0.001)
+                assert.is_true(math.abs(g - 1) < 0.001)
+                assert.is_true(math.abs(b - 1) < 0.001)
+            end)
+
             it("fallback header line colour is {1, 0.82, 0.05} (decorative gold)", function()
                 -- Force the fallback path so we can inspect the header line texture
                 local origCreateFrame = _G.CreateFrame
@@ -1165,6 +1230,10 @@ describe("DelveCompanionStats", function()
 
             it("nemesisLabel width is frameWidth - 12", function()
                 assert.equals(208, ns.nemesisLabel._width)
+            end)
+
+            it("nemesisDetailLabel width is frameWidth - 12", function()
+                assert.equals(208, ns.nemesisDetailLabel._width)
             end)
 
         end)
@@ -1227,16 +1296,16 @@ describe("DelveCompanionStats", function()
             it("content height adds 3+16 for nemesis section", function()
                 _SetMockNemesis(1, 3)
                 ns:UpdateCompanionData()
-                -- 24 (base) + 3 (gap) + 16 (nemesis) = 43
-                assert.equals(43, ns.contentFrame._height)
+                -- 24 (base) + 3 (gap) + 16 (nemesis header) + 16 (1 detail line) = 59
+                assert.equals(59, ns.contentFrame._height)
             end)
 
             it("content height stacks boon and nemesis sections with 3px gaps each", function()
                 _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%.\nMastery: 3%." })
                 _SetMockNemesis(2, 5)
                 ns:UpdateCompanionData()
-                -- 24 (base) + 3+16 (boonHeader) + 2*16 (2 boon lines) + 3+16 (nemesis) = 94
-                assert.equals(94, ns.contentFrame._height)
+                -- 24 (base) + 3+16 (boonHeader) + 2*16 (2 boon lines) + 3+16 (nemesis header) + 16 (1 detail line) = 110
+                assert.equals(110, ns.contentFrame._height)
             end)
 
         end)

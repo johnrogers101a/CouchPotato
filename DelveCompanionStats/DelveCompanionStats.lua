@@ -419,6 +419,8 @@ function ns:PrintDebugInfo()
     table.insert(lines, ("GetNemesisProgress() returns: %q"):format(nemText))
     table.insert(lines, "--- nemesisLabel ---")
     dumpLabel(ns.nemesisLabel, "nemesisLabel", lines)
+    table.insert(lines, "--- nemesisDetailLabel ---")
+    dumpLabel(ns.nemesisDetailLabel, "nemesisDetailLabel", lines)
 
     -- Deep diagnostic: dump all C_ScenarioInfo methods and safe-call GetScenarioStepInfo
     if C_ScenarioInfo then
@@ -873,6 +875,21 @@ function ns:OnLoad()
     ns.nemesisLabel:SetShadowColor(0, 0, 0, 1)
     ns.nemesisLabel:SetText("")
 
+    -- 6f. Nemesis detail label — white body lines below the Nemesis Strongbox header;
+    -- mirrors boonLabel: one line per combat criterion ("description: qty/total")
+    ns.nemesisDetailLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ns.nemesisDetailLabel:SetPoint("TOPLEFT", ns.nemesisLabel, "BOTTOMLEFT", 0, -3)
+    local nemesisDetailFontOk = pcall(function() ns.nemesisDetailLabel:SetFontObject(ObjectiveFont) end)
+    if not nemesisDetailFontOk or not ns.nemesisDetailLabel:GetFont() then
+        ns.nemesisDetailLabel:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 13, "")
+    end
+    ns.nemesisDetailLabel:SetWidth(contentWidth)
+    ns.nemesisDetailLabel:SetJustifyH("LEFT")
+    ns.nemesisDetailLabel:SetTextColor(1, 1, 1, 1)  -- WHITE, same as boonLabel
+    ns.nemesisDetailLabel:SetShadowOffset(1, -1)
+    ns.nemesisDetailLabel:SetShadowColor(0, 0, 0, 1)
+    ns.nemesisDetailLabel:SetText("")
+
     -- 7. Make frame movable (only active when not anchored to the tracker)
     -- Safe: frame created above in this same function before drag handlers registered
     ns.frame:SetMovable(true)
@@ -1157,6 +1174,27 @@ GetNemesisProgress = function()
 end
 
 -------------------------------------------------------------------------------
+-- GetNemesisDetailText: Returns newline-separated white body lines for each
+-- qualifying combat criterion, formatted as "description: quantity/totalQuantity".
+-- Returns "" when no criteria qualify (mirrors GetBoonsDisplayText pattern).
+-------------------------------------------------------------------------------
+local function GetNemesisDetailText()
+    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
+    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
+    if not stepInfo or not stepInfo.numCriteria then return "" end
+
+    local lines = {}
+    for i = 1, stepInfo.numCriteria do
+        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
+        if ok and c and IsCombatCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
+            table.insert(lines, string.format("%s: %d/%d", c.description, c.quantity or 0, c.totalQuantity))
+        end
+    end
+    return table.concat(lines, "\n")
+end
+ns.GetNemesisDetailText = GetNemesisDetailText
+
+-------------------------------------------------------------------------------
 -- UpdateCompanionData: Fetch active companion from C_DelvesUI and update UI
 -- Uses fully dynamic API calls — no hardcoded faction ID lookup tables.
 -- Called by event handlers and during initialization.
@@ -1183,6 +1221,7 @@ function ns:UpdateCompanionData(event)
         if ns.boonHeaderLabel then ns.boonHeaderLabel:Hide() end
         if ns.boonLabel  then ns.boonLabel:SetText(""); ns.boonLabel:Hide() end
         if ns.nemesisLabel then ns.nemesisLabel:SetText(""); ns.nemesisLabel:Hide() end
+        if ns.nemesisDetailLabel then ns.nemesisDetailLabel:SetText(""); ns.nemesisDetailLabel:Hide() end
         return
     end
 
@@ -1255,14 +1294,27 @@ function ns:UpdateCompanionData(event)
         end
     end
 
-    -- Nemesis progress display — "Nemesis Strongbox (n/n)" sub-header (gold)
+    -- Nemesis progress display — "Nemesis Strongbox (n/n)" sub-header (gold) + white detail lines
     if ns.nemesisLabel then
         local nemesisText = GetNemesisProgress()
         ns.nemesisLabel:SetText(nemesisText)
         if nemesisText == "" then
             ns.nemesisLabel:Hide()
+            if ns.nemesisDetailLabel then
+                ns.nemesisDetailLabel:SetText("")
+                ns.nemesisDetailLabel:Hide()
+            end
         else
             ns.nemesisLabel:Show()
+            if ns.nemesisDetailLabel then
+                local detailText = GetNemesisDetailText()
+                ns.nemesisDetailLabel:SetText(detailText)
+                if detailText == "" then
+                    ns.nemesisDetailLabel:Hide()
+                else
+                    ns.nemesisDetailLabel:Show()
+                end
+            end
         end
     end
 
@@ -1279,9 +1331,14 @@ function ns:UpdateCompanionData(event)
             local _, newlines = boonText:gsub("\n", "\n")
             contentHeight = contentHeight + (newlines + 1) * 16
         end
-        -- Nemesis section: 3px gap + label(16)
+        -- Nemesis section: 3px gap + header(16) + detail lines(16 each)
         if ns.nemesisLabel and ns.nemesisLabel:IsShown() then
             contentHeight = contentHeight + 3 + 16
+        end
+        if ns.nemesisDetailLabel and ns.nemesisDetailLabel:IsShown() then
+            local detailText = ns.nemesisDetailLabel:GetText() or ""
+            local _, newlines = detailText:gsub("\n", "\n")
+            contentHeight = contentHeight + (newlines + 1) * 16
         end
         -- Resize contentFrame then total frame (header height + content, or header only when collapsed)
         if ns.contentFrame then ns.contentFrame:SetHeight(contentHeight) end
