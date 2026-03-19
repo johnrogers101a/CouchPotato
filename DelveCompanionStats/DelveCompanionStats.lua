@@ -112,6 +112,24 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
 end)
 
 -------------------------------------------------------------------------------
+-- UpdateFrameVisibility: Show or hide the frame based on active delve state.
+-- Calls UpdateCompanionData when the frame transitions from hidden to shown.
+-------------------------------------------------------------------------------
+function ns:UpdateFrameVisibility()
+    if not ns.frame then return end
+    local wasShown = ns.frame:IsShown()
+    local ok, hasDelve = pcall(function() return C_DelvesUI.HasActiveDelve() end)
+    if ok and hasDelve then
+        ns.frame:Show()
+    else
+        ns.frame:Hide()
+    end
+    if not wasShown and ns.frame:IsShown() then
+        ns:UpdateCompanionData()
+    end
+end
+
+-------------------------------------------------------------------------------
 -- OnLoad: Frame creation + UI setup + SavedVars init + position restore
 -- Called exactly once from ADDON_LOADED handler above.
 -- Guard: if ns.frame already exists, skip (idempotent safety).
@@ -132,10 +150,10 @@ function ns:OnLoad()
     db.companionLevel = db.companionLevel -- keep existing or nil
 
     -- 2. Create the main display frame
-    -- Wrapped in pcall: BackdropTemplate may be unavailable in some WoW versions.
+    -- Wrapped in pcall: guards against any unexpected frame creation failures.
     -- If CreateFrame fails, ns.frame = nil and addon disables gracefully.
     local frameOk, frameResult = pcall(function()
-        return CreateFrame("Frame", "DelveCompanionStatsFrame", UIParent, "BackdropTemplate")
+        return CreateFrame("Frame", "DelveCompanionStatsFrame", UIParent)
     end)
 
     if not frameOk or not frameResult then
@@ -159,15 +177,6 @@ function ns:OnLoad()
         ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 130)
     end
 
-    -- 4. Apply dark semi-transparent backdrop
-    ns.frame:SetBackdrop({
-        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 },
-    })
-    ns.frame:SetBackdropColor(0, 0, 0, 0.7)
-
     -- 5. Create name label (guarded: frame confirmed non-nil above)
     ns.nameLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ns.nameLabel:SetPoint("TOPLEFT", ns.frame, "TOPLEFT", 8, -8)
@@ -179,6 +188,8 @@ function ns:OnLoad()
         ns.nameLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
     end
     ns.nameLabel:SetText("No companion data")
+    ns.nameLabel:SetShadowOffset(2, -2)
+    ns.nameLabel:SetShadowColor(0, 0, 0, 1)
 
     -- 6. Create level label
     ns.levelLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -191,6 +202,8 @@ function ns:OnLoad()
         ns.levelLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
     end
     ns.levelLabel:SetText("")
+    ns.levelLabel:SetShadowOffset(2, -2)
+    ns.levelLabel:SetShadowColor(0, 0, 0, 1)
 
     -- 7. Make frame movable
     -- Safe: frame created above in this same function before drag handlers registered
@@ -222,13 +235,8 @@ function ns:OnLoad()
         end
     end
 
-    -- 9. Populate companion data: Try live API first, fall back to SavedVariables
-    -- NOTE: UpdateCompanionData uses C_DelvesUI.GetFactionForCompanion() + C_Reputation
-    -- and C_GossipInfo APIs to fetch live data, and updates SavedVariables + UI atomically.
-    ns:UpdateCompanionData()
-
-    -- 10. Show the frame
-    if ns.frame then ns.frame:Show() end
+    -- 9. Determine frame visibility based on active delve state
+    ns:UpdateFrameVisibility()
 
     -- 11. Register events for companion data updates
     if ns.frame then
@@ -245,7 +253,11 @@ function ns:OnLoad()
         ns.frame:RegisterEvent("GROUP_ROSTER_UPDATE")
         ns.frame:RegisterEvent("UNIT_NAME_UPDATE")
         ns.frame:SetScript("OnEvent", function(self, event, ...)
-            ns:UpdateCompanionData(event)
+            local wasShown = ns.frame:IsShown()
+            ns:UpdateFrameVisibility()
+            if wasShown and ns.frame:IsShown() then
+                ns:UpdateCompanionData(event)
+            end
         end)
     end
 
