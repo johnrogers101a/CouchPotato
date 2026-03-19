@@ -5,6 +5,32 @@ All notable changes to ControllerCompanion will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-03-18
+
+### Fixed
+- DelveCompanionStats: Fixed companion name display bug — replaced incorrect `C_Reputation.GetFactionDataByID()` call (which returns faction name "Friendship" instead of companion display names) with hardcoded companion name lookup table keyed by companion ID
+- DelveCompanionStats: Corrected `C_DelvesUI.GetFactionForCompanion()` call to pass actual companion ID instead of `nil`
+- DelveCompanionStats: Added Waxmonger Squick (ID 3) to companion names table; shifted Turalyon to ID 4 and Thisalee Crow to ID 5
+- DelveCompanionStats: Fixed frame position anchor — replaced `TOPLEFT/UIParent` with `BOTTOMLEFT/ChatFrame1` fallback to prevent frame rendering off-screen
+- DelveCompanionStats: Fixed frame visibility — set frame strata to `MEDIUM`, level to 100, and explicitly called `Show()` on the fontstring after text assignment
+- DelveCompanionStats: Fixed text color — companion name and renown text now rendered in white (`1, 1, 1`) for legibility on all backgrounds
+- DelveCompanionStats: Eliminated race condition — added nil-guards and `pcall` safety wrapping around API calls that could fire before companion data is available
+- DelveCompanionStats: Fixed Lua 5.1 compatibility — replaced WoW-only bitwise operators with a pure Lua fallback and `loadstring`-based `bit` library detection for CI/test environments
+
+### Added
+- GitHub Actions CI workflow: automated Busted unit tests + Luacheck static analysis on every push and pull request
+- install.ps1: auto-discovery of WoW Retail AddOns folder via filesystem search; no longer requires manual path configuration
+- DelveCompanionStats: new standalone addon scaffold with `.toc`, `Core.lua`, and `IconTexture` support for companion portrait display
+- DelveCompanionStats: live companion data via `C_DelvesUI` API; registers `PLAYER_ENTERING_WORLD`, `ZONE_CHANGED_NEW_AREA`, `UPDATE_FACTION`, and `MAJOR_FACTION_RENOWN_LEVEL_CHANGED` events for real-time updates
+- DelveCompanionStats: `SavedVariables` persistence for companion data caching across sessions
+
+### Technical
+- All 132 tests passing; 0 luacheck warnings
+- Companion display names are now correctly retrieved via static lookup (no API available for this in WoW 12.0.x)
+- Faction ID for reputation lookups is correctly retrieved via `C_DelvesUI.GetFactionForCompanion(companionID)` instead of `nil`
+- CI/CD pipeline: GitHub Actions + Busted + Luacheck — all checks green on merge
+- Lua 5.1 bitwise operations use pure Lua fallback for CI/test environment compatibility (WoW client uses LuaJIT with `bit` library)
+
 ## [1.0.0] - 2026-03-01
 
 ### Added
