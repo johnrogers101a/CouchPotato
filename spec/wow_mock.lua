@@ -844,9 +844,17 @@ _G._ClearMockAuras = function()
     _G.C_UnitAuras._auras = {}
 end
 
--- Test helper: set nemesis progress (replaces entire criteria list)
-_G._SetMockNemesis = function(current, total)
-    _G.C_ScenarioInfo._criteria = {
-        { description = "Enemy group kills", quantity = current, totalQuantity = total }
-    }
+-- Test helper: set nemesis progress.
+-- Two calling forms:
+--   _SetMockNemesis(current, total)           -- single criterion (legacy)
+--   _SetMockNemesis({ {desc, qty, total}, … }) -- explicit criteria table
+_G._SetMockNemesis = function(criteriaOrCurrent, total)
+    if type(criteriaOrCurrent) == "table" then
+        _G.C_ScenarioInfo._criteria = criteriaOrCurrent
+    else
+        -- Legacy single-criterion form
+        _G.C_ScenarioInfo._criteria = {
+            { description = "Enemy group kills", quantity = criteriaOrCurrent, totalQuantity = total }
+        }
+    end
 end

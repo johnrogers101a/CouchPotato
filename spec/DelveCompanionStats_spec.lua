@@ -524,7 +524,7 @@ describe("DelveCompanionStats", function()
 
         it("PLAYER_ENTERING_WORLD schedules two delayed C_Timer.After calls", function()
             -- Count how many timers are registered before the event
-            local timersBefore = 0
+            local timersBefore
             do
                 local originalAfter = C_Timer.After
                 local timerCount = 0
@@ -656,12 +656,12 @@ describe("DelveCompanionStats", function()
             C_ScenarioInfo._criteria = {}
         end)
 
-        it("nemesis progress displays X/Y format", function()
+        it("nemesis progress displays abbreviated label with X/Y format", function()
             _SetMockNemesis(2, 4)
 
             ns:UpdateCompanionData()
 
-            assert.equals("Nemesis: 2/4", ns.nemesisLabel._text)
+            assert.equals("Group: 2/4", ns.nemesisLabel._text)
         end)
 
         it("nemesis progress hides label if criterion not found", function()
@@ -678,6 +678,38 @@ describe("DelveCompanionStats", function()
             ns:UpdateCompanionData()
 
             assert.is_true(ns.nemesisLabel:IsShown())
+        end)
+
+        it("nemesis progress shows all criteria as separate lines", function()
+            _SetMockNemesis({
+                { description = "Vilebranch Skeleton Charmers slain", quantity = 0, totalQuantity = 5 },
+                { description = "Totems destroyed",                   quantity = 1, totalQuantity = 6 },
+            })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Charmers: 0/5\nTotems: 1/6", ns.nemesisLabel._text)
+        end)
+
+        it("nemesis progress skips criteria with zero totalQuantity", function()
+            _SetMockNemesis({
+                { description = "Nothing here", quantity = 0, totalQuantity = 0 },
+                { description = "Totems destroyed", quantity = 2, totalQuantity = 3 },
+            })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Totems: 2/3", ns.nemesisLabel._text)
+        end)
+
+        it("nemesis label abbreviates 'Enemy groups remaining' to 'Groups'", function()
+            _SetMockNemesis({
+                { description = "Enemy groups remaining", quantity = 1, totalQuantity = 3 },
+            })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Groups: 1/3", ns.nemesisLabel._text)
         end)
 
         it("boon and nemesis labels hidden when no delve data present", function()
