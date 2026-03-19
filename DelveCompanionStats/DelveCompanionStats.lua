@@ -421,6 +421,47 @@ function ns:PrintDebugInfo()
     table.insert(lines, "--- nemesisLabel ---")
     dumpLabel(ns.nemesisLabel, "nemesisLabel", lines)
 
+    -- Deep diagnostic: dump all scenario criteria (up to 20)
+    if C_ScenarioInfo then
+        local numCriteria = C_ScenarioInfo.GetNumCriteria() or 0
+        table.insert(lines, "GetNumCriteria() = " .. tostring(numCriteria))
+        for i = 1, math.max(numCriteria, 10) do
+            local c = C_ScenarioInfo.GetCriteriaInfo(i)
+            if c then
+                table.insert(lines, "  criteria[" .. i .. "] desc=" .. (c.description or "nil") .. " qty=" .. tostring(c.quantity) .. " total=" .. tostring(c.totalQuantity) .. " done=" .. tostring(c.completed))
+            end
+        end
+    end
+
+    -- Deep diagnostic: scan C_DelvesUI for nemesis-related keys
+    table.insert(lines, "--- C_DelvesUI nemesis keys ---")
+    if C_DelvesUI then
+        for k, _ in pairs(C_DelvesUI) do
+            local lk = k:lower()
+            if lk:find("nem") or lk:find("strong") or lk:find("enemy") or lk:find("group") or lk:find("kill") then
+                table.insert(lines, "  C_DelvesUI." .. k)
+            end
+        end
+    end
+
+    -- Deep diagnostic: check quest log for nemesis-related entries
+    table.insert(lines, "--- Quest log nemesis search ---")
+    if C_QuestLog then
+        local numEntries = C_QuestLog.GetNumQuestLogEntries()
+        table.insert(lines, "Quest entries: " .. tostring(numEntries))
+        for i = 1, numEntries do
+            local info = C_QuestLog.GetInfo(i)
+            if info and info.title then
+                local t = info.title:lower()
+                if t:find("nem") or t:find("strong") or t:find("enemy") then
+                    table.insert(lines, "  [" .. i .. "] " .. info.title .. " id=" .. tostring(info.questID))
+                end
+            end
+        end
+    else
+        table.insert(lines, "C_QuestLog not available")
+    end
+
     local text = table.concat(lines, "\n")
     popup._editBox:SetText(text)
     popup:Show()
