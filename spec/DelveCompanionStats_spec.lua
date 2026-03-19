@@ -114,6 +114,37 @@ describe("DelveCompanionStats", function()
             assert.equals(3,                   DelveCompanionStatsDB.companionLevel)
         end)
 
+        it("calculates XP as standing minus reactionThreshold over range", function()
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
+            C_GossipInfo.GetFriendshipReputation = function()
+                return {
+                    standing          = 491930,
+                    reactionThreshold = 460435,
+                    nextThreshold     = 499810,
+                    friendshipRank    = 24,
+                }
+            end
+
+            ns:UpdateCompanionData()
+
+            -- currentXP = 491930 - 460435 = 31,495
+            -- maxXP     = 499810 - 460435 = 39,375
+            assert.equals("31,495 / 39,375 XP", ns.xpLabel._text)
+        end)
+
+        it("shows empty xpLabel when standing is missing from friendData", function()
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID = function() return { name = "Valeera Sanguinar" } end
+            C_GossipInfo.GetFriendshipReputation = function()
+                return { friendshipRank = 3 }   -- no standing/thresholds
+            end
+
+            ns:UpdateCompanionData()
+
+            assert.equals("", ns.xpLabel._text)
+        end)
+
         it("handles nil event without error", function()
             assert.has_no_error(function()
                 ns:UpdateCompanionData(nil)

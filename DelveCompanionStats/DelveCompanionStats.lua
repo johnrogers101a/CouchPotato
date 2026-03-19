@@ -56,8 +56,19 @@ SlashCmdList["DCS"] = function(msg)
             dcsprint("Frame shown (toggle)")
             ns:UpdateCompanionData("MANUAL")
         end
+    elseif cmd == "reset" then
+        DelveCompanionStatsDB.position = nil
+        if ns.frame then
+            ns.frame:ClearAllPoints()
+            if ChatFrame1 then
+                ns.frame:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 10)
+            else
+                ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 130)
+            end
+        end
+        dcsprint("Frame position reset to default")
     else
-        dcsprint("Usage: /dcs [debug|show|hide|toggle]")
+        dcsprint("Usage: /dcs [debug|show|hide|toggle|reset]")
     end
 end
 
@@ -215,9 +226,36 @@ function ns:PrintDebugInfo()
     lines[#lines+1] = "IsShown: " .. tostring(ns.frame:IsShown())
     local fw, fh = ns.frame:GetSize()
     lines[#lines+1] = "Size: " .. tostring(fw) .. "x" .. tostring(fh)
-    local point, _, rpoint, ox, oy = ns.frame:GetPoint()
+    local point, relFrame, rpoint, ox, oy = ns.frame:GetPoint()
     lines[#lines+1] = "Anchor: " .. tostring(point) .. " -> " .. tostring(rpoint) .. " (" .. tostring(ox) .. ", " .. tostring(oy) .. ")"
     lines[#lines+1] = "Strata: " .. tostring(ns.frame:GetFrameStrata()) .. "  Level: " .. tostring(ns.frame:GetFrameLevel())
+
+    -- FontString debug
+    lines[#lines+1] = "--- FontStrings ---"
+    if ns.nameLabel then
+        local r, g, b, a = ns.nameLabel:GetTextColor()
+        local fontPath, fontSize, fontFlags = ns.nameLabel:GetFont()
+        lines[#lines+1] = "nameLabel:IsShown() = " .. tostring(ns.nameLabel:IsShown())
+        lines[#lines+1] = "nameLabel:GetTextColor() = " .. tostring(r) .. "," .. tostring(g) .. "," .. tostring(b) .. "," .. tostring(a)
+        lines[#lines+1] = "nameLabel:GetFont() = " .. tostring(fontPath) .. ", " .. tostring(fontSize) .. ", " .. tostring(fontFlags)
+    else
+        lines[#lines+1] = "nameLabel = nil"
+    end
+    if ns.levelLabel then
+        lines[#lines+1] = "levelLabel:IsShown() = " .. tostring(ns.levelLabel:IsShown())
+    else
+        lines[#lines+1] = "levelLabel = nil"
+    end
+    if ns.xpLabel then
+        lines[#lines+1] = "xpLabel:IsShown() = " .. tostring(ns.xpLabel:IsShown())
+    else
+        lines[#lines+1] = "xpLabel = nil"
+    end
+
+    -- Frame anchor detail
+    lines[#lines+1] = "--- Frame Anchor Detail ---"
+    local relFrameName = relFrame and relFrame:GetName() or "nil"
+    lines[#lines+1] = "Anchor relative frame: " .. tostring(relFrameName)
 
     -- Full GetFriendshipReputation dump
     if ns._lastFactionID then
@@ -512,12 +550,15 @@ function ns:UpdateCompanionData(event)
         end
     end
 
-    -- XP display
+    -- XP display (currentXP = standing - reactionThreshold, maxXP = nextThreshold - reactionThreshold)
     if ns.xpLabel then
         local xpText = ""
-        if friendData and friendData.reactionThreshold and friendData.nextThreshold
-            and friendData.nextThreshold > 0 then
-            xpText = FormatNumber(friendData.reactionThreshold) .. " / " .. FormatNumber(friendData.nextThreshold) .. " XP"
+        if friendData and friendData.standing and friendData.reactionThreshold
+            and friendData.nextThreshold
+            and friendData.nextThreshold > friendData.reactionThreshold then
+            local currentXP = friendData.standing - friendData.reactionThreshold
+            local maxXP     = friendData.nextThreshold - friendData.reactionThreshold
+            xpText = FormatNumber(currentXP) .. " / " .. FormatNumber(maxXP) .. " XP"
         end
         ns.xpLabel:SetText(xpText)
     end
