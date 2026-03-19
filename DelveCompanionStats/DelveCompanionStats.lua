@@ -172,140 +172,140 @@ function ns:PrintDebugInfo()
     -- Helper: dump a FontString label's debug properties into the lines table
     local function dumpLabel(label, labelName, linesTable)
         if not label then
-            tinsert(linesTable, labelName .. " => nil (label not created)")
+            table.insert(linesTable, labelName .. " => nil (label not created)")
             return
         end
         local okText, txt = pcall(function() return label:GetText() end)
-        tinsert(linesTable, ("%s:GetText() => %q"):format(labelName, okText and tostring(txt) or "<API error>"))
+        table.insert(linesTable, ("%s:GetText() => %q"):format(labelName, okText and tostring(txt) or "<API error>"))
 
         local okShown, shown = pcall(function() return label:IsShown() end)
-        tinsert(linesTable, ("%s:IsShown() => %s"):format(labelName, okShown and tostring(shown) or "<API error>"))
+        table.insert(linesTable, ("%s:IsShown() => %s"):format(labelName, okShown and tostring(shown) or "<API error>"))
 
         pcall(function()
             local font, size, flags = label:GetFont()
-            tinsert(linesTable, ('%s:GetFont() => font=%q, size=%s, flags=%q'):format(
+            table.insert(linesTable, ('%s:GetFont() => font=%q, size=%s, flags=%q'):format(
                 labelName, tostring(font), tostring(size), tostring(flags)))
         end)
 
         pcall(function()
             local r, g, b, a = label:GetTextColor()
-            tinsert(linesTable, ("%s:GetTextColor() => r=%s, g=%s, b=%s, a=%s"):format(
+            table.insert(linesTable, ("%s:GetTextColor() => r=%s, g=%s, b=%s, a=%s"):format(
                 labelName, tostring(r), tostring(g), tostring(b), tostring(a)))
         end)
 
         pcall(function()
             local pt, rel, relPt, x, y = label:GetPoint(1)
             local relName = rel and (rel.GetName and rel:GetName() or tostring(rel)) or "nil"
-            tinsert(linesTable, ('%s:GetPoint(1) => point=%q, relativeTo=%s, relativePoint=%q, x=%s, y=%s'):format(
+            table.insert(linesTable, ('%s:GetPoint(1) => point=%q, relativeTo=%s, relativePoint=%q, x=%s, y=%s'):format(
                 labelName, tostring(pt), relName, tostring(relPt), tostring(x), tostring(y)))
         end)
 
         local okW, w = pcall(function() return label:GetWidth() end)
-        tinsert(linesTable, ("%s:GetWidth() => %s"):format(labelName, okW and tostring(w) or "<API error>"))
+        table.insert(linesTable, ("%s:GetWidth() => %s"):format(labelName, okW and tostring(w) or "<API error>"))
     end
 
     -- =========================================================================
-    tinsert(lines, "=== INSTANCE STATE ===")
+    table.insert(lines, "=== INSTANCE STATE ===")
     -- =========================================================================
     local inInstance, instanceType
     local inInstOk, inInstErr = pcall(function()
         inInstance, instanceType = IsInInstance()
     end)
     if not inInstOk then
-        tinsert(lines, "IsInInstance() => <API error: " .. tostring(inInstErr) .. ">")
+        table.insert(lines, "IsInInstance() => <API error: " .. tostring(inInstErr) .. ">")
     else
-        tinsert(lines, ("IsInInstance() => inInstance=%s, instanceType=%q"):format(
+        table.insert(lines, ("IsInInstance() => inInstance=%s, instanceType=%q"):format(
             tostring(inInstance), tostring(instanceType)))
         if instanceType == "scenario" then
-            tinsert(lines, "  -> instanceType == \"scenario\"? YES => IsInDelve will return TRUE")
+            table.insert(lines, "  -> instanceType == \"scenario\"? YES => IsInDelve will return TRUE")
         else
-            tinsert(lines, "  -> instanceType == \"scenario\"? NO => checking HasActiveDelve() as fallback...")
+            table.insert(lines, "  -> instanceType == \"scenario\"? NO => checking HasActiveDelve() as fallback...")
             local hadOk, hadVal = pcall(function() return C_DelvesUI.HasActiveDelve() end)
             if hadOk then
-                tinsert(lines, ("  C_DelvesUI.HasActiveDelve() => %s"):format(tostring(hadVal)))
-                tinsert(lines, ("  -> IsInDelve will return %s"):format(tostring(hadVal == true)))
+                table.insert(lines, ("  C_DelvesUI.HasActiveDelve() => %s"):format(tostring(hadVal)))
+                table.insert(lines, ("  -> IsInDelve will return %s"):format(tostring(hadVal == true)))
             else
-                tinsert(lines, "  C_DelvesUI.HasActiveDelve() => <API error: " .. tostring(hadVal) .. ">")
+                table.insert(lines, "  C_DelvesUI.HasActiveDelve() => <API error: " .. tostring(hadVal) .. ">")
             end
         end
     end
 
     -- =========================================================================
-    tinsert(lines, "")
-    tinsert(lines, "=== FRAME VISIBILITY DECISION ===")
+    table.insert(lines, "")
+    table.insert(lines, "=== FRAME VISIBILITY DECISION ===")
     -- =========================================================================
     local inDelveResult = IsInDelve()
-    tinsert(lines, ("IsInDelve() logic result => %s"):format(tostring(inDelveResult)))
-    tinsert(lines, ("Expected frame visibility => %q"):format(
+    table.insert(lines, ("IsInDelve() logic result => %s"):format(tostring(inDelveResult)))
+    table.insert(lines, ("Expected frame visibility => %q"):format(
         inDelveResult and "Should be shown" or "Should be hidden"))
     if ns.frame then
         local okS, isShown   = pcall(function() return ns.frame:IsShown() end)
         local okV, isVisible = pcall(function() return ns.frame:IsVisible() end)
-        tinsert(lines, ("frame:IsShown() => %s"):format(okS and tostring(isShown) or "<API error>"))
-        tinsert(lines, ("frame:IsVisible() => %s"):format(okV and tostring(isVisible) or "<API error>"))
+        table.insert(lines, ("frame:IsShown() => %s"):format(okS and tostring(isShown) or "<API error>"))
+        table.insert(lines, ("frame:IsVisible() => %s"):format(okV and tostring(isVisible) or "<API error>"))
     else
-        tinsert(lines, "frame => nil (frame was not created)")
+        table.insert(lines, "frame => nil (frame was not created)")
     end
 
     -- =========================================================================
-    tinsert(lines, "")
-    tinsert(lines, "=== FRAME PROPERTIES ===")
+    table.insert(lines, "")
+    table.insert(lines, "=== FRAME PROPERTIES ===")
     -- =========================================================================
     if ns.frame then
         local w2, h2
         local okSize = pcall(function() w2, h2 = ns.frame:GetSize() end)
         if okSize then
-            tinsert(lines, ("frame:GetSize() => width=%s, height=%s"):format(tostring(w2), tostring(h2)))
+            table.insert(lines, ("frame:GetSize() => width=%s, height=%s"):format(tostring(w2), tostring(h2)))
         else
-            tinsert(lines, "frame:GetSize() => <API error>")
+            table.insert(lines, "frame:GetSize() => <API error>")
         end
 
         local okAlpha, alpha = pcall(function() return ns.frame:GetAlpha() end)
-        tinsert(lines, ("frame:GetAlpha() => %s"):format(okAlpha and tostring(alpha) or "<API error>"))
+        table.insert(lines, ("frame:GetAlpha() => %s"):format(okAlpha and tostring(alpha) or "<API error>"))
 
         local okStrata, strata = pcall(function() return ns.frame:GetFrameStrata() end)
-        tinsert(lines, ("frame:GetFrameStrata() => %q"):format(okStrata and tostring(strata) or "<API error>"))
+        table.insert(lines, ("frame:GetFrameStrata() => %q"):format(okStrata and tostring(strata) or "<API error>"))
 
         local okLevel, level = pcall(function() return ns.frame:GetFrameLevel() end)
-        tinsert(lines, ("frame:GetFrameLevel() => %s"):format(okLevel and tostring(level) or "<API error>"))
+        table.insert(lines, ("frame:GetFrameLevel() => %s"):format(okLevel and tostring(level) or "<API error>"))
 
         local parentName = "<error>"
         pcall(function()
             local p = ns.frame:GetParent()
             parentName = p and (p.GetName and p:GetName() or tostring(p)) or "nil"
         end)
-        tinsert(lines, ("frame:GetParent() => %s"):format(parentName))
+        table.insert(lines, ("frame:GetParent() => %s"):format(parentName))
 
         pcall(function()
             local pt, rel, relPt, x, y = ns.frame:GetPoint(1)
             local relName = rel and (rel.GetName and rel:GetName() or tostring(rel)) or "nil"
-            tinsert(lines, ('frame:GetPoint(1) => point=%q, relativeTo=%s, relativePoint=%q, x=%s, y=%s'):format(
+            table.insert(lines, ('frame:GetPoint(1) => point=%q, relativeTo=%s, relativePoint=%q, x=%s, y=%s'):format(
                 tostring(pt), relName, tostring(relPt), tostring(x), tostring(y)))
         end)
     else
-        tinsert(lines, "frame => nil (skipping frame properties)")
+        table.insert(lines, "frame => nil (skipping frame properties)")
     end
 
     -- =========================================================================
-    tinsert(lines, "")
-    tinsert(lines, "=== COMPANION STATE ===")
+    table.insert(lines, "")
+    table.insert(lines, "=== COMPANION STATE ===")
     -- =========================================================================
     local factionID
     local okFaction = pcall(function() factionID = C_DelvesUI.GetFactionForCompanion() end)
     if not okFaction then
-        tinsert(lines, "C_DelvesUI.GetFactionForCompanion() => <API error>")
+        table.insert(lines, "C_DelvesUI.GetFactionForCompanion() => <API error>")
     elseif not factionID or factionID == 0 then
-        tinsert(lines, "C_DelvesUI.GetFactionForCompanion() => nil")
-        tinsert(lines, "  -> No active companion")
+        table.insert(lines, "C_DelvesUI.GetFactionForCompanion() => nil")
+        table.insert(lines, "  -> No active companion")
     else
-        tinsert(lines, ("C_DelvesUI.GetFactionForCompanion() => factionID=%d"):format(factionID))
+        table.insert(lines, ("C_DelvesUI.GetFactionForCompanion() => factionID=%d"):format(factionID))
 
         local compName = "nil"
         pcall(function()
             local fd = C_Reputation.GetFactionDataByID(factionID)
             compName = fd and (fd.name or "nil") or "nil"
         end)
-        tinsert(lines, ("C_Reputation.GetFactionDataByID(%d) => name=%q"):format(factionID, compName))
+        table.insert(lines, ("C_Reputation.GetFactionDataByID(%d) => name=%q"):format(factionID, compName))
 
         local rank, standing, nextThreshold = "nil", "nil", "nil"
         pcall(function()
@@ -314,47 +314,47 @@ function ns:PrintDebugInfo()
                 rank          = tostring(fr.friendshipRank  or "nil")
                 standing      = tostring(fr.standing        or "nil")
                 nextThreshold = tostring(fr.nextThreshold   or fr.reactionThreshold or "nil")
-                tinsert(lines, ("C_GossipInfo.GetFriendshipReputation(%d) => {friendshipRank=%s, standing=%s, nextThreshold=%s, ...}"):format(
+                table.insert(lines, ("C_GossipInfo.GetFriendshipReputation(%d) => {friendshipRank=%s, standing=%s, nextThreshold=%s, ...}"):format(
                     factionID, rank, standing, nextThreshold))
             else
-                tinsert(lines, ("C_GossipInfo.GetFriendshipReputation(%d) => nil"):format(factionID))
+                table.insert(lines, ("C_GossipInfo.GetFriendshipReputation(%d) => nil"):format(factionID))
             end
         end)
-        tinsert(lines, ("  -> Companion: %s (Level %s)"):format(compName, rank))
-        tinsert(lines, ("  -> XP progress: %s / %s"):format(standing, nextThreshold))
+        table.insert(lines, ("  -> Companion: %s (Level %s)"):format(compName, rank))
+        table.insert(lines, ("  -> XP progress: %s / %s"):format(standing, nextThreshold))
     end
 
     -- =========================================================================
-    tinsert(lines, "")
-    tinsert(lines, "=== FRAME CONTENT ===")
+    table.insert(lines, "")
+    table.insert(lines, "=== FRAME CONTENT ===")
     -- =========================================================================
-    tinsert(lines, "--- nameLabel ---")
+    table.insert(lines, "--- nameLabel ---")
     dumpLabel(ns.nameLabel, "nameLabel", lines)
-    tinsert(lines, "--- levelLabel ---")
+    table.insert(lines, "--- levelLabel ---")
     dumpLabel(ns.levelLabel, "levelLabel", lines)
-    tinsert(lines, "--- xpLabel ---")
+    table.insert(lines, "--- xpLabel ---")
     dumpLabel(ns.xpLabel, "xpLabel", lines)
 
     -- =========================================================================
-    tinsert(lines, "")
-    tinsert(lines, "=== LAST KNOWN STATE ===")
+    table.insert(lines, "")
+    table.insert(lines, "=== LAST KNOWN STATE ===")
     -- =========================================================================
-    tinsert(lines, ("ns._lastFactionID => %s"):format(tostring(ns._lastFactionID)))
-    tinsert(lines, ("ns._lastName => %s"):format(tostring(ns._lastName)))
-    tinsert(lines, ("ns._lastLevel => %s"):format(tostring(ns._lastLevel)))
+    table.insert(lines, ("factionID (last known) => %s"):format(tostring(ns._lastFactionID)))
+    table.insert(lines, ("name (last known) => %s"):format(tostring(ns._lastName)))
+    table.insert(lines, ("level (last known) => %s"):format(tostring(ns._lastLevel)))
     local db = DelveCompanionStatsDB
     if db then
-        tinsert(lines, ("DelveCompanionStatsDB.companionName => %s"):format(tostring(db.companionName)))
-        tinsert(lines, ("DelveCompanionStatsDB.companionLevel => %s"):format(tostring(db.companionLevel)))
+        table.insert(lines, ("DelveCompanionStatsDB.companionName => %s"):format(tostring(db.companionName)))
+        table.insert(lines, ("DelveCompanionStatsDB.companionLevel => %s"):format(tostring(db.companionLevel)))
         if db.position then
             local pos = db.position
-            tinsert(lines, ("DelveCompanionStatsDB.position => {point=%q, relativePoint=%q, x=%s, y=%s}"):format(
+            table.insert(lines, ("DelveCompanionStatsDB.position => {point=%q, relativePoint=%q, x=%s, y=%s}"):format(
                 tostring(pos.point), tostring(pos.relativePoint), tostring(pos.x), tostring(pos.y)))
         else
-            tinsert(lines, "DelveCompanionStatsDB.position => nil")
+            table.insert(lines, "DelveCompanionStatsDB.position => nil")
         end
     else
-        tinsert(lines, "DelveCompanionStatsDB => nil")
+        table.insert(lines, "DelveCompanionStatsDB => nil")
     end
 
     local text = table.concat(lines, "\n")
@@ -423,8 +423,7 @@ function ns:OnLoad()
     end)
 
     if not frameOk or not frameResult then
-        -- Frame creation failed — log and abort. Addon will be silently disabled.
-        print("|cffff4444DelveCompanionStats:|r Could not create display frame. Addon disabled.")
+        -- Frame creation failed — abort silently. Addon will be disabled.
         ns.frame = nil
         return
     end
@@ -506,8 +505,7 @@ function ns:OnLoad()
             ns.frame:SetPoint(p.point, UIParent, p.relativePoint, p.x, p.y)
         end)
         if not posOk then
-            -- Corrupt position data — log and fall back to default anchor
-            print("|cffffff00DelveCompanionStats:|r Could not restore position. Using default.")
+            -- Corrupt position data — silently fall back to default anchor
         end
     end
 

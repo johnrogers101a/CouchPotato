@@ -44,6 +44,15 @@ _G.strfind   = string.find
 _G.strsub    = string.sub
 _G.strlen    = string.len
 
+-- WoW table utility globals (aliases for standard Lua table functions)
+_G.tinsert   = table.insert
+_G.tremove   = table.remove
+_G.tContains = function(t, value)
+    for _, v in ipairs(t) do if v == value then return true end end
+    return false
+end
+_G.wipe      = function(t) for k in pairs(t) do t[k] = nil end return t end
+
 _G.DEFAULT_CHAT_FRAME = {
     AddMessage = function(self, msg, r, g, b)
         print(msg)
