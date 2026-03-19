@@ -783,26 +783,23 @@ _G.UnitAura = function(unit, index, filter)
     return nil  -- legacy fallback; not used in primary code path
 end
 
--- C_Scenario stub (used by DelveCompanionStats for nemesis progress)
+-- C_ScenarioInfo stub (TWW API — used by DelveCompanionStats for nemesis progress)
 -- _criteria is a list of {name, quantity, totalQuantity}
-_G.C_Scenario = {
+_G.C_ScenarioInfo = {
     _criteria = {},
 
+    GetInfo = function()
+        return nil, nil, false  -- name, description, isInScenario
+    end,
+
     GetNumCriteria = function()
-        return #(_G.C_Scenario._criteria)
+        return #(_G.C_ScenarioInfo._criteria)
     end,
 
     GetCriteriaInfo = function(i)
-        local c = _G.C_Scenario._criteria[i]
+        local c = _G.C_ScenarioInfo._criteria[i]
         if not c then return nil end
         return c
-    end,
-}
-
--- C_ScenarioInfo stub
-_G.C_ScenarioInfo = {
-    GetInfo = function()
-        return nil, nil, false  -- name, description, isInScenario
     end,
 }
 
@@ -818,7 +815,7 @@ end
 
 -- Test helper: set nemesis progress (replaces entire criteria list)
 _G._SetMockNemesis = function(current, total)
-    _G.C_Scenario._criteria = {
+    _G.C_ScenarioInfo._criteria = {
         { name = "Enemy group kills", quantity = current, totalQuantity = total }
     }
 end
