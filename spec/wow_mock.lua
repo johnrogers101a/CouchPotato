@@ -144,6 +144,7 @@ local function createMockFrame(frameType, name, parent, template)
     function frame:GetName() return self._name end
     function frame:SetBackdrop(backdrop) self._backdrop = backdrop end
     function frame:SetBackdropColor(r,g,b,a) self._backdropColor = {r,g,b,a} end
+    function frame:SetBackdropBorderColor(r,g,b,a) self._backdropBorderColor = {r,g,b,a} end
     function frame:SetMovable(v) self._movable = v end
     function frame:EnableMouse(v) self._mouseEnabled = v end
     function frame:RegisterForDrag(...) end
