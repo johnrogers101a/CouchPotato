@@ -505,14 +505,60 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
 end)
 
 -------------------------------------------------------------------------------
+-- GetTrackerAnchor: Returns the first visible Blizzard objective tracker frame
+-- (ScenarioObjectiveTracker preferred, ObjectiveTrackerFrame as fallback).
+-- Returns nil when neither is available/visible.
+-------------------------------------------------------------------------------
+local function GetTrackerAnchor()
+    if ScenarioObjectiveTracker
+        and ScenarioObjectiveTracker.IsShown
+        and ScenarioObjectiveTracker:IsShown() then
+        return ScenarioObjectiveTracker
+    end
+    if ObjectiveTrackerFrame
+        and ObjectiveTrackerFrame.IsShown
+        and ObjectiveTrackerFrame:IsShown() then
+        return ObjectiveTrackerFrame
+    end
+    return nil
+end
+
+-------------------------------------------------------------------------------
+-- AnchorFrame: Attaches ns.frame directly below the Blizzard objective tracker
+-- when one is visible.  Falls back to the last saved position (draggable) when
+-- no tracker is found.  Parent is always UIParent — we only use the tracker as
+-- a SetPoint reference, never as a parent, to avoid inheriting its child
+-- textures (scroll arrows, ornaments, etc.).
+-------------------------------------------------------------------------------
+local function AnchorFrame()
+    if not ns.frame then return end
+    local anchor = GetTrackerAnchor()
+    if anchor then
+        ns.frame:ClearAllPoints()
+        ns.frame:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
+        ns.frame:SetWidth(anchor:GetWidth())
+        ns.isDraggable = false
+    else
+        -- Fall back to saved position; allow dragging when unanchored
+        local pos = DelveCompanionStatsDB and DelveCompanionStatsDB.position
+        if pos then
+            ns.frame:ClearAllPoints()
+            ns.frame:SetPoint(pos.point, UIParent, pos.relativePoint, pos.x, pos.y)
+        end
+        ns.isDraggable = true
+    end
+end
+
+-------------------------------------------------------------------------------
 -- UpdateFrameVisibility: Show or hide the frame based on active delve state.
--- Calls UpdateCompanionData when the frame transitions from hidden to shown.
+-- Calls AnchorFrame and UpdateCompanionData when the frame becomes visible.
 -------------------------------------------------------------------------------
 function ns:UpdateFrameVisibility()
     if not ns.frame then return end
     local wasShown = ns.frame:IsShown()
     if IsInDelve() then
         ns.frame:Show()
+        AnchorFrame()
     else
         ns.frame:Hide()
     end
@@ -565,121 +611,139 @@ function ns:OnLoad()
 
     ns.frame = frameResult
 
-    -- Apply Blizzard Dialog-box backdrop (pcall: guards against missing BackdropTemplate)
-    pcall(function()
-        ns.frame:SetBackdrop({
-            bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
-            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-            tile = true, tileSize = 32, edgeSize = 16,
-            insets = { left = 4, right = 4, top = 4, bottom = 4 },
-        })
-        ns.frame:SetBackdropColor(0, 0, 0, 0.80)
-        ns.frame:SetBackdropBorderColor(1, 1, 1, 0.5)
-    end)
+    -- Plain dark background matching the objective tracker content area.
+    -- Using a colored texture avoids the generic dialog-box look and requires
+    -- no BackdropTemplate mixin — the frame creation fallback above is sufficient.
+    local bg = ns.frame:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.05, 0.05, 0.05, 0.85)
 
     -- Set frame strata and level to ensure visibility above other UI
     ns.frame:SetFrameStrata("DIALOG")
     ns.frame:SetFrameLevel(100)
 
-    -- 3. Set size and default anchor (above ChatFrame1 when available)
-    ns.frame:SetSize(240, 160)
+    -- 3. Determine frame width — match ScenarioObjectiveTracker when available,
+    -- otherwise fall back to 220 px (a reasonable tracker-column width).
+    local frameWidth = 220
+    pcall(function()
+        if ScenarioObjectiveTracker and ScenarioObjectiveTracker.GetWidth then
+            local w = ScenarioObjectiveTracker:GetWidth()
+            if w and w > 0 then frameWidth = w end
+        end
+    end)
+    -- Inner content width: 8 px padding each side
+    local contentWidth = frameWidth - 16
+
+    -- Set size and default anchor (above ChatFrame1 when available)
+    ns.frame:SetSize(frameWidth, 160)
     if ChatFrame1 then
         ns.frame:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 10)
     else
         ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 130)
     end
 
-    -- 4b. Create section header label ("Delve Companion")
-    ns.headerLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    ns.headerLabel:SetPoint("TOPLEFT", ns.frame, "TOPLEFT", 12, -8)
-    ns.headerLabel:SetWidth(216)
+    -- 4b. Section header label — Blizzard gold, matching tracker section headers
+    -- ("Delves", "All Objectives" use GameFontNormal with the gold accent colour)
+    ns.headerLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ns.headerLabel:SetPoint("TOPLEFT", ns.frame, "TOPLEFT", 8, -8)
+    ns.headerLabel:SetWidth(contentWidth)
     ns.headerLabel:SetJustifyH("LEFT")
-    local headerFontOk = pcall(function() ns.headerLabel:SetFontObject("GameFontHighlight") end)
+    local headerFontOk = pcall(function() ns.headerLabel:SetFontObject("GameFontNormal") end)
     if not headerFontOk or not ns.headerLabel:GetFont() then
-        ns.headerLabel:SetFont(STANDARD_TEXT_FONT, 12, "OUTLINE")
+        ns.headerLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
     end
-    ns.headerLabel:SetTextColor(1.0, 0.85, 0.0, 1)
-    ns.headerLabel:SetShadowOffset(2, -2)
+    ns.headerLabel:SetTextColor(1, 0.82, 0, 1)   -- Blizzard gold
+    ns.headerLabel:SetShadowOffset(1, -1)
     ns.headerLabel:SetShadowColor(0, 0, 0, 1)
     ns.headerLabel:SetText("Delve Companion")
 
-    -- 5. Create name label (guarded: frame confirmed non-nil above)
-    ns.nameLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ns.nameLabel:SetPoint("TOPLEFT", ns.headerLabel, "BOTTOMLEFT", 0, -4)
-    ns.nameLabel:SetWidth(216)
+    -- Thin gold separator line under section header (matches Blizzard tracker style)
+    local divider = ns.frame:CreateTexture(nil, "ARTWORK")
+    divider:SetHeight(1)
+    divider:SetPoint("TOPLEFT",  ns.headerLabel, "BOTTOMLEFT",  0, -2)
+    divider:SetPoint("TOPRIGHT", ns.headerLabel, "BOTTOMRIGHT", 0, -2)
+    divider:SetColorTexture(1, 0.82, 0, 0.8)
+
+    -- 5. Name label — small white text, matching tracker objective style
+    ns.nameLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ns.nameLabel:SetPoint("TOPLEFT", divider, "BOTTOMLEFT", 0, -4)
+    ns.nameLabel:SetWidth(contentWidth)
     ns.nameLabel:SetJustifyH("LEFT")
     ns.nameLabel:SetTextColor(1, 1, 1, 1)
-    local nameFontOk = pcall(function() ns.nameLabel:SetFontObject("GameFontNormal") end)
+    local nameFontOk = pcall(function() ns.nameLabel:SetFontObject("GameFontHighlightSmall") end)
     if not nameFontOk or not ns.nameLabel:GetFont() then
-        ns.nameLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+        ns.nameLabel:SetFont(STANDARD_TEXT_FONT, 10, "")
     end
     ns.nameLabel:SetText("No companion data")
-    ns.nameLabel:SetShadowOffset(2, -2)
+    ns.nameLabel:SetShadowOffset(1, -1)
     ns.nameLabel:SetShadowColor(0, 0, 0, 1)
 
-    -- 6. Create level label
-    ns.levelLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    -- 6. Level label
+    ns.levelLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ns.levelLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -4)
-    ns.levelLabel:SetWidth(216)
+    ns.levelLabel:SetWidth(contentWidth)
     ns.levelLabel:SetJustifyH("LEFT")
     ns.levelLabel:SetTextColor(1, 1, 1, 1)
-    local levelFontOk = pcall(function() ns.levelLabel:SetFontObject("GameFontNormal") end)
+    local levelFontOk = pcall(function() ns.levelLabel:SetFontObject("GameFontHighlightSmall") end)
     if not levelFontOk or not ns.levelLabel:GetFont() then
-        ns.levelLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+        ns.levelLabel:SetFont(STANDARD_TEXT_FONT, 10, "")
     end
     ns.levelLabel:SetText("")
-    ns.levelLabel:SetShadowOffset(2, -2)
+    ns.levelLabel:SetShadowOffset(1, -1)
     ns.levelLabel:SetShadowColor(0, 0, 0, 1)
 
-    -- 6b. Create XP label (below levelLabel)
-    ns.xpLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    -- 6b. XP label — slightly larger than body text, matching tracker XP readout
+    ns.xpLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     ns.xpLabel:SetPoint("TOPLEFT", ns.levelLabel, "BOTTOMLEFT", 0, -4)
-    ns.xpLabel:SetWidth(216)
+    ns.xpLabel:SetWidth(contentWidth)
     ns.xpLabel:SetJustifyH("LEFT")
-    local xpFontOk = pcall(function() ns.xpLabel:SetFontObject("GameFontNormal") end)
+    local xpFontOk = pcall(function() ns.xpLabel:SetFontObject("GameFontHighlight") end)
     if not xpFontOk or not ns.xpLabel:GetFont() then
-        ns.xpLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+        ns.xpLabel:SetFont(STANDARD_TEXT_FONT, 12, "")
     end
     ns.xpLabel:SetTextColor(1, 1, 1, 1)
     ns.xpLabel:SetShadowColor(0, 0, 0, 1)
-    ns.xpLabel:SetShadowOffset(2, -2)
+    ns.xpLabel:SetShadowOffset(1, -1)
     ns.xpLabel:SetText("")
 
-    -- 6c. Create boon label (below xpLabel)
-    ns.boonLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    -- 6c. Boon label
+    ns.boonLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ns.boonLabel:SetPoint("TOPLEFT", ns.xpLabel, "BOTTOMLEFT", 0, -4)
-    local boonFontOk = pcall(function() ns.boonLabel:SetFontObject("GameFontNormal") end)
+    local boonFontOk = pcall(function() ns.boonLabel:SetFontObject("GameFontHighlightSmall") end)
     if not boonFontOk or not ns.boonLabel:GetFont() then
-        ns.boonLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+        ns.boonLabel:SetFont(STANDARD_TEXT_FONT, 10, "")
     end
-    ns.boonLabel:SetWidth(216)
+    ns.boonLabel:SetWidth(contentWidth)
     ns.boonLabel:SetJustifyH("LEFT")
     ns.boonLabel:SetTextColor(1, 1, 1, 1)
-    ns.boonLabel:SetShadowOffset(2, -2)
+    ns.boonLabel:SetShadowOffset(1, -1)
     ns.boonLabel:SetShadowColor(0, 0, 0, 1)
     ns.boonLabel:SetText("")
 
-    -- 6d. Create nemesis label (below boonLabel)
-    ns.nemesisLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    -- 6d. Nemesis label
+    ns.nemesisLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -4)
-    local nemesisFontOk = pcall(function() ns.nemesisLabel:SetFontObject("GameFontNormal") end)
+    local nemesisFontOk = pcall(function() ns.nemesisLabel:SetFontObject("GameFontHighlightSmall") end)
     if not nemesisFontOk or not ns.nemesisLabel:GetFont() then
-        ns.nemesisLabel:SetFont(STANDARD_TEXT_FONT, 14, "OUTLINE")
+        ns.nemesisLabel:SetFont(STANDARD_TEXT_FONT, 10, "")
     end
-    ns.nemesisLabel:SetWidth(216)
+    ns.nemesisLabel:SetWidth(contentWidth)
     ns.nemesisLabel:SetJustifyH("LEFT")
     ns.nemesisLabel:SetTextColor(1, 1, 1, 1)
-    ns.nemesisLabel:SetShadowOffset(2, -2)
+    ns.nemesisLabel:SetShadowOffset(1, -1)
     ns.nemesisLabel:SetShadowColor(0, 0, 0, 1)
     ns.nemesisLabel:SetText("")
 
-    -- 7. Make frame movable
+    -- 7. Make frame movable (only active when not anchored to the tracker)
     -- Safe: frame created above in this same function before drag handlers registered
     ns.frame:SetMovable(true)
     ns.frame:EnableMouse(true)
     ns.frame:RegisterForDrag("LeftButton")
-    ns.frame:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    ns.frame:SetScript("OnDragStart", function(self)
+        if ns.isDraggable then self:StartMoving() end
+    end)
     ns.frame:SetScript("OnDragStop", function(self)
+        if not ns.isDraggable then return end
         self:StopMovingOrSizing()
         local point, _, relativePoint, x, y = self:GetPoint()
         DelveCompanionStatsDB.position = {
@@ -739,15 +803,22 @@ function ns:OnLoad()
             -- zone-in) have time to activate before we query the tooltip.
             if event == "PLAYER_ENTERING_WORLD" then
                 ns:UpdateFrameVisibility()
+                AnchorFrame()
                 if ns.frame:IsShown() then
                     ns:UpdateCompanionData(event)
                 end
                 if C_Timer and C_Timer.After then
                     C_Timer.After(2, function()
-                        if IsInDelve() then ns:UpdateCompanionData("TIMER_2S_PEW") end
+                        if IsInDelve() then
+                            AnchorFrame()
+                            ns:UpdateCompanionData("TIMER_2S_PEW")
+                        end
                     end)
                     C_Timer.After(5, function()
-                        if IsInDelve() then ns:UpdateCompanionData("TIMER_5S_PEW") end
+                        if IsInDelve() then
+                            AnchorFrame()
+                            ns:UpdateCompanionData("TIMER_5S_PEW")
+                        end
                     end)
                 end
                 return
