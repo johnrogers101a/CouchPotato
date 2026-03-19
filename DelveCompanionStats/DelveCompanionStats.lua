@@ -421,16 +421,31 @@ function ns:PrintDebugInfo()
     table.insert(lines, "--- nemesisLabel ---")
     dumpLabel(ns.nemesisLabel, "nemesisLabel", lines)
 
-    -- Deep diagnostic: dump all scenario criteria (up to 20)
+    -- Deep diagnostic: dump all C_ScenarioInfo methods and safe-call GetNumCriteria
     if C_ScenarioInfo then
-        local numCriteria = C_ScenarioInfo.GetNumCriteria() or 0
-        table.insert(lines, "GetNumCriteria() = " .. tostring(numCriteria))
-        for i = 1, math.max(numCriteria, 10) do
-            local c = C_ScenarioInfo.GetCriteriaInfo(i)
-            if c then
-                table.insert(lines, "  criteria[" .. i .. "] desc=" .. (c.description or "nil") .. " qty=" .. tostring(c.quantity) .. " total=" .. tostring(c.totalQuantity) .. " done=" .. tostring(c.completed))
-            end
+        table.insert(lines, "C_ScenarioInfo available? yes")
+        -- Dump all available methods
+        table.insert(lines, "--- C_ScenarioInfo methods ---")
+        for k, v in pairs(C_ScenarioInfo) do
+            table.insert(lines, "  ." .. k .. " = " .. type(v))
         end
+        -- Safe call
+        if C_ScenarioInfo.GetNumCriteria then
+            local ok, n = pcall(C_ScenarioInfo.GetNumCriteria)
+            table.insert(lines, "GetNumCriteria() = " .. tostring(ok and n or "ERROR: " .. tostring(n)))
+            if ok and n and n > 0 then
+                for i = 1, n do
+                    local ok2, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
+                    if ok2 and c then
+                        table.insert(lines, "  criteria[" .. i .. "] desc=" .. (c.description or "nil") .. " qty=" .. tostring(c.quantity) .. " total=" .. tostring(c.totalQuantity))
+                    end
+                end
+            end
+        else
+            table.insert(lines, "GetNumCriteria = nil (method not available)")
+        end
+    else
+        table.insert(lines, "C_ScenarioInfo available? no")
     end
 
     -- Deep diagnostic: scan C_DelvesUI for nemesis-related keys
@@ -447,14 +462,18 @@ function ns:PrintDebugInfo()
     -- Deep diagnostic: check quest log for nemesis-related entries
     table.insert(lines, "--- Quest log nemesis search ---")
     if C_QuestLog then
-        local numEntries = C_QuestLog.GetNumQuestLogEntries()
-        table.insert(lines, "Quest entries: " .. tostring(numEntries))
-        for i = 1, numEntries do
-            local info = C_QuestLog.GetInfo(i)
-            if info and info.title then
-                local t = info.title:lower()
-                if t:find("nem") or t:find("strong") or t:find("enemy") then
-                    table.insert(lines, "  [" .. i .. "] " .. info.title .. " id=" .. tostring(info.questID))
+        local okEntries, numEntries = pcall(function() return C_QuestLog.GetNumQuestLogEntries() end)
+        if not okEntries then
+            table.insert(lines, "C_QuestLog.GetNumQuestLogEntries() => <API error: " .. tostring(numEntries) .. ">")
+        else
+            table.insert(lines, "Quest entries: " .. tostring(numEntries))
+            for i = 1, numEntries do
+                local okInfo, info = pcall(function() return C_QuestLog.GetInfo(i) end)
+                if okInfo and info and info.title then
+                    local t = info.title:lower()
+                    if t:find("nem") or t:find("strong") or t:find("enemy") then
+                        table.insert(lines, "  [" .. i .. "] " .. info.title .. " id=" .. tostring(info.questID))
+                    end
                 end
             end
         end
@@ -765,11 +784,10 @@ end
 -- Queries C_ScenarioInfo criteria to find the nemesis strongbox kill objective.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
+    if not C_ScenarioInfo or not C_ScenarioInfo.GetNumCriteria then return "" end
     local numCriteria = 0
     local ok = pcall(function()
-        if C_ScenarioInfo and C_ScenarioInfo.GetNumCriteria then
-            numCriteria = C_ScenarioInfo.GetNumCriteria() or 0
-        end
+        numCriteria = C_ScenarioInfo.GetNumCriteria() or 0
     end)
     if not ok or numCriteria == 0 then return "" end
 
