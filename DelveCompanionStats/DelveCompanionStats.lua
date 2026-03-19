@@ -423,7 +423,7 @@ function ns:OnLoad()
     end)
 
     if not frameOk or not frameResult then
-        -- Frame creation failed — abort silently. Addon will be disabled.
+        print("|cffff4444DelveCompanionStats:|r Could not create display frame. Addon disabled.")
         ns.frame = nil
         return
     end
