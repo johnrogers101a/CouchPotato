@@ -119,13 +119,14 @@ end
 
 -------------------------------------------------------------------------------
 -- IsInDelve: Returns true when the player is inside a delve instance.
--- Uses IsInInstance() returning "party" as the primary signal (reliable across
--- all phases of a delve run), with HasActiveDelve() as a secondary fallback.
+-- Uses IsInInstance() returning "scenario" as the primary signal (reliable
+-- across all phases of a delve run in TWW), with HasActiveDelve() as a
+-- secondary fallback.
 -------------------------------------------------------------------------------
 local function IsInDelve()
     local _, instanceType = IsInInstance()
-    -- Delves are "party" instances in TWW
-    if instanceType == "party" then return true end
+    -- Delves are "scenario" instances in TWW
+    if instanceType == "scenario" then return true end
     -- Also check HasActiveDelve as secondary signal (pcall guards against API errors)
     local ok, hasDelve = pcall(function()
         return C_DelvesUI.HasActiveDelve and C_DelvesUI.HasActiveDelve()
@@ -438,7 +439,13 @@ function ns:UpdateCompanionData(event)
         ns.nameLabel:SetText(name)
     end
     if ns.levelLabel then
-        ns.levelLabel:SetText(level and ("Level " .. tostring(level)) or "")
+        if level then
+            -- Strip any existing "Level " prefix the API may have returned before prepending
+            local levelStr = tostring(level):gsub("^[Ll]evel%s+", "")
+            ns.levelLabel:SetText("Level " .. levelStr)
+        else
+            ns.levelLabel:SetText("")
+        end
     end
 
     -- Persist to SavedVariables
