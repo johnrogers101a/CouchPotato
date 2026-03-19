@@ -47,11 +47,86 @@ SlashCmdList["DCS"] = function(arg)
 end
 
 -------------------------------------------------------------------------------
--- PrintDebugInfo: Dump C_DelvesUI API state and last-known addon values
+-- CreateDebugPopup: Build the scrollable debug info popup (singleton).
+-------------------------------------------------------------------------------
+function ns:CreateDebugPopup()
+    if ns.debugPopup then return ns.debugPopup end
+
+    local ok, popup = pcall(function()
+        return CreateFrame("Frame", "DelveCompanionStatsDebugPopup", UIParent, "BackdropTemplate")
+    end)
+    if not ok or not popup then
+        -- Fallback: plain Frame without BackdropTemplate
+        popup = CreateFrame("Frame", "DelveCompanionStatsDebugPopup", UIParent)
+    end
+
+    popup:SetSize(600, 400)
+    popup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    popup:SetFrameStrata("DIALOG")
+    popup:SetFrameLevel(100)
+
+    -- Dark semi-transparent backdrop (same style as the main display frame)
+    popup:SetBackdrop({
+        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    popup:SetBackdropColor(0, 0, 0, 0.85)
+
+    -- Title
+    local title = popup:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOPLEFT", popup, "TOPLEFT", 8, -8)
+    title:SetText("DCS Debug Info")
+
+    -- ScrollFrame (inner area: inset 8,-28 from topleft, -28,30 from bottomright)
+    local scrollFrame = CreateFrame("ScrollFrame", nil, popup)
+    scrollFrame:SetPoint("TOPLEFT",     popup, "TOPLEFT",     8,  -28)
+    scrollFrame:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -28,  30)
+
+    -- EditBox as scroll child
+    local editBox = CreateFrame("EditBox", nil, scrollFrame)
+    editBox:SetMultiLine(true)
+    editBox:SetAutoFocus(false)
+    editBox:EnableMouse(true)
+    local fontOk = pcall(function() editBox:SetFontObject("GameFontHighlight") end)
+    if not fontOk then
+        editBox:SetFont(STANDARD_TEXT_FONT, 12, "")
+    end
+    editBox:SetSize(scrollFrame:GetWidth(), 2000)
+    scrollFrame:SetScrollChild(editBox)
+
+    -- Store editBox reference for external access and testing
+    popup._editBox = editBox
+
+    -- Close button
+    local closeBtn = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
+    closeBtn:SetSize(80, 22)
+    closeBtn:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -8, 8)
+    closeBtn:SetText("Close")
+    closeBtn:SetScript("OnClick", function() popup:Hide() end)
+
+    -- Dismiss on ESC
+    popup:EnableKeyboard(true)
+    popup:SetScript("OnKeyDown", function(self, key)
+        if key == "ESCAPE" then self:Hide() end
+    end)
+
+    popup:Hide()
+    ns.debugPopup = popup
+    return popup
+end
+
+-------------------------------------------------------------------------------
+-- PrintDebugInfo: Dump C_DelvesUI API state and last-known addon values.
+-- Output goes into a scrollable popup instead of spamming the chat frame.
 -------------------------------------------------------------------------------
 function ns:PrintDebugInfo()
-    dcsprint("=== DCS Debug Info ===")
-    dcsprint("C_DelvesUI exists: " .. tostring(C_DelvesUI ~= nil))
+    local lines = {}
+    local function add(s) lines[#lines + 1] = tostring(s) end
+
+    add("=== DCS Debug Info ===")
+    add("C_DelvesUI exists: " .. tostring(C_DelvesUI ~= nil))
 
     -- Check known function existence
     local knownFns = {
@@ -62,14 +137,14 @@ function ns:PrintDebugInfo()
     }
     for _, fnName in ipairs(knownFns) do
         local exists = C_DelvesUI and C_DelvesUI[fnName] ~= nil
-        dcsprint("  C_DelvesUI." .. fnName .. " exists: " .. tostring(exists))
+        add("  C_DelvesUI." .. fnName .. " exists: " .. tostring(exists))
     end
 
     -- Enumerate all keys on C_DelvesUI
     if C_DelvesUI then
-        dcsprint("C_DelvesUI keys:")
+        add("C_DelvesUI keys:")
         for k, _ in pairs(C_DelvesUI) do
-            dcsprint("  " .. tostring(k))
+            add("  " .. tostring(k))
         end
     end
 
@@ -77,22 +152,29 @@ function ns:PrintDebugInfo()
     for _, fnName in ipairs(knownFns) do
         if C_DelvesUI and C_DelvesUI[fnName] then
             local ok, result = pcall(C_DelvesUI[fnName])
-            dcsprint("  C_DelvesUI." .. fnName .. "() => ok=" .. tostring(ok) .. " result=" .. tostring(result))
+            add("  C_DelvesUI." .. fnName .. "() => ok=" .. tostring(ok) .. " result=" .. tostring(result))
         end
     end
 
     -- GetFactionForCompanion: call with no args (returns active companion's faction ID)
     if C_DelvesUI and C_DelvesUI.GetFactionForCompanion then
         local ok, result = pcall(C_DelvesUI.GetFactionForCompanion)
-        dcsprint("  GetFactionForCompanion() => ok=" .. tostring(ok) .. " result=" .. tostring(result))
+        add("  GetFactionForCompanion() => ok=" .. tostring(ok) .. " result=" .. tostring(result))
     end
 
     -- Current addon state
-    dcsprint("factionID (last known): "   .. tostring(ns._lastFactionID))
-    dcsprint("name (last known): "        .. tostring(ns._lastName))
-    dcsprint("level (last known): "       .. tostring(ns._lastLevel))
-    dcsprint("nameLabel text: "  .. tostring(ns.nameLabel  and ns.nameLabel:GetText()  or "N/A"))
-    dcsprint("levelLabel text: " .. tostring(ns.levelLabel and ns.levelLabel:GetText() or "N/A"))
+    add("factionID (last known): "   .. tostring(ns._lastFactionID))
+    add("name (last known): "        .. tostring(ns._lastName))
+    add("level (last known): "       .. tostring(ns._lastLevel))
+    add("nameLabel text: "  .. tostring(ns.nameLabel  and ns.nameLabel:GetText()  or "N/A"))
+    add("levelLabel text: " .. tostring(ns.levelLabel and ns.levelLabel:GetText() or "N/A"))
+
+    local text = table.concat(lines, "\n")
+
+    -- Show in scrollable popup (create once, reuse on subsequent calls)
+    if not ns.debugPopup then ns:CreateDebugPopup() end
+    ns.debugPopup._editBox:SetText(text)
+    ns.debugPopup:Show()
 end
 
 -------------------------------------------------------------------------------
