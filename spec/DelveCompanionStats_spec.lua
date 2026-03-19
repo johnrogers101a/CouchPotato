@@ -1172,24 +1172,24 @@ describe("DelveCompanionStats", function()
         describe("spacing and padding", function()
 
             it("nameLabel width is frameWidth - 12", function()
-                -- frameWidth fallback is 235 (ScenarioObjectiveTracker nil in tests); contentWidth = 235 - 12 = 223
-                assert.equals(223, ns.nameLabel._width)
+                -- frameWidth fallback is 213; contentWidth = 213 - 12 = 201
+                assert.equals(201, ns.nameLabel._width)
             end)
 
             it("boonHeaderLabel width is frameWidth - 12", function()
-                assert.equals(223, ns.boonHeaderLabel._width)
+                assert.equals(201, ns.boonHeaderLabel._width)
             end)
 
             it("boonLabel width is frameWidth - 12", function()
-                assert.equals(223, ns.boonLabel._width)
+                assert.equals(201, ns.boonLabel._width)
             end)
 
             it("nemesisLabel width is frameWidth - 12", function()
-                assert.equals(223, ns.nemesisLabel._width)
+                assert.equals(201, ns.nemesisLabel._width)
             end)
 
             it("nemesisDetailLabel width is frameWidth - 12", function()
-                assert.equals(223, ns.nemesisDetailLabel._width)
+                assert.equals(201, ns.nemesisDetailLabel._width)
             end)
 
         end)
@@ -1197,24 +1197,22 @@ describe("DelveCompanionStats", function()
         -- ── Content frame background ──────────────────────────────────────────
         describe("content frame background", function()
 
-            it("contentFrame has a dark brown background texture", function()
-                -- SetColorTexture(0.05, 0.04, 0.01, 0.95) — very dark brown
-                local found = false
-                for _, tex in ipairs(ns.contentFrame._textures or {}) do
-                    local c = tex._color
-                    if c and math.abs(c[1] - 0.05) < 0.001
-                          and math.abs(c[2] - 0.04) < 0.001
-                          and math.abs(c[3] - 0.01) < 0.001
-                          and math.abs(c[4] - 0.95) < 0.001 then
-                        found = true
-                        break
-                    end
-                end
-                assert.is_true(found, "expected dark brown texture (0.05,0.04,0.01,0.95) on contentFrame")
+            it("contentFrame has rounded gold backdrop border", function()
+                assert.is_not_nil(ns.contentFrame._backdrop)
+                assert.are.equal("Interface\\Tooltips\\UI-Tooltip-Border", ns.contentFrame._backdrop.edgeFile)
+                local bc = ns.contentFrame._backdropBorderColor
+                assert.is_not_nil(bc)
+                assert.near(1, bc[1], 0.01)
+                assert.near(0.78, bc[2], 0.01)
+                assert.near(0.1, bc[3], 0.01)
             end)
 
-            it("contentFrame has no backdrop set (nil)", function()
-                assert.is_nil(ns.contentFrame._backdrop)
+            it("contentFrame has dark brown backdrop background", function()
+                local bc = ns.contentFrame._backdropColor
+                assert.is_not_nil(bc)
+                assert.near(0.05, bc[1], 0.01)
+                assert.near(0.04, bc[2], 0.01)
+                assert.near(0.01, bc[3], 0.01)
             end)
 
         end)
