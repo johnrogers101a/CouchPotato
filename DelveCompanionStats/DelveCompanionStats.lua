@@ -366,31 +366,7 @@ function ns:PrintDebugInfo()
     table.insert(lines, "")
     table.insert(lines, "=== BOON STATE ===")
     -- =========================================================================
-    local boonAuraAvail = (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) and "yes" or "no"
-    table.insert(lines, ("C_UnitAuras available? %s"):format(boonAuraAvail))
-    if boonAuraAvail == "yes" then
-        local boonAura = nil
-        pcall(function() boonAura = C_UnitAuras.GetPlayerAuraBySpellID(1280098) end)
-        if boonAura then
-            table.insert(lines, "Aura 1280098 found? yes")
-            table.insert(lines, ("  aura.value1 => %s"):format(tostring(boonAura.value1)))
-        else
-            table.insert(lines, "Aura 1280098 found? no")
-        end
-    end
-    -- Dump all fields of the boon aura struct
-    do
-        local boonAura2 = nil
-        pcall(function() boonAura2 = C_UnitAuras.GetPlayerAuraBySpellID(1280098) end)
-        if boonAura2 then
-            table.insert(lines, "--- Aura 1280098 fields ---")
-            for k, v in pairs(boonAura2) do
-                table.insert(lines, ("  %s = %s"):format(tostring(k), tostring(v)))
-            end
-        end
-    end
-
-    -- Dump tooltip lines for spell 1280098
+    -- Dump tooltip lines for spell 1280098 (source of boon stat values)
     table.insert(lines, "--- Tooltip for 1280098 ---")
     pcall(function()
         GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
@@ -665,34 +641,51 @@ local function FormatNumber(num)
 end
 
 -------------------------------------------------------------------------------
--- DELVE_BOONS: Registry of spell IDs → display names for delve boons.
--- Spell IDs sourced from Wowhead (verified 2025). Parent meta-buff: 1280098 "Boons".
--- Each entry maps a numeric spell ID to a human-readable stat name.
+-- BOON_ABBREV: Maps tooltip stat names (from spell 1280098) to short labels.
+-- Used by GetBoonsDisplayText() to build a compact single-line summary.
 -------------------------------------------------------------------------------
-local DELVE_BOONS = {
-    [1279750] = "Max Health",
-    [1279751] = "Dmg Reduction",
-    [1279752] = "Move Speed",
-    [1279753] = "Primary Stat",
-    [1266965] = "Crit Strike",
-    [1266966] = "Haste",
-    [1266967] = "Mastery",
-    [1266969] = "Versatility",
+local BOON_ABBREV = {
+    ["Maximum Health"]         = "HP",
+    ["Movement Speed"]         = "Spd",
+    ["Strength"]               = "Str",
+    ["Haste"]                  = "Hst",
+    ["Critical Strike"]        = "Crit",
+    ["Mastery"]                = "Mast",
+    ["Versatility"]            = "Vers",
+    ["Reduce incoming damage"] = "DR",
 }
 
 -------------------------------------------------------------------------------
--- GetBoonsDisplayText: Returns "Boons: Active" if the parent boon aura (1280098)
--- is present on the player, or "" if it is not.
--- Note: aura.value1 is nil in practice; presence of the aura is sufficient.
+-- GetBoonsDisplayText: Reads the tooltip for boon spell 1280098 and returns a
+-- compact summary of non-zero stats, e.g. "HP:3% Spd:5% Str:4% Mast:3%".
+-- Returns "" if no boon lines are found (hides the boon label).
 -------------------------------------------------------------------------------
 GetBoonsDisplayText = function()
-    -- Individual boon spell IDs (1279750, etc.) are "Consume on Pick-Up" effects that
-    -- don't persist as player auras. Check only the parent "Boons" aura (1280098).
-    local aura = C_UnitAuras.GetPlayerAuraBySpellID(1280098)
-    if aura then
-        return "Boons: Active"
-    end
-    return ""
+    local parts = {}
+    local ok = pcall(function()
+        GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+        GameTooltip:SetSpellByID(1280098)
+        local numLines = GameTooltip:NumLines()
+        for i = 1, numLines do
+            local lineWidget = _G["GameTooltipTextLeft" .. i]
+            if lineWidget then
+                local text = lineWidget:GetText()
+                if text then
+                    local statName, numStr = text:match("^(.+): (%d+)%%.%s*$")
+                    if statName and numStr then
+                        local num = tonumber(numStr)
+                        if num and num > 0 then
+                            local abbrev = BOON_ABBREV[statName] or statName:sub(1, 4)
+                            table.insert(parts, abbrev .. ":" .. num .. "%")
+                        end
+                    end
+                end
+            end
+        end
+        GameTooltip:Hide()
+    end)
+    if not ok or #parts == 0 then return "" end
+    return table.concat(parts, " ")
 end
 
 -------------------------------------------------------------------------------

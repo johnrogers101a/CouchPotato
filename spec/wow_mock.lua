@@ -59,13 +59,43 @@ _G.DEFAULT_CHAT_FRAME = {
     end
 }
 
+local _tooltipNumLines = 0
+
 _G.GameTooltip = {
-    SetOwner = function() end,
+    SetOwner     = function() end,
     SetSpellByID = function() end,
-    SetItemByID = function() end,
-    Show = function() end,
-    Hide = function() end,
+    SetItemByID  = function() end,
+    Show         = function() end,
+    Hide         = function() end,
+    NumLines     = function() return _tooltipNumLines end,
 }
+
+-- GameTooltipTextLeft1..8: FontString stubs read by GetBoonsDisplayText()
+for i = 1, 8 do
+    _G["GameTooltipTextLeft" .. i] = {
+        _text = "",
+        GetText = function(self)
+            if self._text and self._text ~= "" then return self._text end
+            return nil
+        end,
+    }
+end
+
+-- Test helper: populate mock tooltip lines (used for boon tests)
+_G._SetMockBoonTooltip = function(lines)
+    _tooltipNumLines = #lines
+    for i = 1, 8 do
+        _G["GameTooltipTextLeft" .. i]._text = lines[i] or ""
+    end
+end
+
+-- Test helper: clear mock tooltip (called in before_each / after_each)
+_G._ClearMockBoonTooltip = function()
+    _tooltipNumLines = 0
+    for i = 1, 8 do
+        _G["GameTooltipTextLeft" .. i]._text = ""
+    end
+end
 
 -- CreateFrame - returns a FUNCTIONAL frame mock
 local function createMockFrame(frameType, name, parent, template)
