@@ -172,10 +172,15 @@ local function createMockFrame(frameType, name, parent, template)
         function fs:Hide() self._shown = false end
         function fs:IsShown() return self._shown end
         function fs:GetFont() return "GameFontNormal", 12, "" end
+        function fs:SetShadowOffset(x, y) end
+        function fs:SetShadowColor(r, g, b, a) end
         table.insert(frame._fontstrings, fs)
         return fs
     end
-    
+
+    -- Base frame keyboard support
+    function frame:EnableKeyboard(v) self._keyboardEnabled = v end
+
     -- Cooldown frame support
     if template and template:find("CooldownFrameTemplate") then
         function frame:SetDrawEdge(v) end
@@ -193,7 +198,25 @@ local function createMockFrame(frameType, name, parent, template)
         function frame:SetStatusBarColor(r,g,b,a) end
         function frame:SetStatusBarTexture(t) end
     end
-    
+
+    -- EditBox support
+    if frameType == "EditBox" then
+        frame._text = ""
+        function frame:SetText(t) self._text = t end
+        function frame:GetText() return self._text end
+        function frame:SetMultiLine(v) end
+        function frame:SetAutoFocus(v) end
+        function frame:SetFontObject(f) end
+        function frame:SetFont(font, size, flags) end
+        function frame:EnableMouse(v) self._mouseEnabled = v end
+    end
+
+    -- ScrollFrame support
+    if frameType == "ScrollFrame" then
+        function frame:SetScrollChild(child) self._scrollChild = child end
+        function frame:GetScrollChild() return self._scrollChild end
+    end
+
     return frame
 end
 
