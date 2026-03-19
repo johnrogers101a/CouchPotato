@@ -435,7 +435,7 @@ function ns:OnLoad()
     ns.frame:SetFrameLevel(100)
 
     -- 3. Set size and default anchor (above ChatFrame1 when available)
-    ns.frame:SetSize(200, 120)
+    ns.frame:SetSize(200, 160)
     if ChatFrame1 then
         ns.frame:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 10)
     else
@@ -479,6 +479,26 @@ function ns:OnLoad()
     ns.xpLabel:SetJustifyH("LEFT")
     ns.xpLabel:SetPoint("TOPLEFT", ns.levelLabel, "BOTTOMLEFT", 0, -4)
     ns.xpLabel:SetText("")
+
+    -- 6c. Create boon label (below xpLabel)
+    ns.boonLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ns.boonLabel:SetPoint("TOPLEFT", ns.xpLabel, "BOTTOMLEFT", 0, -4)
+    ns.boonLabel:SetWidth(184)
+    ns.boonLabel:SetJustifyH("LEFT")
+    ns.boonLabel:SetTextColor(1, 1, 1, 1)
+    ns.boonLabel:SetShadowOffset(2, -2)
+    ns.boonLabel:SetShadowColor(0, 0, 0, 1)
+    ns.boonLabel:SetText("")
+
+    -- 6d. Create nemesis label (below boonLabel)
+    ns.nemesisLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -4)
+    ns.nemesisLabel:SetWidth(184)
+    ns.nemesisLabel:SetJustifyH("LEFT")
+    ns.nemesisLabel:SetTextColor(1, 1, 1, 1)
+    ns.nemesisLabel:SetShadowOffset(2, -2)
+    ns.nemesisLabel:SetShadowColor(0, 0, 0, 1)
+    ns.nemesisLabel:SetText("")
 
     -- 7. Make frame movable
     -- Safe: frame created above in this same function before drag handlers registered
@@ -525,6 +545,8 @@ function ns:OnLoad()
         ns.frame:RegisterEvent("UPDATE_INSTANCE_INFO")
         ns.frame:RegisterEvent("GROUP_ROSTER_UPDATE")
         ns.frame:RegisterEvent("UNIT_NAME_UPDATE")
+        -- SCENARIO_CRITERIA_UPDATE fires when nemesis kill count changes
+        pcall(function() ns.frame:RegisterEvent("SCENARIO_CRITERIA_UPDATE") end)
         ns.frame:SetScript("OnEvent", function(self, event, ...)
             ns:UpdateFrameVisibility()
             if ns.frame:IsShown() then
@@ -560,6 +582,73 @@ local function FormatNumber(num)
         result = result .. s:sub(i, i)
     end
     return result
+end
+
+-------------------------------------------------------------------------------
+-- DELVE_BOONS: Registry of spell IDs → display names for delve boons.
+-- TODO: Validate spell IDs 438098–438105 in-game before release.
+-- Each entry maps a numeric spell ID to a human-readable stat name.
+-------------------------------------------------------------------------------
+local DELVE_BOONS = {
+    [438098] = "Maximum Health",
+    [438099] = "Movement Speed",
+    [438100] = "Strength",
+    [438101] = "Haste",
+    [438102] = "Critical Strike",
+    [438103] = "Mastery",
+    [438104] = "Versatility",
+    [438105] = "Damage Reduction",
+}
+
+-------------------------------------------------------------------------------
+-- GetBoonsDisplayText: Returns a formatted string of active boons, or "" if none.
+-- Iterates DELVE_BOONS registry, queries each spell's aura via C_UnitAuras,
+-- and includes only boons with value1 > 0.
+-- Format: "Boons: Stat1 X%, Stat2 Y%"
+-------------------------------------------------------------------------------
+local function GetBoonsDisplayText()
+    local parts = {}
+    for spellID, boonName in pairs(DELVE_BOONS) do
+        local aura = nil
+        local ok = pcall(function()
+            if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+                aura = C_UnitAuras.GetPlayerAuraBySpellID(spellID, "HELPFUL")
+            end
+        end)
+        if ok and aura and aura.value1 and aura.value1 > 0 then
+            table.insert(parts, boonName .. " " .. math.floor(aura.value1) .. "%")
+        end
+    end
+    if #parts == 0 then return "" end
+    return "Boons: " .. table.concat(parts, ", ")
+end
+
+-------------------------------------------------------------------------------
+-- GetNemesisProgress: Returns "Nemesis: X/Y" if an Enemy group criterion exists,
+-- otherwise returns "".
+-- Queries C_Scenario criteria to find the nemesis strongbox kill objective.
+-------------------------------------------------------------------------------
+local function GetNemesisProgress()
+    local numCriteria = 0
+    local ok = pcall(function()
+        if C_Scenario and C_Scenario.GetNumCriteria then
+            numCriteria = C_Scenario.GetNumCriteria() or 0
+        end
+    end)
+    if not ok or numCriteria == 0 then return "" end
+
+    for i = 1, numCriteria do
+        local info = nil
+        pcall(function()
+            info = C_Scenario.GetCriteriaInfo(i)
+        end)
+        if info and info.name and info.name:find("Enemy group") then
+            local cur   = info.quantity or 0
+            local total = info.totalQuantity or 0
+            return "Nemesis: " .. cur .. "/" .. total
+        end
+    end
+    return ""
 end
 
 -------------------------------------------------------------------------------
@@ -639,6 +728,28 @@ function ns:UpdateCompanionData(event)
             xpText = FormatNumber(currentXP) .. " / " .. FormatNumber(maxXP) .. " XP"
         end
         ns.xpLabel:SetText(xpText)
+    end
+
+    -- Boon display
+    if ns.boonLabel then
+        local boonText = GetBoonsDisplayText()
+        ns.boonLabel:SetText(boonText)
+        if boonText == "" then
+            ns.boonLabel:Hide()
+        else
+            ns.boonLabel:Show()
+        end
+    end
+
+    -- Nemesis progress display
+    if ns.nemesisLabel then
+        local nemesisText = GetNemesisProgress()
+        ns.nemesisLabel:SetText(nemesisText)
+        if nemesisText == "" then
+            ns.nemesisLabel:Hide()
+        else
+            ns.nemesisLabel:Show()
+        end
     end
 
     -- Persist to SavedVariables
