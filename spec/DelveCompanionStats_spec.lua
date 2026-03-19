@@ -636,8 +636,112 @@ describe("DelveCompanionStats", function()
     end)
 
     -- -------------------------------------------------------------------------
-    -- Nemesis progress tests
+    -- Header frame and collapse/expand tests
     -- -------------------------------------------------------------------------
+    describe("header frame and collapse/expand", function()
+
+        it("ns.headerFrame is not nil after OnLoad", function()
+            assert.is_not_nil(ns.headerFrame)
+        end)
+
+        it("native template path: headerFrame has .Text and .Button children", function()
+            -- Mock supports ObjectiveTrackerSectionHeaderTemplate — should use native path
+            assert.is_not_nil(ns.headerFrame.Text)
+            assert.is_not_nil(ns.headerFrame.Button)
+        end)
+
+        it("native template path: title text is 'Delve Companion'", function()
+            local titleChild = ns.headerFrame.Text or ns.headerFrame.Title
+            assert.is_not_nil(titleChild)
+            assert.equals("Delve Companion", titleChild:GetText())
+        end)
+
+        it("collapse button click hides contentFrame and sets collapsed = true", function()
+            ns.contentFrame:Show()
+            local btn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            assert.is_not_nil(btn)
+            btn._scripts["OnClick"]()
+            assert.is_false(ns.contentFrame:IsShown())
+            assert.is_true(DelveCompanionStatsDB.collapsed)
+        end)
+
+        it("collapse button click sets button text to '+'", function()
+            ns.contentFrame:Show()
+            local btn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            btn._scripts["OnClick"]()
+            assert.equals("+", btn:GetText())
+        end)
+
+        it("expand button click shows contentFrame and sets collapsed = false", function()
+            -- Collapse first
+            ns.contentFrame:Hide()
+            DelveCompanionStatsDB.collapsed = true
+            local btn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            btn:SetText("+")
+            -- Click to expand
+            btn._scripts["OnClick"]()
+            assert.is_true(ns.contentFrame:IsShown())
+            assert.is_false(DelveCompanionStatsDB.collapsed)
+        end)
+
+        it("expand button click sets button text to '–'", function()
+            ns.contentFrame:Hide()
+            local btn = ns.headerFrame.Button or ns.headerFrame.CollapseButton
+            btn:SetText("+")
+            btn._scripts["OnClick"]()
+            assert.equals("–", btn:GetText())
+        end)
+
+        it("restores collapsed state (contentFrame hidden) when db.collapsed = true on init", function()
+            -- Fresh load with collapsed = true in DB
+            _G.DelveCompanionStatsDB  = { collapsed = true }
+            _G.DelveCompanionStatsNS  = nil
+            _G.DelveCompanionStatsFrame  = nil
+            _G.DelveCompanionStatsHeader = nil
+            dofile("DelveCompanionStats/DelveCompanionStats.lua")
+            local ns2 = _G.DelveCompanionStatsNS
+            ns2:OnLoad()
+            assert.is_false(ns2.contentFrame:IsShown())
+        end)
+
+        it("restores expanded state (contentFrame shown) when db.collapsed = false on init", function()
+            _G.DelveCompanionStatsDB  = { collapsed = false }
+            _G.DelveCompanionStatsNS  = nil
+            _G.DelveCompanionStatsFrame  = nil
+            _G.DelveCompanionStatsHeader = nil
+            dofile("DelveCompanionStats/DelveCompanionStats.lua")
+            local ns2 = _G.DelveCompanionStatsNS
+            ns2:OnLoad()
+            assert.is_true(ns2.contentFrame:IsShown())
+        end)
+
+        it("falls back to custom header when template creation errors", function()
+            local origCreateFrame = _G.CreateFrame
+            _G.CreateFrame = function(frameType, name, parent, template)
+                if template == "ObjectiveTrackerSectionHeaderTemplate" then
+                    error("template not available in this environment")
+                end
+                return origCreateFrame(frameType, name, parent, template)
+            end
+
+            _G.DelveCompanionStatsDB  = {}
+            _G.DelveCompanionStatsNS  = nil
+            _G.DelveCompanionStatsFrame  = nil
+            _G.DelveCompanionStatsHeader = nil
+            dofile("DelveCompanionStats/DelveCompanionStats.lua")
+            local ns2 = _G.DelveCompanionStatsNS
+            ns2:OnLoad()
+
+            _G.CreateFrame = origCreateFrame
+
+            -- Fallback still provides a valid headerFrame
+            assert.is_not_nil(ns2.headerFrame)
+            -- Custom path creates ns.headerLabel as a FontString (no .Button child)
+            assert.is_nil(ns2.headerFrame.Button)
+            assert.is_not_nil(ns2.headerLabel)
+        end)
+
+    end)
     describe("Nemesis progress", function()
 
         before_each(function()
