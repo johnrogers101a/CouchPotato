@@ -37,12 +37,27 @@ end
 -------------------------------------------------------------------------------
 SLASH_DCS1 = "/dcs"
 SLASH_DCS2 = "/delvecompanion"
-SlashCmdList["DCS"] = function(arg)
-    local cmd = strtrim(strlower(arg or ""))
+SlashCmdList["DCS"] = function(msg)
+    local cmd = msg and msg:lower():match("^%s*(%S+)") or ""
     if cmd == "debug" then
         ns:PrintDebugInfo()
+    elseif cmd == "show" then
+        ns.frame:Show()
+        dcsprint("Frame shown manually")
+    elseif cmd == "hide" then
+        ns.frame:Hide()
+        dcsprint("Frame hidden manually")
+    elseif cmd == "toggle" then
+        if ns.frame:IsShown() then
+            ns.frame:Hide()
+            dcsprint("Frame hidden (toggle)")
+        else
+            ns.frame:Show()
+            dcsprint("Frame shown (toggle)")
+            ns:UpdateCompanionData("MANUAL")
+        end
     else
-        dcsprint("Usage: /dcs debug")
+        dcsprint("Usage: /dcs [debug|show|hide|toggle]")
     end
 end
 
@@ -195,6 +210,26 @@ function ns:PrintDebugInfo()
     add("IsInInstance() type = " .. tostring(instanceType))
     add("IsInDelve() = " .. tostring(IsInDelve()))
 
+    -- Frame state
+    lines[#lines+1] = "--- Frame State ---"
+    lines[#lines+1] = "IsShown: " .. tostring(ns.frame:IsShown())
+    local fw, fh = ns.frame:GetSize()
+    lines[#lines+1] = "Size: " .. tostring(fw) .. "x" .. tostring(fh)
+    local point, _, rpoint, ox, oy = ns.frame:GetPoint()
+    lines[#lines+1] = "Anchor: " .. tostring(point) .. " -> " .. tostring(rpoint) .. " (" .. tostring(ox) .. ", " .. tostring(oy) .. ")"
+    lines[#lines+1] = "Strata: " .. tostring(ns.frame:GetFrameStrata()) .. "  Level: " .. tostring(ns.frame:GetFrameLevel())
+
+    -- Full GetFriendshipReputation dump
+    if ns.lastFactionID then
+        local ok, fd = pcall(C_GossipInfo.GetFriendshipReputation, ns.lastFactionID)
+        if ok and fd then
+            lines[#lines+1] = "--- GetFriendshipReputation ---"
+            for k, v in pairs(fd) do
+                lines[#lines+1] = "  " .. tostring(k) .. " = " .. tostring(v)
+            end
+        end
+    end
+
     local text = table.concat(lines, "\n")
 
     -- Show in scrollable popup (create once, reuse on subsequent calls)
@@ -277,7 +312,7 @@ function ns:OnLoad()
     ns.frame:SetFrameLevel(100)
 
     -- 3. Set size and default anchor (above ChatFrame1 when available)
-    ns.frame:SetSize(200, 100)
+    ns.frame:SetSize(200, 120)
     if ChatFrame1 then
         ns.frame:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 10)
     else
@@ -311,6 +346,16 @@ function ns:OnLoad()
     ns.levelLabel:SetText("")
     ns.levelLabel:SetShadowOffset(2, -2)
     ns.levelLabel:SetShadowColor(0, 0, 0, 1)
+
+    -- 6b. Create XP label (below levelLabel)
+    ns.xpLabel = ns.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ns.xpLabel:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+    ns.xpLabel:SetTextColor(1, 1, 1, 1)
+    ns.xpLabel:SetShadowColor(0, 0, 0, 1)
+    ns.xpLabel:SetShadowOffset(1, -1)
+    ns.xpLabel:SetJustifyH("LEFT")
+    ns.xpLabel:SetPoint("TOPLEFT", ns.levelLabel, "BOTTOMLEFT", 0, -4)
+    ns.xpLabel:SetText("")
 
     -- 7. Make frame movable
     -- Safe: frame created above in this same function before drag handlers registered
@@ -360,9 +405,9 @@ function ns:OnLoad()
         ns.frame:RegisterEvent("GROUP_ROSTER_UPDATE")
         ns.frame:RegisterEvent("UNIT_NAME_UPDATE")
         ns.frame:SetScript("OnEvent", function(self, event, ...)
-            local wasShown = ns.frame:IsShown()
             ns:UpdateFrameVisibility()
-            if wasShown and ns.frame:IsShown() then
+            if ns.frame:IsShown() then
+                dcsprint("UpdateCompanionData triggered by event: " .. tostring(event))
                 ns:UpdateCompanionData(event)
             end
         end)
@@ -378,6 +423,23 @@ function ns:OnLoad()
         C_Timer.After(5,  function() ns:UpdateCompanionData("TIMER_5S") end)
         C_Timer.After(10, function() ns:UpdateCompanionData("TIMER_10S") end)
     end
+end
+
+-------------------------------------------------------------------------------
+-- FormatNumber: Format a number with comma separators (e.g. 12345 -> "12,345")
+-------------------------------------------------------------------------------
+local function FormatNumber(num)
+    if not num or num == 0 then return tostring(num or 0) end
+    local s = tostring(math.floor(num))
+    local result = ""
+    local len = #s
+    for i = 1, len do
+        if i > 1 and (len - i + 1) % 3 == 0 then
+            result = result .. ","
+        end
+        result = result .. s:sub(i, i)
+    end
+    return result
 end
 
 -------------------------------------------------------------------------------
@@ -421,10 +483,12 @@ function ns:UpdateCompanionData(event)
 
     -- Step 3: Get companion level from friendship reputation
     local level = nil
+    local friendData = nil
     if C_GossipInfo and C_GossipInfo.GetFriendshipReputation then
-        local ok, friendData = pcall(C_GossipInfo.GetFriendshipReputation, factionID)
-        if ok and friendData then
-            level = friendData.friendshipRank or friendData.reaction or friendData.standing
+        local ok, fd = pcall(C_GossipInfo.GetFriendshipReputation, factionID)
+        if ok and fd then
+            friendData = fd
+            level = fd.friendshipRank or fd.reaction or fd.standing
         end
     end
     dcsprint("  level => " .. tostring(level))
@@ -446,6 +510,16 @@ function ns:UpdateCompanionData(event)
         else
             ns.levelLabel:SetText("")
         end
+    end
+
+    -- XP display
+    if ns.xpLabel then
+        local xpText = ""
+        if friendData and friendData.reactionThreshold and friendData.nextThreshold
+            and friendData.nextThreshold > 0 then
+            xpText = FormatNumber(friendData.reactionThreshold) .. " / " .. FormatNumber(friendData.nextThreshold) .. " XP"
+        end
+        ns.xpLabel:SetText(xpText)
     end
 
     -- Persist to SavedVariables

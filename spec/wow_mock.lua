@@ -93,7 +93,10 @@ local function createMockFrame(frameType, name, parent, template)
     function frame:SetScale(s) self._scale = s end
     function frame:GetScale() return self._scale or 1.0 end
     function frame:SetFrameStrata(s) self._strata = s end
+    function frame:GetFrameStrata() return self._strata or "MEDIUM" end
     function frame:SetFrameLevel(l) self._level = l end
+    function frame:GetFrameLevel() return self._level or 0 end
+    function frame:GetSize() return self._width, self._height end
     function frame:EnableGamePadButton(e) self._gpEnabled = e end
     function frame:EnableGamePadStick(e) self._stickEnabled = e end
     function frame:SetPropagateKeyboardInput(p) self._propagateKeyboard = p end
