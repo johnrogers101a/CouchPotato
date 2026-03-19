@@ -19,6 +19,17 @@ _G.DelveCompanionStatsNS = ns
 
 ns.version = "1.0.0"
 
+-------------------------------------------------------------------------------
+-- dcsprint: Write a coloured message to the chat frame (or print fallback)
+-------------------------------------------------------------------------------
+local function dcsprint(msg)
+    if DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff00ccffDCS:|r " .. tostring(msg))
+    else
+        print("|cff00ccffDCS:|r " .. tostring(msg))
+    end
+end
+
 -- Companion ID → Display Name mapping
 -- Hardcoded because WoW API provides no function to retrieve display names by companion ID
 -- Known companions in WoW Delves (as of patch 12.0.x)
@@ -29,6 +40,79 @@ ns.companionNames = {
     [4] = "Turalyon",
     [5] = "Thisalee Crow",
 }
+
+-------------------------------------------------------------------------------
+-- Slash commands: /dcs  or  /delvecompanion
+-------------------------------------------------------------------------------
+SLASH_DCS1 = "/dcs"
+SLASH_DCS2 = "/delvecompanion"
+SlashCmdList["DCS"] = function(arg)
+    local cmd = strtrim(strlower(arg or ""))
+    if cmd == "debug" then
+        ns:PrintDebugInfo()
+    else
+        dcsprint("Usage: /dcs debug")
+    end
+end
+
+-------------------------------------------------------------------------------
+-- PrintDebugInfo: Dump C_DelvesUI API state and last-known addon values
+-------------------------------------------------------------------------------
+function ns:PrintDebugInfo()
+    dcsprint("=== DCS Debug Info ===")
+    dcsprint("C_DelvesUI exists: " .. tostring(C_DelvesUI ~= nil))
+
+    -- Check known function existence
+    local knownFns = {
+        "GetCompanionInfoForActivePlayer",
+        "GetFactionForCompanion",
+        "GetActiveCompanion",
+        "GetActiveDelve",
+    }
+    for _, fnName in ipairs(knownFns) do
+        local exists = C_DelvesUI and C_DelvesUI[fnName] ~= nil
+        dcsprint("  C_DelvesUI." .. fnName .. " exists: " .. tostring(exists))
+    end
+
+    -- Enumerate all keys on C_DelvesUI
+    if C_DelvesUI then
+        dcsprint("C_DelvesUI keys:")
+        for k, _ in pairs(C_DelvesUI) do
+            dcsprint("  " .. tostring(k))
+        end
+    end
+
+    -- Call each known function and print raw return
+    for _, fnName in ipairs(knownFns) do
+        if C_DelvesUI and C_DelvesUI[fnName] then
+            local ok, result = pcall(C_DelvesUI[fnName])
+            dcsprint("  C_DelvesUI." .. fnName .. "() => ok=" .. tostring(ok) .. " result=" .. tostring(result))
+        end
+    end
+
+    -- GetFactionForCompanion: try several args
+    if C_DelvesUI and C_DelvesUI.GetFactionForCompanion then
+        local testArgs = {1, 2, 3, 4, 5, "Brann", "Valeera"}
+        for _, arg in ipairs(testArgs) do
+            local ok, result = pcall(C_DelvesUI.GetFactionForCompanion, arg)
+            dcsprint("  GetFactionForCompanion(" .. tostring(arg) .. ") => ok=" .. tostring(ok) .. " result=" .. tostring(result))
+        end
+    end
+
+    -- GetActiveCompanion: try even if we don't think it exists
+    if C_DelvesUI then
+        local ok, result = pcall(function() return C_DelvesUI.GetActiveCompanion() end)
+        dcsprint("  C_DelvesUI.GetActiveCompanion() pcall => ok=" .. tostring(ok) .. " result=" .. tostring(result))
+    end
+
+    -- Current addon state
+    dcsprint("companionID (last known): " .. tostring(ns._lastCompanionID))
+    dcsprint("factionID (last known): "   .. tostring(ns._lastFactionID))
+    dcsprint("name (last known): "        .. tostring(ns._lastName))
+    dcsprint("level (last known): "       .. tostring(ns._lastLevel))
+    dcsprint("nameLabel text: "  .. tostring(ns.nameLabel  and ns.nameLabel:GetText()  or "N/A"))
+    dcsprint("levelLabel text: " .. tostring(ns.levelLabel and ns.levelLabel:GetText() or "N/A"))
+end
 
 -------------------------------------------------------------------------------
 -- Central event frame — ADDON_LOADED only (no PLAYER_LOGIN race condition)
@@ -175,22 +259,34 @@ function ns:OnLoad()
         ns.frame:RegisterEvent("UPDATE_FACTION")
         -- MAJOR_FACTION_RENOWN_LEVEL_CHANGED fires when renown level changes
         ns.frame:RegisterEvent("MAJOR_FACTION_RENOWN_LEVEL_CHANGED")
+        -- Additional events to widen the data-refresh net
+        ns.frame:RegisterEvent("UPDATE_INSTANCE_INFO")
+        ns.frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+        ns.frame:RegisterEvent("UNIT_NAME_UPDATE")
         ns.frame:SetScript("OnEvent", function(self, event, ...)
-            ns:UpdateCompanionData()
+            ns:UpdateCompanionData(event)
         end)
     end
 
     -- Explicitly show fontstrings (belt-and-suspenders: ensures visibility even if parent Show() is pending)
     if ns.nameLabel then ns.nameLabel:Show() end
     if ns.levelLabel then ns.levelLabel:Show() end
+
+    -- Polling fallbacks: data may not be ready immediately on ADDON_LOADED
+    if C_Timer and C_Timer.After then
+        C_Timer.After(3,  function() ns:UpdateCompanionData("TIMER_3S") end)
+        C_Timer.After(5,  function() ns:UpdateCompanionData("TIMER_5S") end)
+        C_Timer.After(10, function() ns:UpdateCompanionData("TIMER_10S") end)
+    end
 end
 
 -------------------------------------------------------------------------------
 -- UpdateCompanionData: Fetch active companion from C_DelvesUI and update UI
 -- Called by event handlers and during initialization
 -------------------------------------------------------------------------------
-function ns:UpdateCompanionData()
+function ns:UpdateCompanionData(event)
     if not ns.frame then return end
+    dcsprint("UpdateCompanionData triggered by: " .. tostring(event))
     local name, level = nil, nil
 
     -- Step 1: Get companion ID via GetCompanionInfoForActivePlayer
@@ -201,6 +297,7 @@ function ns:UpdateCompanionData()
             companionID = result
         end
     end
+    dcsprint("  GetCompanionInfoForActivePlayer => " .. tostring(companionID))
 
     -- Step 2: Look up companion name in hardcoded table; fall back to "Unknown Companion"
     if companionID then
@@ -215,6 +312,7 @@ function ns:UpdateCompanionData()
             factionID = result
         end
     end
+    dcsprint("  GetFactionForCompanion(" .. tostring(companionID) .. ") => " .. tostring(factionID))
 
     if factionID and C_GossipInfo and C_GossipInfo.GetFriendshipReputation then
         local ok, friendData = pcall(C_GossipInfo.GetFriendshipReputation, factionID)
@@ -227,12 +325,19 @@ function ns:UpdateCompanionData()
             end
         end
     end
+    dcsprint("  level => " .. tostring(level))
 
     -- Fall back to SavedVariables if live API returned nothing
     if not name and DelveCompanionStatsDB then
         name  = DelveCompanionStatsDB.companionName
         level = DelveCompanionStatsDB.companionLevel
     end
+
+    -- Store last-known values for debug inspection
+    ns._lastCompanionID = companionID
+    ns._lastFactionID   = factionID
+    ns._lastName        = name
+    ns._lastLevel       = level
 
     -- Update UI
     if ns.nameLabel then
