@@ -1198,19 +1198,19 @@ describe("DelveCompanionStats", function()
         describe("content frame background", function()
 
             it("contentFrame has a dark brown background texture", function()
-                -- SetColorTexture(0.05, 0.04, 0.01, 0.85) — very dark brown
+                -- SetColorTexture(0.05, 0.04, 0.01, 0.95) — very dark brown
                 local found = false
                 for _, tex in ipairs(ns.contentFrame._textures or {}) do
                     local c = tex._color
                     if c and math.abs(c[1] - 0.05) < 0.001
                           and math.abs(c[2] - 0.04) < 0.001
                           and math.abs(c[3] - 0.01) < 0.001
-                          and math.abs(c[4] - 0.85) < 0.001 then
+                          and math.abs(c[4] - 0.95) < 0.001 then
                         found = true
                         break
                     end
                 end
-                assert.is_true(found, "expected dark brown texture (0.05,0.04,0.01,0.85) on contentFrame")
+                assert.is_true(found, "expected dark brown texture (0.05,0.04,0.01,0.95) on contentFrame")
             end)
 
             it("contentFrame has no backdrop set (nil)", function()
@@ -1299,8 +1299,8 @@ describe("DelveCompanionStats", function()
             assert.is_true(DelveCompanionStatsDB.pinned)
         end)
 
-        it("pin button text is '📌' after OnLoad (both pinned and unpinned use same icon)", function()
-            assert.equals("📌", ns.pinBtnText:GetText())
+        it("pin button text is '*' after OnLoad (both pinned and unpinned use same icon)", function()
+            assert.equals("*", ns.pinBtnText:GetText())
         end)
 
         it("pin button text color is gold when pinned", function()

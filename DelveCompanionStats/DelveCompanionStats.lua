@@ -759,7 +759,7 @@ function ns:OnLoad()
             ns.frame:ClearAllPoints()
             ns.frame:SetPoint("TOP", ScenarioObjectiveTracker, "BOTTOM", 0, -4)
         end
-        ns.pinBtnText:SetText("📌")
+        ns.pinBtnText:SetText("*")
         ns.pinBtnText:SetTextColor(1, 0.78, 0.1, 1)   -- gold when pinned
         DelveCompanionStatsDB.pinned = true
     end
@@ -775,7 +775,7 @@ function ns:OnLoad()
             local point, _, relPoint, x, y = f:GetPoint()
             DelveCompanionStatsDB.position = { point = point, relPoint = relPoint, x = x, y = y }
         end)
-        ns.pinBtnText:SetText("📌")
+        ns.pinBtnText:SetText("*")
         ns.pinBtnText:SetTextColor(0.5, 0.5, 0.5, 1)  -- grey when unpinned
         DelveCompanionStatsDB.pinned = false
     end
@@ -796,7 +796,7 @@ function ns:OnLoad()
                 ns.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
             end
             if ns.pinBtnText then
-                ns.pinBtnText:SetText("📌")
+                ns.pinBtnText:SetText("*")
                 ns.pinBtnText:SetTextColor(1, 0.78, 0.1, 1)
             end
         else
@@ -811,7 +811,7 @@ function ns:OnLoad()
                 db.position = {point=point, relPoint=relPoint, x=x, y=y}
             end)
             if ns.pinBtnText then
-                ns.pinBtnText:SetText("📌")
+                ns.pinBtnText:SetText("*")
                 ns.pinBtnText:SetTextColor(0.5, 0.5, 0.5, 1)
             end
         end
@@ -837,26 +837,26 @@ function ns:OnLoad()
     -- Subtle dark content background
     local contentBg = contentFrame:CreateTexture(nil, "BACKGROUND")
     contentBg:SetAllPoints(contentFrame)
-    contentBg:SetColorTexture(0.05, 0.04, 0.01, 0.85)  -- very dark brown, slightly lighter than header
+    contentBg:SetColorTexture(0.05, 0.04, 0.01, 0.95)  -- very dark brown, slightly lighter than header
 
     -- Thin gold border lines (left, right, bottom only — top is header bottom line)
     local borderLeft = contentFrame:CreateTexture(nil, "BORDER")
     borderLeft:SetWidth(1)
     borderLeft:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 0, 0)
     borderLeft:SetPoint("BOTTOMLEFT", contentFrame, "BOTTOMLEFT", 0, 0)
-    borderLeft:SetColorTexture(1, 0.78, 0.1, 0.6)
+    borderLeft:SetColorTexture(1, 0.78, 0.1, 1.0)
 
     local borderRight = contentFrame:CreateTexture(nil, "BORDER")
     borderRight:SetWidth(1)
     borderRight:SetPoint("TOPRIGHT", contentFrame, "TOPRIGHT", 0, 0)
     borderRight:SetPoint("BOTTOMRIGHT", contentFrame, "BOTTOMRIGHT", 0, 0)
-    borderRight:SetColorTexture(1, 0.78, 0.1, 0.6)
+    borderRight:SetColorTexture(1, 0.78, 0.1, 1.0)
 
     local borderBottom = contentFrame:CreateTexture(nil, "BORDER")
     borderBottom:SetHeight(1)
     borderBottom:SetPoint("BOTTOMLEFT", contentFrame, "BOTTOMLEFT", 0, 0)
     borderBottom:SetPoint("BOTTOMRIGHT", contentFrame, "BOTTOMRIGHT", 0, 0)
-    borderBottom:SetColorTexture(1, 0.78, 0.1, 0.6)
+    borderBottom:SetColorTexture(1, 0.78, 0.1, 1.0)
     -- Store on ns so UpdateCompanionData can resize it
     ns.contentFrame = contentFrame
 
@@ -998,7 +998,7 @@ function ns:OnLoad()
         ns.frame:SetScript("OnDragStart", nil)
         ns.frame:SetScript("OnDragStop", nil)
         if ns.pinBtnText then
-            ns.pinBtnText:SetText("📌")
+            ns.pinBtnText:SetText("*")
             ns.pinBtnText:SetTextColor(1, 0.78, 0.1, 1)
         end
     end
