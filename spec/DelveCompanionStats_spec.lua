@@ -693,7 +693,7 @@ describe("DelveCompanionStats", function()
 
         it("nemesis progress skips criteria with zero totalQuantity", function()
             _SetMockNemesis({
-                { description = "Nothing here", quantity = 0, totalQuantity = 0 },
+                { description = "Cultists slain", quantity = 0, totalQuantity = 0 },
                 { description = "Totems destroyed", quantity = 2, totalQuantity = 3 },
             })
 
@@ -710,6 +710,82 @@ describe("DelveCompanionStats", function()
             ns:UpdateCompanionData()
 
             assert.equals("Groups: 1/3", ns.nemesisLabel._text)
+        end)
+
+        it("nemesis hides non-combat criteria (Speak with)", function()
+            _SetMockNemesis({
+                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
+            })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("", ns.nemesisLabel._text)
+            assert.is_false(ns.nemesisLabel:IsShown())
+        end)
+
+        it("nemesis hides label when all criteria are non-combat", function()
+            _SetMockNemesis({
+                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
+                { description = "Find the hidden passage", quantity = 0, totalQuantity = 1 },
+            })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("", ns.nemesisLabel._text)
+            assert.is_false(ns.nemesisLabel:IsShown())
+        end)
+
+        -- -------------------------------------------------------------------------
+        -- IsCombatCriteria direct unit tests
+        -- -------------------------------------------------------------------------
+        describe("IsCombatCriteria", function()
+            it("returns false for 'Speak with X'", function()
+                assert.is_false(ns.IsCombatCriteria("Speak with Celoenus Blackflame"))
+            end)
+
+            it("returns false for 'Talk to X'", function()
+                assert.is_false(ns.IsCombatCriteria("Talk to the guard"))
+            end)
+
+            it("returns false for 'Find X'", function()
+                assert.is_false(ns.IsCombatCriteria("Find the hidden passage"))
+            end)
+
+            it("returns false for 'Collect X'", function()
+                assert.is_false(ns.IsCombatCriteria("Collect the ancient relic"))
+            end)
+
+            it("returns false for nil", function()
+                assert.is_false(ns.IsCombatCriteria(nil))
+            end)
+
+            it("returns false for ambiguous descriptions", function()
+                assert.is_false(ns.IsCombatCriteria("Survive the onslaught"))
+            end)
+
+            it("returns true for 'X slain'", function()
+                assert.is_true(ns.IsCombatCriteria("Cultists slain"))
+            end)
+
+            it("returns true for 'Blademaster Darza slain'", function()
+                assert.is_true(ns.IsCombatCriteria("Blademaster Darza slain"))
+            end)
+
+            it("returns true for 'Totems destroyed'", function()
+                assert.is_true(ns.IsCombatCriteria("Totems destroyed"))
+            end)
+
+            it("returns true for 'Enemy group' descriptions", function()
+                assert.is_true(ns.IsCombatCriteria("Enemy groups remaining"))
+            end)
+
+            it("returns true for 'defeated' descriptions", function()
+                assert.is_true(ns.IsCombatCriteria("Enemies defeated"))
+            end)
+
+            it("returns true for 'nemesis' descriptions", function()
+                assert.is_true(ns.IsCombatCriteria("Nemesis bounty target killed"))
+            end)
         end)
 
         it("boon and nemesis labels hidden when no delve data present", function()
