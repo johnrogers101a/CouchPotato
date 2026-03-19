@@ -401,15 +401,14 @@ function ns:PrintDebugInfo()
     local scenarioAvail = (C_ScenarioInfo ~= nil and "yes" or "no")
     table.insert(lines, ("C_ScenarioInfo available? %s"):format(scenarioAvail))
     if scenarioAvail == "yes" then
-        local numC = 0
-        pcall(function() numC = C_ScenarioInfo.GetNumCriteria() or 0 end)
-        table.insert(lines, ("GetNumCriteria() returns: %d"):format(numC))
+        local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
+        local numC = (stepInfo and stepInfo.numCriteria) or 0
+        table.insert(lines, ("GetScenarioStepInfo().numCriteria: %d"):format(numC))
         for i = 1, numC do
-            local ci = nil
-            pcall(function() ci = C_ScenarioInfo.GetCriteriaInfo(i) end)
-            if ci then
-                table.insert(lines, ("  Criteria[%d]: name=%q, quantity=%s, totalQuantity=%s"):format(
-                    i, tostring(ci.name), tostring(ci.quantity), tostring(ci.totalQuantity)))
+            local ok, ci = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
+            if ok and ci then
+                table.insert(lines, ("  Criteria[%d]: description=%q, quantity=%s, totalQuantity=%s"):format(
+                    i, tostring(ci.description), tostring(ci.quantity), tostring(ci.totalQuantity)))
             else
                 table.insert(lines, ("  Criteria[%d]: <nil>"):format(i))
             end
@@ -421,7 +420,7 @@ function ns:PrintDebugInfo()
     table.insert(lines, "--- nemesisLabel ---")
     dumpLabel(ns.nemesisLabel, "nemesisLabel", lines)
 
-    -- Deep diagnostic: dump all C_ScenarioInfo methods and safe-call GetNumCriteria
+    -- Deep diagnostic: dump all C_ScenarioInfo methods and safe-call GetScenarioStepInfo
     if C_ScenarioInfo then
         table.insert(lines, "C_ScenarioInfo available? yes")
         -- Dump all available methods
@@ -430,19 +429,22 @@ function ns:PrintDebugInfo()
             table.insert(lines, "  ." .. k .. " = " .. type(v))
         end
         -- Safe call
-        if C_ScenarioInfo.GetNumCriteria then
-            local ok, n = pcall(C_ScenarioInfo.GetNumCriteria)
-            table.insert(lines, "GetNumCriteria() = " .. tostring(ok and n or "ERROR: " .. tostring(n)))
-            if ok and n and n > 0 then
+        if C_ScenarioInfo.GetScenarioStepInfo then
+            local ok, si = pcall(C_ScenarioInfo.GetScenarioStepInfo)
+            if ok and si then
+                local n = si.numCriteria or 0
+                table.insert(lines, "GetScenarioStepInfo().numCriteria = " .. tostring(n))
                 for i = 1, n do
                     local ok2, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
                     if ok2 and c then
                         table.insert(lines, "  criteria[" .. i .. "] desc=" .. (c.description or "nil") .. " qty=" .. tostring(c.quantity) .. " total=" .. tostring(c.totalQuantity))
                     end
                 end
+            else
+                table.insert(lines, "GetScenarioStepInfo() = ERROR or nil")
             end
         else
-            table.insert(lines, "GetNumCriteria = nil (method not available)")
+            table.insert(lines, "GetScenarioStepInfo = nil (method not available)")
         end
     else
         table.insert(lines, "C_ScenarioInfo available? no")
@@ -784,36 +786,26 @@ end
 -- Queries C_ScenarioInfo criteria to find the nemesis strongbox kill objective.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
-    if not C_ScenarioInfo or not C_ScenarioInfo.GetNumCriteria then return "" end
-    local numCriteria = 0
-    local ok = pcall(function()
-        numCriteria = C_ScenarioInfo.GetNumCriteria() or 0
-    end)
-    if not ok or numCriteria == 0 then return "" end
+    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
+    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
+    if not stepInfo or not stepInfo.numCriteria then return "" end
 
-    -- Primary: case-insensitive name match
-    for i = 1, numCriteria do
-        local info = nil
-        pcall(function()
-            info = C_ScenarioInfo.GetCriteriaInfo(i)
-        end)
-        if info and info.name and info.name:lower():find("enemy group") then
-            local cur   = info.quantity or 0
-            local total = info.totalQuantity or 0
-            return "Nemesis: " .. cur .. "/" .. total
+    -- Primary: case-insensitive description match
+    for i = 1, stepInfo.numCriteria do
+        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
+        if ok and c and c.description then
+            local desc = c.description:lower()
+            if desc:find("enemy group") or desc:find("nemesis") then
+                return "Nemesis: " .. tostring(c.quantity) .. "/" .. tostring(c.totalQuantity)
+            end
         end
     end
 
     -- Fallback: first criterion with a meaningful totalQuantity
-    for i = 1, numCriteria do
-        local info = nil
-        pcall(function()
-            info = C_ScenarioInfo.GetCriteriaInfo(i)
-        end)
-        if info and info.totalQuantity and info.totalQuantity > 0 then
-            local cur   = info.quantity or 0
-            local total = info.totalQuantity
-            return "Nemesis: " .. cur .. "/" .. total
+    for i = 1, stepInfo.numCriteria do
+        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
+        if ok and c and c.totalQuantity and c.totalQuantity > 0 then
+            return "Nemesis: " .. tostring(c.quantity) .. "/" .. tostring(c.totalQuantity)
         end
     end
     return ""

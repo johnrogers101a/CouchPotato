@@ -815,7 +815,7 @@ _G.UnitAura = function(unit, index, filter)
 end
 
 -- C_ScenarioInfo stub (TWW API — used by DelveCompanionStats for nemesis progress)
--- _criteria is a list of {name, quantity, totalQuantity}
+-- _criteria is a list of {description, quantity, totalQuantity}
 _G.C_ScenarioInfo = {
     _criteria = {},
 
@@ -823,8 +823,8 @@ _G.C_ScenarioInfo = {
         return nil, nil, false  -- name, description, isInScenario
     end,
 
-    GetNumCriteria = function()
-        return #(_G.C_ScenarioInfo._criteria)
+    GetScenarioStepInfo = function()
+        return { numCriteria = #(_G.C_ScenarioInfo._criteria) }
     end,
 
     GetCriteriaInfo = function(i)
@@ -847,6 +847,6 @@ end
 -- Test helper: set nemesis progress (replaces entire criteria list)
 _G._SetMockNemesis = function(current, total)
     _G.C_ScenarioInfo._criteria = {
-        { name = "Enemy group kills", quantity = current, totalQuantity = total }
+        { description = "Enemy group kills", quantity = current, totalQuantity = total }
     }
 end
