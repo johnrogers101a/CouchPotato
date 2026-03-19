@@ -933,4 +933,250 @@ describe("DelveCompanionStats", function()
         end)
 
     end)
+
+    -- -------------------------------------------------------------------------
+    -- Blizzard ObjectiveTracker exact styling tests
+    -- -------------------------------------------------------------------------
+    describe("Blizzard ObjectiveTracker styling", function()
+
+        -- ── Fonts ─────────────────────────────────────────────────────────────
+        describe("fonts", function()
+
+            it("header label uses ObjectiveTitleFont (native path)", function()
+                -- In the native path ns.headerLabel == headerFrame.Text, which now has
+                -- SetFontObject support; ObjectiveTitleFont is defined in wow_mock.
+                assert.is_not_nil(ns.headerLabel)
+                local fontPath = ns.headerLabel:GetFont()
+                assert.equals("ObjectiveTitleFont", fontPath)
+            end)
+
+            it("nameLabel uses ObjectiveFont", function()
+                local fontPath = ns.nameLabel:GetFont()
+                assert.equals("ObjectiveFont", fontPath)
+            end)
+
+            it("boonHeaderLabel uses ObjectiveFont", function()
+                local fontPath = ns.boonHeaderLabel:GetFont()
+                assert.equals("ObjectiveFont", fontPath)
+            end)
+
+            it("boonLabel uses ObjectiveFont", function()
+                local fontPath = ns.boonLabel:GetFont()
+                assert.equals("ObjectiveFont", fontPath)
+            end)
+
+            it("nemesisLabel uses ObjectiveFont", function()
+                local fontPath = ns.nemesisLabel:GetFont()
+                assert.equals("ObjectiveFont", fontPath)
+            end)
+
+            it("fallback header uses ObjectiveTitleFont when template unavailable", function()
+                local origCreateFrame = _G.CreateFrame
+                _G.CreateFrame = function(frameType, name, parent, template)
+                    if template == "ObjectiveTrackerSectionHeaderTemplate" then
+                        error("template not available in this environment")
+                    end
+                    return origCreateFrame(frameType, name, parent, template)
+                end
+
+                _G.DelveCompanionStatsDB     = {}
+                _G.DelveCompanionStatsNS     = nil
+                _G.DelveCompanionStatsFrame  = nil
+                _G.DelveCompanionStatsHeader = nil
+                dofile("DelveCompanionStats/DelveCompanionStats.lua")
+                local ns2 = _G.DelveCompanionStatsNS
+                ns2:OnLoad()
+
+                _G.CreateFrame = origCreateFrame
+
+                assert.is_not_nil(ns2.headerLabel)
+                local fontPath = ns2.headerLabel:GetFont()
+                assert.equals("ObjectiveTitleFont", fontPath)
+            end)
+
+        end)
+
+        -- ── Colors ────────────────────────────────────────────────────────────
+        describe("colors", function()
+
+            it("header label colour is muted gold {0.9, 0.75, 0.3}", function()
+                local r, g, b = ns.headerLabel:GetTextColor()
+                assert.is_true(math.abs(r - 0.9)  < 0.001, "expected r≈0.9, got " .. tostring(r))
+                assert.is_true(math.abs(g - 0.75) < 0.001, "expected g≈0.75, got " .. tostring(g))
+                assert.is_true(math.abs(b - 0.3)  < 0.001, "expected b≈0.3, got " .. tostring(b))
+            end)
+
+            it("boonHeaderLabel colour is muted gold {0.9, 0.75, 0.3}", function()
+                local r, g, b = ns.boonHeaderLabel:GetTextColor()
+                assert.is_true(math.abs(r - 0.9)  < 0.001)
+                assert.is_true(math.abs(g - 0.75) < 0.001)
+                assert.is_true(math.abs(b - 0.3)  < 0.001)
+            end)
+
+            it("nemesisLabel colour is muted gold {0.9, 0.75, 0.3}", function()
+                local r, g, b = ns.nemesisLabel:GetTextColor()
+                assert.is_true(math.abs(r - 0.9)  < 0.001)
+                assert.is_true(math.abs(g - 0.75) < 0.001)
+                assert.is_true(math.abs(b - 0.3)  < 0.001)
+            end)
+
+            it("nameLabel colour is white {1, 1, 1}", function()
+                local r, g, b = ns.nameLabel:GetTextColor()
+                assert.is_true(math.abs(r - 1) < 0.001)
+                assert.is_true(math.abs(g - 1) < 0.001)
+                assert.is_true(math.abs(b - 1) < 0.001)
+            end)
+
+            it("boonLabel colour is white {1, 1, 1}", function()
+                local r, g, b = ns.boonLabel:GetTextColor()
+                assert.is_true(math.abs(r - 1) < 0.001)
+                assert.is_true(math.abs(g - 1) < 0.001)
+                assert.is_true(math.abs(b - 1) < 0.001)
+            end)
+
+            it("fallback header line colour is {1, 0.82, 0.05} (decorative gold)", function()
+                -- Force the fallback path so we can inspect the header line texture
+                local origCreateFrame = _G.CreateFrame
+                _G.CreateFrame = function(frameType, name, parent, template)
+                    if template == "ObjectiveTrackerSectionHeaderTemplate" then
+                        error("template not available")
+                    end
+                    return origCreateFrame(frameType, name, parent, template)
+                end
+
+                _G.DelveCompanionStatsDB     = {}
+                _G.DelveCompanionStatsNS     = nil
+                _G.DelveCompanionStatsFrame  = nil
+                _G.DelveCompanionStatsHeader = nil
+                dofile("DelveCompanionStats/DelveCompanionStats.lua")
+                local ns2 = _G.DelveCompanionStatsNS
+                ns2:OnLoad()
+                _G.CreateFrame = origCreateFrame
+
+                -- The ARTWORK texture on headerFrame is the bottom line (3rd texture: bg, glow, line)
+                local hf = ns2.headerFrame
+                assert.is_not_nil(hf)
+                -- Find the line texture by looking for one with r≈1, g≈0.82, b≈0.05
+                local found = false
+                for _, tex in ipairs(hf._textures or {}) do
+                    local c = tex._color
+                    if c and math.abs(c[1] - 1) < 0.001
+                          and math.abs(c[2] - 0.82) < 0.001
+                          and math.abs(c[3] - 0.05) < 0.001 then
+                        found = true
+                        break
+                    end
+                end
+                assert.is_true(found, "expected header line texture with colour {1, 0.82, 0.05}")
+            end)
+
+        end)
+
+        -- ── Spacing / padding ─────────────────────────────────────────────────
+        describe("spacing and padding", function()
+
+            it("nameLabel width is frameWidth - 12", function()
+                -- frameWidth defaults to 220; contentWidth = 220 - 12 = 208
+                assert.equals(208, ns.nameLabel._width)
+            end)
+
+            it("boonHeaderLabel width is frameWidth - 12", function()
+                assert.equals(208, ns.boonHeaderLabel._width)
+            end)
+
+            it("boonLabel width is frameWidth - 12", function()
+                assert.equals(208, ns.boonLabel._width)
+            end)
+
+            it("nemesisLabel width is frameWidth - 12", function()
+                assert.equals(208, ns.nemesisLabel._width)
+            end)
+
+        end)
+
+        -- ── Content frame background ──────────────────────────────────────────
+        describe("content frame background", function()
+
+            it("contentFrame has a semi-transparent dark background texture", function()
+                -- A SetColorTexture(0,0,0,0.45) call must have been made on contentFrame
+                local found = false
+                for _, tex in ipairs(ns.contentFrame._textures or {}) do
+                    local c = tex._color
+                    if c and c[1] == 0 and c[2] == 0 and c[3] == 0
+                          and math.abs(c[4] - 0.45) < 0.001 then
+                        found = true
+                        break
+                    end
+                end
+                assert.is_true(found, "expected semi-transparent dark texture on contentFrame")
+            end)
+
+            it("contentFrame has no backdrop set (nil)", function()
+                assert.is_nil(ns.contentFrame._backdrop)
+            end)
+
+        end)
+
+        -- ── Height recalculation ──────────────────────────────────────────────
+        describe("height recalculation", function()
+
+            before_each(function()
+                C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+                C_Reputation.GetFactionDataByID   = function() return { name = "Brann Bronzebeard" } end
+                C_GossipInfo.GetFriendshipReputation = function()
+                    return { friendshipRank = 5 }
+                end
+                _ClearMockBoonTooltip()
+                C_ScenarioInfo._criteria = {}
+            end)
+
+            after_each(function()
+                _ClearMockBoonTooltip()
+                C_ScenarioInfo._criteria = {}
+            end)
+
+            it("base content height is 24 (4+16+4) when only nameLabel visible", function()
+                ns:UpdateCompanionData()
+                -- No boons, no nemesis → contentHeight = 24
+                assert.equals(24, ns.contentFrame._height)
+            end)
+
+            it("content height adds 3+16 gap+header plus 16-per-boon-line", function()
+                -- One boon line
+                _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%." })
+                ns:UpdateCompanionData()
+                -- 24 (base) + 3 (gap) + 16 (boonHeader) + 16 (1 boon line) = 59
+                assert.equals(59, ns.contentFrame._height)
+            end)
+
+            it("content height adds 3+16 for nemesis section", function()
+                _SetMockNemesis(1, 3)
+                ns:UpdateCompanionData()
+                -- 24 (base) + 3 (gap) + 16 (nemesis) = 43
+                assert.equals(43, ns.contentFrame._height)
+            end)
+
+            it("content height stacks boon and nemesis sections with 3px gaps each", function()
+                _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%.\nMastery: 3%." })
+                _SetMockNemesis(2, 5)
+                ns:UpdateCompanionData()
+                -- 24 (base) + 3+16 (boonHeader) + 2*16 (2 boon lines) + 3+16 (nemesis) = 94
+                assert.equals(94, ns.contentFrame._height)
+            end)
+
+        end)
+
+        -- ── Debug probe for header frame children ─────────────────────────────
+        describe("debug probe: header frame children", function()
+
+            it("PrintDebugInfo output includes '--- Header frame children ---'", function()
+                ns:PrintDebugInfo()
+                local text = ns.debugPopup._editBox:GetText()
+                assert.is_truthy(text:find("Header frame children", 1, true),
+                    "expected 'Header frame children' section in debug output")
+            end)
+
+        end)
+
+    end)
 end)

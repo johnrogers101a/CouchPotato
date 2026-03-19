@@ -36,6 +36,10 @@ _G.UIParent = {
 
 _G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 
+-- Blizzard font objects (stubs matching ObjectiveTracker font names used in styling)
+_G.ObjectiveTitleFont = { _name = "ObjectiveTitleFont" }
+_G.ObjectiveFont      = { _name = "ObjectiveFont" }
+
 -- WoW string utility globals
 _G.strlower  = function(s) return (s or ""):lower() end
 _G.strupper  = function(s) return (s or ""):upper() end
@@ -227,6 +231,13 @@ local function createMockFrame(frameType, name, parent, template)
         function fs:SetTextColor(r,g,b,a) self._r = r; self._g = g; self._b = b; self._a = a end
         function fs:GetTextColor() return self._r or 1, self._g or 1, self._b or 1, self._a or 1 end
         function fs:SetFont(font, size, flags) self._fontPath = font; self._fontSize = size; self._fontFlags = flags end
+        function fs:SetFontObject(obj)
+            if type(obj) == "table" and obj._name then
+                self._fontPath = obj._name
+            elseif type(obj) == "string" then
+                self._fontPath = obj
+            end
+        end
         function fs:GetFont() return self._fontPath or "GameFontNormal", self._fontSize or 12, self._fontFlags or "" end
         function fs:SetWidth(w) self._width = w end
         function fs:SetJustifyH(j) end
@@ -262,17 +273,55 @@ local function createMockFrame(frameType, name, parent, template)
     -- matching the real Blizzard template's child widget names.
     if template and template:find("ObjectiveTrackerSectionHeaderTemplate") then
         frame.Text = {
-            _text = "",
-            SetText = function(self, t) self._text = t end,
-            GetText = function(self) return self._text end,
+            _text = "", _fontPath = nil, _fontObject = nil,
+            _r = 1, _g = 1, _b = 1, _a = 1,
+            SetText  = function(self, t) self._text = t end,
+            GetText  = function(self) return self._text end,
+            SetFontObject = function(self, obj)
+                self._fontObject = obj
+                if type(obj) == "table" and obj._name then
+                    self._fontPath = obj._name
+                elseif type(obj) == "string" then
+                    self._fontPath = obj
+                end
+            end,
+            GetFont = function(self)
+                return self._fontPath or "GameFontNormal",
+                       self._fontSize or 12, self._fontFlags or ""
+            end,
+            SetFont = function(self, f, s, fl)
+                self._fontPath = f; self._fontSize = s; self._fontFlags = fl
+            end,
+            SetTextColor = function(self, r, g, b, a)
+                self._r = r; self._g = g; self._b = b; self._a = a or 1
+            end,
+            GetTextColor = function(self)
+                return self._r, self._g, self._b, self._a
+            end,
         }
         frame.Button = {
             _text = "–",
             _scripts = {},
+            _textColor = { r = 1, g = 1, b = 1, a = 1 },
+            _points = {},
             SetText   = function(self, t) self._text = t end,
             GetText   = function(self) return self._text end,
             SetScript = function(self, event, fn) self._scripts[event] = fn end,
             GetScript = function(self, event) return self._scripts[event] end,
+            SetFont   = function(self, f, s, fl) end,
+            SetTextColor = function(self, r, g, b, a)
+                self._textColor = { r = r, g = g, b = b, a = a or 1 }
+            end,
+            GetTextColor = function(self)
+                return self._textColor.r, self._textColor.g,
+                       self._textColor.b, self._textColor.a
+            end,
+            SetShadowOffset = function() end,
+            SetShadowColor  = function() end,
+            ClearAllPoints  = function(self) self._points = {} end,
+            SetPoint = function(self, ...)
+                self._points[#self._points + 1] = { ... }
+            end,
         }
     end
     
