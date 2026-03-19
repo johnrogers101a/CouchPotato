@@ -1027,7 +1027,7 @@ local BOON_ABBREV = {
     ["Critical Strike"]        = "Crit",
     ["Mastery"]                = "Mastery",
     ["Versatility"]            = "Vers",
-    ["Reduce incoming damage"] = "Dmg Red",
+    ["Damage Reduction"]       = "Dmg Red",
 }
 
 -------------------------------------------------------------------------------
