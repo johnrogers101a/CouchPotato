@@ -119,4 +119,37 @@ describe("DelveCompanionStats", function()
             assert.equals("No companion data", ns.nameLabel._text)
         end)
     end)
+
+    describe("slash command registration", function()
+        it("registers /dcs slash command", function()
+            assert.is_not_nil(SLASH_DCS1)
+            assert.equals("/dcs", SLASH_DCS1)
+            assert.is_not_nil(SlashCmdList["DCS"])
+            assert.is_function(SlashCmdList["DCS"])
+        end)
+
+        it("registers /delvecompanion slash command alias", function()
+            assert.is_not_nil(SLASH_DCS2)
+            assert.equals("/delvecompanion", SLASH_DCS2)
+        end)
+    end)
+
+    describe("UpdateCompanionData state tracking", function()
+        it("stores last-known companion state after update", function()
+            C_DelvesUI.GetCompanionInfoForActivePlayer = function() return 2 end
+            C_DelvesUI.GetFactionForCompanion = function() return 200 end
+
+            ns:UpdateCompanionData("TEST_EVENT")
+
+            assert.equals(2, ns._lastCompanionID)
+            assert.equals(200, ns._lastFactionID)
+            assert.equals("Valeera Sanguinar", ns._lastName)
+        end)
+
+        it("UpdateCompanionData handles nil event without error", function()
+            assert.has_no_error(function()
+                ns:UpdateCompanionData(nil)
+            end)
+        end)
+    end)
 end)
