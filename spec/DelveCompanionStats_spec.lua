@@ -135,6 +135,55 @@ describe("DelveCompanionStats", function()
         end)
     end)
 
+    describe("PrintDebugInfo / CreateDebugPopup", function()
+
+        it("PrintDebugInfo creates ns.debugPopup (not nil after call)", function()
+            assert.is_nil(ns.debugPopup)
+            ns:PrintDebugInfo()
+            assert.is_not_nil(ns.debugPopup)
+        end)
+
+        it("ns.debugPopup._editBox contains non-empty debug text after PrintDebugInfo", function()
+            ns:PrintDebugInfo()
+            local text = ns.debugPopup._editBox:GetText()
+            assert.is_not_nil(text)
+            assert.is_true(#text > 0)
+        end)
+
+        it("debug text contains expected substrings: C_DelvesUI, factionID, name", function()
+            ns:PrintDebugInfo()
+            local text = ns.debugPopup._editBox:GetText()
+            assert.is_not_nil(text:find("C_DelvesUI",  1, true), "expected 'C_DelvesUI' in debug text")
+            assert.is_not_nil(text:find("factionID",   1, true), "expected 'factionID' in debug text")
+            assert.is_not_nil(text:find("name",        1, true), "expected 'name' in debug text")
+        end)
+
+        it("calling PrintDebugInfo twice reuses the same popup (singleton)", function()
+            ns:PrintDebugInfo()
+            local first = ns.debugPopup
+            ns:PrintDebugInfo()
+            local second = ns.debugPopup
+            assert.equals(first, second)
+        end)
+
+        it("popup is shown after PrintDebugInfo", function()
+            ns:PrintDebugInfo()
+            assert.is_true(ns.debugPopup._shown)
+        end)
+
+        it("/dcs debug slash command triggers PrintDebugInfo and creates popup", function()
+            assert.is_nil(ns.debugPopup)
+            SlashCmdList["DCS"]("debug")
+            assert.is_not_nil(ns.debugPopup)
+        end)
+
+        it("CreateDebugPopup stores _editBox reference on popup", function()
+            ns:CreateDebugPopup()
+            assert.is_not_nil(ns.debugPopup._editBox)
+        end)
+
+    end)
+
     describe("UpdateCompanionData state tracking", function()
         it("stores last-known factionID and name after update", function()
             C_DelvesUI.GetFactionForCompanion = function() return 2744 end
@@ -160,5 +209,79 @@ describe("DelveCompanionStats", function()
                 ns:UpdateCompanionData(nil)
             end)
         end)
+    end)
+
+    -- -------------------------------------------------------------------------
+    -- Frame visibility tests
+    -- -------------------------------------------------------------------------
+    describe("Frame visibility", function()
+
+        after_each(function()
+            -- Reset delve state so the NEXT test's outer before_each runs OnLoad
+            -- with a clean (no-delve) state, preventing test pollution.
+            C_DelvesUI._SetHasActiveDelve(false)
+            -- Restore HasActiveDelve in case a test replaced it with an error stub.
+            C_DelvesUI.HasActiveDelve = function() return C_DelvesUI._hasActiveDelve or false end
+        end)
+
+        it("hides frame after OnLoad when HasActiveDelve returns false", function()
+            -- Outer before_each called ns:OnLoad() with _hasActiveDelve = false.
+            -- UpdateFrameVisibility() inside OnLoad should have hidden the frame.
+            assert.equals(false, ns.frame:IsShown())
+        end)
+
+        it("shows frame when PLAYER_ENTERING_WORLD fires and HasActiveDelve returns true", function()
+            -- Frame is hidden after OnLoad; entering a delve should show it.
+            C_DelvesUI._SetHasActiveDelve(true)
+            ns.frame._scripts["OnEvent"](ns.frame, "PLAYER_ENTERING_WORLD")
+            assert.equals(true, ns.frame:IsShown())
+        end)
+
+        it("hides frame when ZONE_CHANGED_NEW_AREA fires and HasActiveDelve returns false", function()
+            -- First enter a delve so the frame is visible.
+            C_DelvesUI._SetHasActiveDelve(true)
+            ns.frame._scripts["OnEvent"](ns.frame, "PLAYER_ENTERING_WORLD")
+            assert.equals(true, ns.frame:IsShown())
+
+            -- Now leave the delve; the frame should hide.
+            C_DelvesUI._SetHasActiveDelve(false)
+            ns.frame._scripts["OnEvent"](ns.frame, "ZONE_CHANGED_NEW_AREA")
+            assert.equals(false, ns.frame:IsShown())
+        end)
+
+        it("calls UpdateCompanionData when frame transitions from hidden to shown", function()
+            -- Wrap ns.UpdateCompanionData with a call counter (spy).
+            local callCount = 0
+            local originalUCD = ns.UpdateCompanionData
+            ns.UpdateCompanionData = function(self, event)
+                callCount = callCount + 1
+                return originalUCD(self, event)
+            end
+
+            -- Precondition: frame is hidden after OnLoad.
+            assert.equals(false, ns.frame:IsShown())
+
+            -- Trigger hidden → shown transition.
+            C_DelvesUI._SetHasActiveDelve(true)
+            ns.frame._scripts["OnEvent"](ns.frame, "PLAYER_ENTERING_WORLD")
+
+            -- UpdateCompanionData must have been invoked at least once.
+            assert.is_true(callCount >= 1)
+
+            -- Restore the original implementation.
+            ns.UpdateCompanionData = originalUCD
+        end)
+
+        it("keeps frame hidden when HasActiveDelve raises an error", function()
+            -- Replace HasActiveDelve with a function that throws.
+            C_DelvesUI.HasActiveDelve = function() error("API unavailable") end
+
+            -- UpdateFrameVisibility must survive the error (pcall guard) and hide.
+            assert.has_no_error(function()
+                ns:UpdateFrameVisibility()
+            end)
+            assert.equals(false, ns.frame:IsShown())
+        end)
+
     end)
 end)
