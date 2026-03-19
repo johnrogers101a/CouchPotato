@@ -117,14 +117,15 @@ local function createMockFrame(frameType, name, parent, template)
         _height = 0,
         _textures = {},
         _fontstrings = {},
+        _points = {},
     }
     
     function frame:SetSize(w, h) self._width = w; self._height = h end
     function frame:SetHeight(h) self._height = h end
     function frame:GetWidth() return self._width end
     function frame:GetHeight() return self._height end
-    function frame:SetPoint(...) end
-    function frame:ClearAllPoints() end
+    function frame:SetPoint(...) self._points[#self._points + 1] = { ... } end
+    function frame:ClearAllPoints() self._points = {} end
     function frame:SetAllPoints(other) end
     function frame:SetParent(p) self._parent = p end
     function frame:GetParent() return self._parent end
@@ -226,6 +227,7 @@ local function createMockFrame(frameType, name, parent, template)
             _shown = true,
         }
         function fs:SetPoint(...) end
+        function fs:SetAllPoints(anchor) end
         function fs:SetText(t) self._text = t end
         function fs:GetText() return self._text end
         function fs:SetTextColor(r,g,b,a) self._r = r; self._g = g; self._b = b; self._a = a end
@@ -254,6 +256,15 @@ local function createMockFrame(frameType, name, parent, template)
 
     -- Base frame keyboard support
     function frame:EnableKeyboard(v) self._keyboardEnabled = v end
+
+    -- SetFontString: bind a FontString as the button's label, proxying text/color methods
+    function frame:SetFontString(fs)
+        self._labelFS = fs
+        self.GetText = function(self2) return self2._labelFS:GetText() end
+        self.SetText = function(self2, t) self2._labelFS:SetText(t) end
+        self.GetTextColor = function(self2) return self2._labelFS:GetTextColor() end
+        self.SetTextColor = function(self2, r, g, b, a) self2._labelFS:SetTextColor(r, g, b, a) end
+    end
 
     -- Cooldown frame support
     if template and template:find("CooldownFrameTemplate") then
