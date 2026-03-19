@@ -641,14 +641,14 @@ function ns:OnLoad()
     ns.frame:SetFrameLevel(100)
 
     -- 3. Determine frame width — match ScenarioObjectiveTracker when available,
-    -- otherwise fall back to 220 px (a reasonable tracker-column width).
-    local frameWidth = 220
-    pcall(function()
-        if ScenarioObjectiveTracker and ScenarioObjectiveTracker.GetWidth then
-            local w = ScenarioObjectiveTracker:GetWidth()
-            if w and w > 0 then frameWidth = w end
-        end
-    end)
+    -- otherwise fall back to 260 px (a reasonable tracker-column width).
+    local frameWidth = 0
+    if ScenarioObjectiveTracker and ScenarioObjectiveTracker.GetWidth then
+        frameWidth = ScenarioObjectiveTracker:GetWidth()
+    end
+    if frameWidth < 100 then
+        frameWidth = 260  -- fallback
+    end
     -- Inner content width: 6 px padding each side (matches ObjectiveTracker label inset)
     local contentWidth = frameWidth - 12
 
@@ -693,7 +693,7 @@ function ns:OnLoad()
     headerTitle:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
     headerTitle:SetPoint("LEFT", header, "LEFT", 8, 0)
     headerTitle:SetJustifyV("MIDDLE")
-    headerTitle:SetText("Delve Companion")
+    headerTitle:SetText("Companion")
     headerTitle:SetTextColor(1, 0.82, 0.0, 1)
 
     -- Collapse button: gold en-dash, far right, vertically centred
@@ -774,15 +774,39 @@ function ns:OnLoad()
             DelveCompanionStatsDB.position = { point = point, relPoint = relPoint, x = x, y = y }
         end)
         ns.pinBtnText:SetText("📌")
-        ns.pinBtnText:SetTextColor(0.6, 0.6, 0.6, 1)  -- grey when unpinned
+        ns.pinBtnText:SetTextColor(0.5, 0.5, 0.5, 1)  -- grey when unpinned
         DelveCompanionStatsDB.pinned = false
     end
 
     pinBtn:SetScript("OnClick", function()
-        if DelveCompanionStatsDB.pinned then
-            ApplyUnpinnedState()
+        if DelveCompanionStatsDB.pinned ~= false then
+            -- Currently pinned → unpin
+            DelveCompanionStatsDB.pinned = false
+            ns.frame:SetMovable(true)
+            ns.frame:EnableMouse(true)
+            ns.frame:RegisterForDrag("LeftButton")
+            ns.frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
+            ns.frame:SetScript("OnDragStop", function(f)
+                f:StopMovingOrSizing()
+                local point, _, relPoint, x, y = f:GetPoint()
+                DelveCompanionStatsDB.position = {point=point, relPoint=relPoint, x=x, y=y}
+            end)
+            ns.pinBtnText:SetText("📌")
+            ns.pinBtnText:SetTextColor(0.5, 0.5, 0.5, 1)  -- grey = unpinned
         else
-            ApplyPinnedState()
+            -- Currently unpinned → pin
+            DelveCompanionStatsDB.pinned = true
+            ns.frame:SetMovable(false)
+            ns.frame:SetScript("OnDragStart", nil)
+            ns.frame:SetScript("OnDragStop", nil)
+            ns.frame:ClearAllPoints()
+            if ScenarioObjectiveTracker then
+                ns.frame:SetPoint("TOP", ScenarioObjectiveTracker, "BOTTOM", 0, -4)
+            else
+                ns.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+            end
+            ns.pinBtnText:SetText("📌")
+            ns.pinBtnText:SetTextColor(1, 0.78, 0.1, 1)  -- gold = pinned
         end
     end)
 
@@ -803,10 +827,29 @@ function ns:OnLoad()
     end
     contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",  0, 0)
     contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT", 0, 0)
-    -- Simple semi-transparent dark background; no border texture
+    -- Subtle dark content background
     local contentBg = contentFrame:CreateTexture(nil, "BACKGROUND")
-    contentBg:SetAllPoints()
-    contentBg:SetColorTexture(0, 0, 0, 0.45)
+    contentBg:SetAllPoints(contentFrame)
+    contentBg:SetColorTexture(0.05, 0.04, 0.01, 0.85)  -- very dark brown, slightly lighter than header
+
+    -- Thin gold border lines (left, right, bottom only — top is header bottom line)
+    local borderLeft = contentFrame:CreateTexture(nil, "BORDER")
+    borderLeft:SetWidth(1)
+    borderLeft:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 0, 0)
+    borderLeft:SetPoint("BOTTOMLEFT", contentFrame, "BOTTOMLEFT", 0, 0)
+    borderLeft:SetColorTexture(1, 0.78, 0.1, 0.6)
+
+    local borderRight = contentFrame:CreateTexture(nil, "BORDER")
+    borderRight:SetWidth(1)
+    borderRight:SetPoint("TOPRIGHT", contentFrame, "TOPRIGHT", 0, 0)
+    borderRight:SetPoint("BOTTOMRIGHT", contentFrame, "BOTTOMRIGHT", 0, 0)
+    borderRight:SetColorTexture(1, 0.78, 0.1, 0.6)
+
+    local borderBottom = contentFrame:CreateTexture(nil, "BORDER")
+    borderBottom:SetHeight(1)
+    borderBottom:SetPoint("BOTTOMLEFT", contentFrame, "BOTTOMLEFT", 0, 0)
+    borderBottom:SetPoint("BOTTOMRIGHT", contentFrame, "BOTTOMRIGHT", 0, 0)
+    borderBottom:SetColorTexture(1, 0.78, 0.1, 0.6)
     -- Store on ns so UpdateCompanionData can resize it
     ns.contentFrame = contentFrame
 
@@ -947,6 +990,24 @@ function ns:OnLoad()
     -- 9. Determine frame visibility based on active delve state
     ns:UpdateFrameVisibility()
 
+    -- ResizeToTracker: re-measure ScenarioObjectiveTracker width and apply to all labels.
+    -- Called on PLAYER_ENTERING_WORLD so the tracker is fully sized before we read it.
+    local function ResizeToTracker()
+        if ScenarioObjectiveTracker and ScenarioObjectiveTracker.GetWidth then
+            local w = ScenarioObjectiveTracker:GetWidth()
+            if w and w > 100 then
+                ns.frame:SetWidth(w)
+                if ns.headerFrame then ns.headerFrame:SetWidth(w) end
+                local cw = w - 12
+                if ns.nameLabel         then ns.nameLabel:SetWidth(cw) end
+                if ns.boonLabel         then ns.boonLabel:SetWidth(cw) end
+                if ns.boonHeaderLabel   then ns.boonHeaderLabel:SetWidth(cw) end
+                if ns.nemesisLabel      then ns.nemesisLabel:SetWidth(cw) end
+                if ns.nemesisDetailLabel then ns.nemesisDetailLabel:SetWidth(cw) end
+            end
+        end
+    end
+
     -- 11. Register events for companion data updates
     if ns.frame then
         ns.frame:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -981,6 +1042,7 @@ function ns:OnLoad()
             -- two delayed refreshes so boons (which may not be applied immediately on
             -- zone-in) have time to activate before we query the tooltip.
             if event == "PLAYER_ENTERING_WORLD" then
+                ResizeToTracker()
                 ns:UpdateFrameVisibility()
                 AnchorFrame()
                 if ns.frame:IsShown() then
@@ -1256,7 +1318,12 @@ function ns:UpdateCompanionData(event)
     ns._lastName      = name
     ns._lastLevel     = level
 
-    -- Update UI — Line 1: combined "Name  LN  XP (pct%)" on nameLabel
+    -- Update header title to show companion name dynamically
+    if ns.headerTitle then
+        ns.headerTitle:SetText(name)
+    end
+
+    -- Update UI — Line 1: combined "LN  XP" on nameLabel (no name, no percentage)
     -- levelLabel and xpLabel are kept as hidden labels for backward-compat/testability
     if ns.nameLabel then
         -- Build level fragment
@@ -1272,12 +1339,11 @@ function ns:UpdateCompanionData(event)
             local currentXP = friendData.standing - threshold
             local maxXP     = friendData.nextThreshold - threshold
             if maxXP > 0 then
-                local percent = math.floor((currentXP / maxXP) * 100)
-                xpText = FormatNumber(currentXP) .. "/" .. FormatNumber(maxXP) .. " (" .. percent .. "%)"
+                xpText = FormatNumber(currentXP) .. "/" .. FormatNumber(maxXP)
             end
         end
 
-        local parts = { name }
+        local parts = {}
         if levelStr ~= "" then parts[#parts + 1] = "L" .. levelStr end
         if xpText   ~= "" then parts[#parts + 1] = xpText end
         ns.nameLabel:SetText(table.concat(parts, "  "))

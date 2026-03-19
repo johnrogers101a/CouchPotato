@@ -60,8 +60,9 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            -- No friendship data → name only on Line 1
-            assert.equals("Valeera Sanguinar", ns.nameLabel._text)
+            -- No friendship data → name shown in header, nameLabel shows only level+XP (both empty here)
+            assert.equals("Valeera Sanguinar", ns.headerTitle:GetText())
+            assert.equals("", ns.nameLabel._text)
         end)
 
         it("shows Unknown when GetFactionDataByID returns nil", function()
@@ -70,7 +71,8 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("Unknown", ns.nameLabel._text)
+            assert.equals("Unknown", ns.headerTitle:GetText())
+            assert.equals("", ns.nameLabel._text)
         end)
 
         it("extracts level from friendshipRank (combined into nameLabel Line 1)", function()
@@ -80,8 +82,8 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            -- Level is now part of the combined nameLabel text; levelLabel stays hidden/empty
-            assert.is_truthy(ns.nameLabel._text:find("Valeera Sanguinar", 1, true))
+            -- Name goes to header; nameLabel shows level only (no XP in this mock)
+            assert.equals("Valeera Sanguinar", ns.headerTitle:GetText())
             assert.is_truthy(ns.nameLabel._text:find("L3", 1, true))
             assert.equals("", ns.levelLabel._text)
         end)
@@ -104,8 +106,10 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            -- No level data → nameLabel is just the name, no "Level" fragment
-            assert.equals("Valeera Sanguinar", ns.nameLabel._text)
+            -- No level data → nameLabel is empty (level+XP only format, nothing to show)
+            -- Header title shows the companion name
+            assert.equals("Valeera Sanguinar", ns.headerTitle:GetText())
+            assert.equals("", ns.nameLabel._text)
             assert.equals("", ns.levelLabel._text)
         end)
 
@@ -136,10 +140,12 @@ describe("DelveCompanionStats", function()
 
             -- currentXP = 491930 - 460435 = 31,495
             -- maxXP     = 499810 - 460435 = 39,375
-            -- All three pieces appear on the single combined nameLabel line
-            assert.is_truthy(ns.nameLabel._text:find("Valeera Sanguinar", 1, true))
+            -- nameLabel shows "L24  31,495/39,375" — level and XP only, no name, no %
+            assert.equals("Valeera Sanguinar", ns.headerTitle:GetText())
             assert.is_truthy(ns.nameLabel._text:find("L24", 1, true))
-            assert.is_truthy(ns.nameLabel._text:find("31,495/39,375 (79%)", 1, true))
+            assert.is_truthy(ns.nameLabel._text:find("31,495/39,375", 1, true))
+            assert.is_nil(ns.nameLabel._text:find("79%%", 1, true))
+            assert.is_nil(ns.nameLabel._text:find("Valeera Sanguinar", 1, true))
             -- xpLabel is hidden/unused
             assert.equals("", ns.xpLabel._text)
         end)
@@ -668,9 +674,9 @@ describe("DelveCompanionStats", function()
             assert.is_not_nil(ns.collapseBtn)
         end)
 
-        it("header title text is 'Delve Companion'", function()
+        it("header title text is 'Companion' (placeholder until data loads)", function()
             assert.is_not_nil(ns.headerTitle)
-            assert.equals("Delve Companion", ns.headerTitle:GetText())
+            assert.equals("Companion", ns.headerTitle:GetText())
         end)
 
         it("collapse button click hides contentFrame and sets collapsed = true", function()
@@ -1165,24 +1171,24 @@ describe("DelveCompanionStats", function()
         describe("spacing and padding", function()
 
             it("nameLabel width is frameWidth - 12", function()
-                -- frameWidth defaults to 220; contentWidth = 220 - 12 = 208
-                assert.equals(208, ns.nameLabel._width)
+                -- frameWidth fallback is 260 (ScenarioObjectiveTracker nil in tests); contentWidth = 260 - 12 = 248
+                assert.equals(248, ns.nameLabel._width)
             end)
 
             it("boonHeaderLabel width is frameWidth - 12", function()
-                assert.equals(208, ns.boonHeaderLabel._width)
+                assert.equals(248, ns.boonHeaderLabel._width)
             end)
 
             it("boonLabel width is frameWidth - 12", function()
-                assert.equals(208, ns.boonLabel._width)
+                assert.equals(248, ns.boonLabel._width)
             end)
 
             it("nemesisLabel width is frameWidth - 12", function()
-                assert.equals(208, ns.nemesisLabel._width)
+                assert.equals(248, ns.nemesisLabel._width)
             end)
 
             it("nemesisDetailLabel width is frameWidth - 12", function()
-                assert.equals(208, ns.nemesisDetailLabel._width)
+                assert.equals(248, ns.nemesisDetailLabel._width)
             end)
 
         end)
@@ -1190,18 +1196,20 @@ describe("DelveCompanionStats", function()
         -- ── Content frame background ──────────────────────────────────────────
         describe("content frame background", function()
 
-            it("contentFrame has a semi-transparent dark background texture", function()
-                -- A SetColorTexture(0,0,0,0.45) call must have been made on contentFrame
+            it("contentFrame has a dark brown background texture", function()
+                -- SetColorTexture(0.05, 0.04, 0.01, 0.85) — very dark brown
                 local found = false
                 for _, tex in ipairs(ns.contentFrame._textures or {}) do
                     local c = tex._color
-                    if c and c[1] == 0 and c[2] == 0 and c[3] == 0
-                          and math.abs(c[4] - 0.45) < 0.001 then
+                    if c and math.abs(c[1] - 0.05) < 0.001
+                          and math.abs(c[2] - 0.04) < 0.001
+                          and math.abs(c[3] - 0.01) < 0.001
+                          and math.abs(c[4] - 0.85) < 0.001 then
                         found = true
                         break
                     end
                 end
-                assert.is_true(found, "expected semi-transparent dark texture on contentFrame")
+                assert.is_true(found, "expected dark brown texture (0.05,0.04,0.01,0.85) on contentFrame")
             end)
 
             it("contentFrame has no backdrop set (nil)", function()
@@ -1320,9 +1328,9 @@ describe("DelveCompanionStats", function()
         it("pin button text color is grey when unpinned", function()
             ns.pinBtn._scripts["OnClick"]()   -- unpin
             local r, g, b = ns.pinBtnText:GetTextColor()
-            assert.near(0.6, r, 0.01, "R should be ~0.6 (grey)")
-            assert.near(0.6, g, 0.01, "G should be ~0.6 (grey)")
-            assert.near(0.6, b, 0.01, "B should be ~0.6 (grey)")
+            assert.near(0.5, r, 0.01, "R should be ~0.5 (grey)")
+            assert.near(0.5, g, 0.01, "G should be ~0.5 (grey)")
+            assert.near(0.5, b, 0.01, "B should be ~0.5 (grey)")
         end)
 
         it("clicking pin button when unpinned switches back to pinned state", function()
