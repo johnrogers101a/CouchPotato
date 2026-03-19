@@ -10,9 +10,20 @@ _G.ChatFrame1 = {
 }
 setmetatable(_G.ChatFrame1, {__index = _G.UIParent})
 
+-- IsInInstance mock (mutable for tests)
+_G._isInInstanceType = "none"   -- default: not in any instance
+_G.IsInInstance = function()
+    return nil, _G._isInInstanceType
+end
+
 -- C_DelvesUI stub (used by DelveCompanionStats to fetch active companion)
 _G.C_DelvesUI = {
     GetActiveCompanion = function() return nil end,
+    GetFactionForCompanion = function() return 2744 end,
+    GetCompanionInfoForActivePlayer = function() return nil end,
+    HasActiveDelve = function() return C_DelvesUI._hasActiveDelve or false end,
+    _hasActiveDelve = false,
+    _SetHasActiveDelve = function(val) C_DelvesUI._hasActiveDelve = val end,
 }
 
 -- Core UI frames
@@ -23,19 +34,77 @@ _G.UIParent = {
     Hide = function() end,
 }
 
+_G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
+
+-- Blizzard font objects (stubs matching ObjectiveTracker font names used in styling)
+_G.ObjectiveTitleFont = { _name = "ObjectiveTitleFont" }
+_G.ObjectiveFont      = { _name = "ObjectiveFont" }
+
+-- ScenarioObjectiveTracker stub (used by AnchorFrame and pin/unpin logic)
+-- Intentionally nil so tests see the "no tracker" code path, matching the usual
+-- test environment where no Blizzard tracker frame exists.
+_G.ScenarioObjectiveTracker = nil
+
+-- WoW string utility globals
+_G.strlower  = function(s) return (s or ""):lower() end
+_G.strupper  = function(s) return (s or ""):upper() end
+_G.strtrim   = function(s) return (s or ""):match("^%s*(.-)%s*$") end
+_G.strfind   = string.find
+_G.strsub    = string.sub
+_G.strlen    = string.len
+
+-- WoW table utility globals (aliases for standard Lua table functions)
+_G.tinsert   = table.insert
+_G.tremove   = table.remove
+_G.tContains = function(t, value)
+    for _, v in ipairs(t) do if v == value then return true end end
+    return false
+end
+_G.wipe      = function(t) for k in pairs(t) do t[k] = nil end return t end
+
 _G.DEFAULT_CHAT_FRAME = {
     AddMessage = function(self, msg, r, g, b)
         print(msg)
     end
 }
 
+local _tooltipNumLines = 0
+
 _G.GameTooltip = {
-    SetOwner = function() end,
+    SetOwner     = function() end,
     SetSpellByID = function() end,
-    SetItemByID = function() end,
-    Show = function() end,
-    Hide = function() end,
+    SetItemByID  = function() end,
+    Show         = function() end,
+    Hide         = function() end,
+    NumLines     = function() return _tooltipNumLines end,
 }
+
+-- GameTooltipTextLeft1..8: FontString stubs read by GetBoonsDisplayText()
+for i = 1, 8 do
+    _G["GameTooltipTextLeft" .. i] = {
+        _text = "",
+        GetText = function(self)
+            if self._text and self._text ~= "" then return self._text end
+            return nil
+        end,
+    }
+end
+
+-- Test helper: populate mock tooltip lines (used for boon tests)
+_G._SetMockBoonTooltip = function(lines)
+    _tooltipNumLines = #lines
+    for i = 1, 8 do
+        _G["GameTooltipTextLeft" .. i]._text = lines[i] or ""
+    end
+end
+
+-- Test helper: clear mock tooltip (called in before_each / after_each)
+_G._ClearMockBoonTooltip = function()
+    _tooltipNumLines = 0
+    for i = 1, 8 do
+        _G["GameTooltipTextLeft" .. i]._text = ""
+    end
+end
 
 -- CreateFrame - returns a FUNCTIONAL frame mock
 local function createMockFrame(frameType, name, parent, template)
@@ -53,13 +122,16 @@ local function createMockFrame(frameType, name, parent, template)
         _height = 0,
         _textures = {},
         _fontstrings = {},
+        _points = {},
     }
     
     function frame:SetSize(w, h) self._width = w; self._height = h end
+    function frame:SetWidth(w) self._width = w end
+    function frame:SetHeight(h) self._height = h end
     function frame:GetWidth() return self._width end
     function frame:GetHeight() return self._height end
-    function frame:SetPoint(...) end
-    function frame:ClearAllPoints() end
+    function frame:SetPoint(...) self._points[#self._points + 1] = { ... } end
+    function frame:ClearAllPoints() self._points = {} end
     function frame:SetAllPoints(other) end
     function frame:SetParent(p) self._parent = p end
     function frame:GetParent() return self._parent end
@@ -72,12 +144,26 @@ local function createMockFrame(frameType, name, parent, template)
     function frame:SetScale(s) self._scale = s end
     function frame:GetScale() return self._scale or 1.0 end
     function frame:SetFrameStrata(s) self._strata = s end
+    function frame:GetFrameStrata() return self._strata or "MEDIUM" end
     function frame:SetFrameLevel(l) self._level = l end
+    function frame:GetFrameLevel() return self._level or 0 end
+    function frame:GetSize() return self._width, self._height end
     function frame:EnableGamePadButton(e) self._gpEnabled = e end
     function frame:EnableGamePadStick(e) self._stickEnabled = e end
     function frame:SetPropagateKeyboardInput(p) self._propagateKeyboard = p end
     function frame:RegisterForClicks(...) end
     function frame:GetName() return self._name end
+    function frame:SetBackdrop(backdrop) self._backdrop = backdrop end
+    function frame:SetBackdropColor(r,g,b,a) self._backdropColor = {r,g,b,a} end
+    function frame:SetBackdropBorderColor(r,g,b,a) self._backdropBorderColor = {r,g,b,a} end
+    function frame:SetMovable(v) self._movable = v end
+    function frame:EnableMouse(v) self._mouseEnabled = v end
+    function frame:RegisterForDrag(...) end
+    function frame:StartMoving() end
+    function frame:StopMovingOrSizing() end
+    function frame:GetPoint(index)
+        return "BOTTOMLEFT", nil, "BOTTOMLEFT", 0, 0
+    end
     
     function frame:SetScript(event, fn)
         self._scripts[event] = fn
@@ -127,7 +213,10 @@ local function createMockFrame(frameType, name, parent, template)
         }
         function tex:SetAllPoints(anchor) end
         function tex:SetPoint(...) end
-        function tex:SetSize(w, h) end
+        function tex:SetSize(w, h) self._width = w; self._height = h end
+        function tex:SetWidth(w) self._width = w end
+        function tex:SetHeight(h) self._height = h end
+        function tex:GetWidth() return self._width or 0 end
         function tex:SetTexture(t) self._texture = t; return t ~= nil end
         function tex:GetTexture() return self._texture end
         function tex:SetColorTexture(r,g,b,a) self._color = {r,g,b,a} end
@@ -147,23 +236,125 @@ local function createMockFrame(frameType, name, parent, template)
             _shown = true,
         }
         function fs:SetPoint(...) end
+        function fs:SetAllPoints(anchor) end
         function fs:SetText(t) self._text = t end
         function fs:GetText() return self._text end
-        function fs:SetTextColor(r,g,b,a) end
-        function fs:SetFont(font, size, flags) end
+        function fs:SetTextColor(r,g,b,a) self._r = r; self._g = g; self._b = b; self._a = a end
+        function fs:GetTextColor() return self._r or 1, self._g or 1, self._b or 1, self._a or 1 end
+        function fs:SetFont(font, size, flags) self._fontPath = font; self._fontSize = size; self._fontFlags = flags end
+        function fs:SetVerticalAlign(v) self._verticalAlign = v end
+        function fs:SetFontObject(obj)
+            if type(obj) == "table" and obj._name then
+                self._fontPath = obj._name
+            elseif type(obj) == "string" then
+                self._fontPath = obj
+            end
+        end
+        function fs:GetFont() return self._fontPath or "GameFontNormal", self._fontSize or 12, self._fontFlags or "" end
         function fs:SetWidth(w) self._width = w end
         function fs:SetJustifyH(j) end
+        function fs:SetJustifyV(j) end
         function fs:Show() self._shown = true end
         function fs:Hide() self._shown = false end
         function fs:IsShown() return self._shown end
+        function fs:SetShadowOffset(x, y) end
+        function fs:SetShadowColor(r, g, b, a) end
+        function fs:SetWordWrap(v) self._wordWrap = v end
+        function fs:GetWordWrap() return self._wordWrap end
         table.insert(frame._fontstrings, fs)
         return fs
     end
-    
+
+    -- Base frame keyboard support
+    function frame:EnableKeyboard(v) self._keyboardEnabled = v end
+
+    -- SetFontString: bind a FontString as the button's label, proxying text/color methods
+    function frame:SetFontString(fs)
+        self._labelFS = fs
+        self.GetText = function(self2) return self2._labelFS:GetText() end
+        self.SetText = function(self2, t) self2._labelFS:SetText(t) end
+        self.GetTextColor = function(self2) return self2._labelFS:GetTextColor() end
+        self.SetTextColor = function(self2, r, g, b, a) self2._labelFS:SetTextColor(r, g, b, a) end
+    end
+
+    -- Texture methods for Button (SetNormalTexture, SetPushedTexture, SetHighlightTexture, SetNormalAtlas)
+    function frame:SetNormalTexture(tex) self._normalTexture = tex end
+    function frame:GetNormalTexture() return self._normalTexture end
+    function frame:SetPushedTexture(tex) self._pushedTexture = tex end
+    function frame:GetPushedTexture() return self._pushedTexture end
+    function frame:SetHighlightTexture(tex, blendMode) self._highlightTexture = tex; self._highlightBlend = blendMode end
+    function frame:GetHighlightTexture() return self._highlightTexture end
+    function frame:SetNormalAtlas(atlas) self._normalAtlas = atlas end
+    function frame:GetNormalAtlas() return self._normalAtlas end
+
     -- Cooldown frame support
     if template and template:find("CooldownFrameTemplate") then
         function frame:SetDrawEdge(v) end
         function frame:SetCooldown(start, duration) end
+    end
+
+    -- UIPanelButtonTemplate support (SetText on button labels)
+    if template and template:find("UIPanelButtonTemplate") then
+        frame._text = ""
+        function frame:SetText(t) self._text = t end
+        function frame:GetText() return self._text end
+    end
+
+    -- ObjectiveTrackerSectionHeaderTemplate support
+    -- Provides .Text (title FontString) and .Button (collapse/expand) children,
+    -- matching the real Blizzard template's child widget names.
+    if template and template:find("ObjectiveTrackerSectionHeaderTemplate") then
+        frame.Text = {
+            _text = "", _fontPath = nil, _fontObject = nil,
+            _r = 1, _g = 1, _b = 1, _a = 1,
+            SetText  = function(self, t) self._text = t end,
+            GetText  = function(self) return self._text end,
+            SetFontObject = function(self, obj)
+                self._fontObject = obj
+                if type(obj) == "table" and obj._name then
+                    self._fontPath = obj._name
+                elseif type(obj) == "string" then
+                    self._fontPath = obj
+                end
+            end,
+            GetFont = function(self)
+                return self._fontPath or "GameFontNormal",
+                       self._fontSize or 12, self._fontFlags or ""
+            end,
+            SetFont = function(self, f, s, fl)
+                self._fontPath = f; self._fontSize = s; self._fontFlags = fl
+            end,
+            SetTextColor = function(self, r, g, b, a)
+                self._r = r; self._g = g; self._b = b; self._a = a or 1
+            end,
+            GetTextColor = function(self)
+                return self._r, self._g, self._b, self._a
+            end,
+        }
+        frame.Button = {
+            _text = "–",
+            _scripts = {},
+            _textColor = { r = 1, g = 1, b = 1, a = 1 },
+            _points = {},
+            SetText   = function(self, t) self._text = t end,
+            GetText   = function(self) return self._text end,
+            SetScript = function(self, event, fn) self._scripts[event] = fn end,
+            GetScript = function(self, event) return self._scripts[event] end,
+            SetFont   = function(self, f, s, fl) end,
+            SetTextColor = function(self, r, g, b, a)
+                self._textColor = { r = r, g = g, b = b, a = a or 1 }
+            end,
+            GetTextColor = function(self)
+                return self._textColor.r, self._textColor.g,
+                       self._textColor.b, self._textColor.a
+            end,
+            SetShadowOffset = function() end,
+            SetShadowColor  = function() end,
+            ClearAllPoints  = function(self) self._points = {} end,
+            SetPoint = function(self, ...)
+                self._points[#self._points + 1] = { ... }
+            end,
+        }
     end
     
     -- StatusBar support
@@ -177,7 +368,25 @@ local function createMockFrame(frameType, name, parent, template)
         function frame:SetStatusBarColor(r,g,b,a) end
         function frame:SetStatusBarTexture(t) end
     end
-    
+
+    -- EditBox support
+    if frameType == "EditBox" then
+        frame._text = ""
+        function frame:SetText(t) self._text = t end
+        function frame:GetText() return self._text end
+        function frame:SetMultiLine(v) end
+        function frame:SetAutoFocus(v) end
+        function frame:SetFontObject(f) end
+        function frame:SetFont(font, size, flags) end
+        function frame:EnableMouse(v) self._mouseEnabled = v end
+    end
+
+    -- ScrollFrame support
+    if frameType == "ScrollFrame" then
+        function frame:SetScrollChild(child) self._scrollChild = child end
+        function frame:GetScrollChild() return self._scrollChild end
+    end
+
     return frame
 end
 
@@ -635,6 +844,33 @@ if not _G.unpack then
     _G.unpack = table.unpack
 end
 
+-- C_GossipInfo stub (used by DelveCompanionStats for friendship reputation)
+_G.C_GossipInfo = _G.C_GossipInfo or {
+    GetFriendshipReputation = function(factionID)
+        if factionID == 2744 then
+            return {
+                standing           = 491930,
+                reactionThreshold  = 460435,
+                nextThreshold      = 499810,
+                reaction           = "Level 24",
+                friendshipFactionID = 2744,
+                name               = "Valeera Sanguinar",
+                friendshipRank     = 3,
+            }
+        end
+        return nil
+    end,
+    GetFriendshipReputationRanks = function(factionID) return nil end,
+}
+
+-- C_Reputation stub (used by DelveCompanionStats for dynamic companion name lookup)
+_G.C_Reputation = {
+    GetFactionDataByID = function(factionID)
+        if factionID == 2744 then return { name = "Valeera Sanguinar" } end
+        return nil
+    end,
+}
+
 -- bit library (available in WoW's Lua 5.1 environment)
 if not _G.bit then
     -- Try to load luabitop (installed in CI via luarocks install luabitop)
@@ -665,6 +901,65 @@ if not _G.bit then
             lshift = function(a, b) return math.floor(a * (2 ^ b)) end,
             rshift = function(a, b) return math.floor(a / (2 ^ b)) end,
             bnot   = function(a)    return -(a + 1) end,
+        }
+    end
+end
+
+-- C_UnitAuras stub (used by DelveCompanionStats for boon detection)
+-- _auras[spellID] = table (truthy) or nil
+_G.C_UnitAuras = {
+    _auras = {},
+
+    GetPlayerAuraBySpellID = function(spellID, filter)
+        return _G.C_UnitAuras._auras[spellID]
+    end,
+}
+
+_G.UnitAura = function(unit, index, filter)
+    return nil  -- legacy fallback; not used in primary code path
+end
+
+-- C_ScenarioInfo stub (TWW API — used by DelveCompanionStats for nemesis progress)
+-- _criteria is a list of {description, quantity, totalQuantity}
+_G.C_ScenarioInfo = {
+    _criteria = {},
+
+    GetInfo = function()
+        return nil, nil, false  -- name, description, isInScenario
+    end,
+
+    GetScenarioStepInfo = function()
+        return { numCriteria = #(_G.C_ScenarioInfo._criteria) }
+    end,
+
+    GetCriteriaInfo = function(i)
+        local c = _G.C_ScenarioInfo._criteria[i]
+        if not c then return nil end
+        return c
+    end,
+}
+
+-- Test helper: set a single boon aura by spell ID (value1 optional; presence is enough)
+_G._SetMockAura = function(spellID, value1)
+    _G.C_UnitAuras._auras[spellID] = { value1 = value1 }
+end
+
+-- Test helper: clear all mock auras
+_G._ClearMockAuras = function()
+    _G.C_UnitAuras._auras = {}
+end
+
+-- Test helper: set nemesis progress.
+-- Two calling forms:
+--   _SetMockNemesis(current, total)           -- single criterion (legacy)
+--   _SetMockNemesis({ {desc, qty, total}, … }) -- explicit criteria table
+_G._SetMockNemesis = function(criteriaOrCurrent, total)
+    if type(criteriaOrCurrent) == "table" then
+        _G.C_ScenarioInfo._criteria = criteriaOrCurrent
+    else
+        -- Legacy single-criterion form
+        _G.C_ScenarioInfo._criteria = {
+            { description = "Enemy group kills", quantity = criteriaOrCurrent, totalQuantity = total }
         }
     end
 end

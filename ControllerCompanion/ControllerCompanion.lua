@@ -438,6 +438,12 @@ function CP:ChatCommand(input)
     elseif cmd == "status" then
         self:PrintStatus()
 
+    elseif cmd == "info" then
+        local text = self:DumpSettings()
+        if not CP.infoPopup then CP:CreateInfoPopup() end
+        CP.infoPopup._editBox:SetText(text)
+        CP.infoPopup:Show()
+
     else
         -- No arguments: open the config window
         if CP.ConfigWindow then
@@ -455,6 +461,7 @@ function CP:ChatCommand(input)
             self:Print("  /cp test      - Run in-game diagnostics")
             self:Print("  /cp debug     - Dump binding/module/DB state")
             self:Print("  /cp debugmode - Toggle verbose debug logging")
+            self:Print("  /cp info      - Show all current settings")
         end
     end
 end
@@ -462,6 +469,108 @@ end
 -------------------------------------------------------------------------------
 -- Helpers
 -------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------
+-- CreateInfoPopup: Build the scrollable settings info popup (singleton).
+-------------------------------------------------------------------------------
+function CP:CreateInfoPopup()
+    if CP.infoPopup then return CP.infoPopup end
+
+    local ok, popup = pcall(function()
+        return CreateFrame("Frame", "ControllerCompanionInfoPopup", UIParent, "BackdropTemplate")
+    end)
+    if not ok or not popup then
+        popup = CreateFrame("Frame", "ControllerCompanionInfoPopup", UIParent)
+    end
+
+    popup:SetSize(500, 400)
+    popup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    popup:SetFrameStrata("DIALOG")
+    popup:SetFrameLevel(100)
+
+    popup:SetBackdrop({
+        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    popup:SetBackdropColor(0, 0, 0, 0.85)
+
+    -- Title
+    local title = popup:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOPLEFT", popup, "TOPLEFT", 8, -8)
+    title:SetText("ControllerCompanion Settings")
+
+    -- ScrollFrame
+    local scrollFrame = CreateFrame("ScrollFrame", nil, popup)
+    scrollFrame:SetPoint("TOPLEFT",     popup, "TOPLEFT",     8,  -28)
+    scrollFrame:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -28,  30)
+
+    -- EditBox as scroll child
+    local editBox = CreateFrame("EditBox", nil, scrollFrame)
+    editBox:SetMultiLine(true)
+    editBox:SetAutoFocus(false)
+    editBox:EnableMouse(true)
+    local fontOk = pcall(function() editBox:SetFontObject("GameFontHighlight") end)
+    if not fontOk then
+        editBox:SetFont(STANDARD_TEXT_FONT, 12, "")
+    end
+    editBox:SetSize(scrollFrame:GetWidth(), 2000)
+    scrollFrame:SetScrollChild(editBox)
+
+    popup._editBox = editBox
+
+    -- Close button
+    local closeBtn = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
+    closeBtn:SetSize(80, 22)
+    closeBtn:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -8, 8)
+    closeBtn:SetText("Close")
+    closeBtn:SetScript("OnClick", function() popup:Hide() end)
+
+    -- Dismiss on ESC
+    popup:EnableKeyboard(true)
+    popup:SetScript("OnKeyDown", function(self, key)
+        if key == "ESCAPE" then self:Hide() end
+    end)
+
+    popup:Hide()
+    CP.infoPopup = popup
+    return popup
+end
+
+-------------------------------------------------------------------------------
+-- DumpSettings: Build a formatted multi-line string of all current settings.
+-------------------------------------------------------------------------------
+function CP:DumpSettings()
+    if not CP.db then return "Settings not yet loaded" end
+    local p = CP.db.profile
+    local c = CP.db.char
+
+    local lines = {}
+    local function add(s) lines[#lines + 1] = tostring(s) end
+
+    add("=== ControllerCompanion Settings ===")
+    add("Version: " .. (self.version or "?"))
+    add("")
+    add("[Profile]")
+    add("enabled: "            .. tostring(p.enabled))
+    add("debugMode: "          .. tostring(p.debugMode))
+    add("uiScale: "            .. tostring(p.uiScale))
+    add("radialAlpha: "        .. tostring(p.radialAlpha))
+    add("vibrationEnabled: "   .. tostring(p.vibrationEnabled))
+    add("ledEnabled: "         .. tostring(p.ledEnabled))
+    add("hideBlizzardFrames: " .. tostring(p.hideBlizzardFrames))
+    add("peekThreshold: "      .. tostring(p.peekThreshold))
+    add("lockThreshold: "      .. tostring(p.lockThreshold))
+    add("")
+    add("[Character]")
+    add("currentWheel: "  .. tostring(c.currentWheel))
+    add("healerMode: "    .. tostring(c.healerMode))
+    add("wheelLayouts: (table)")
+
+    return table.concat(lines, "\n")
+end
+
 function CP:PrintStatus()
     self:Print("=== ControllerCompanion Status ===")
     self:Print(string_format("Version: %s", self.version))

@@ -59,6 +59,8 @@ globals = {
     "DEFAULT_CHAT_FRAME", "GameTooltip", "SlashCmdList",
     "RAID_CLASS_COLORS", "CUSTOM_CLASS_COLORS",
     "GameFontNormal", "GameFontNormalLarge", "GameFontNormalSmall",
+    "GameFontHighlightSmall", "GameFontHighlight",
+    "ObjectiveTitleFont", "ObjectiveFont",
     "NumberFontNormal", "ChatFontNormal", "STANDARD_TEXT_FONT",
     "LootFrame", "CharacterFrame", "MainMenuBar",
     "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarLeft", "MultiBarRight",
@@ -86,16 +88,21 @@ globals = {
 
     -- Slash command globals (set by Loader.lua)
     "SLASH_CP1", "SLASH_CP2", "SLASH_CPLOAD1",
+    "SLASH_DCS1", "SLASH_DCS2",
 
     -- Ace3 (embedded)
     "LibStub",
 
     -- Delves
-    "C_DelvesUI", "ChatFrame1", "C_Reputation",
+    "C_DelvesUI", "ChatFrame1", "C_Reputation", "IsInInstance",
+    "ScenarioObjectiveTracker", "ObjectiveTrackerFrame",
+
+    -- Unit Auras and Scenario APIs
+    "C_UnitAuras", "C_ScenarioInfo", "UnitAura",
 
     -- Addon globals
     "ControllerCompanion", "ControllerCompanionDB", "ControllerCompanionLoaderDB",
-    "DelveCompanionStatsDB",
+    "DelveCompanionStatsDB", "DelveCompanionStatsNS",
 
     -- bit library
     "bit",
@@ -116,7 +123,9 @@ ignore = {
 -- Per-file settings
 files = {
     ["spec/**"] = {
-        globals = { "_MockPlayer", "_SetCombatState", "_GetOverrideBindings", "_ResetBindings" },
+        globals = { "_MockPlayer", "_SetCombatState", "_GetOverrideBindings", "_ResetBindings",
+                    "_SetMockAura", "_ClearMockAuras", "_SetMockNemesis",
+                    "_SetMockBoonTooltip", "_ClearMockBoonTooltip" },
         ignore = { "143" },  -- accessing undefined fields (busted assertions, table.unpack compat)
     }
 }
