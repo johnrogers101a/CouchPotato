@@ -1271,6 +1271,67 @@ describe("DelveCompanionStats", function()
                 assert.equals(2, #all)
             end)
 
+            it("GetAllNemesisCriteria returns empty table when GetScenarioInfo returns nil", function()
+                -- Simulate GetScenarioInfo returning nil (no active scenario)
+                local orig = C_ScenarioInfo.GetScenarioInfo
+                C_ScenarioInfo.GetScenarioInfo = function() return nil end
+                local all = ns.GetAllNemesisCriteria()
+                assert.equals(0, #all)
+                C_ScenarioInfo.GetScenarioInfo = orig
+            end)
+
+            it("GetAllNemesisCriteria skips step when GetStepInfo returns nil", function()
+                -- Step 2 exists in numStages but its GetStepInfo returns nil
+                _G.C_ScenarioInfo._scenarioInfo = { currentStage = 1, numStages = 2 }
+                local orig = C_ScenarioInfo.GetStepInfo
+                C_ScenarioInfo.GetStepInfo = function(stepIndex)
+                    if stepIndex == 2 then return nil end
+                    return orig(stepIndex)
+                end
+                _SetMockNemesisByStep(1, {
+                    { description = "Defeat Nemesis", quantity = 0, totalQuantity = 1 }
+                })
+                local all = ns.GetAllNemesisCriteria()
+                -- Only step 1 is returned; step 2 is silently skipped
+                assert.equals(1, #all)
+                C_ScenarioInfo.GetStepInfo = orig
+            end)
+
+            it("GetAllNemesisCriteria skips criteria entry when GetCriteriaInfoByStep returns nil", function()
+                -- Step has 2 criteria but second returns nil
+                _G.C_ScenarioInfo._scenarioInfo = { currentStage = 1, numStages = 1 }
+                local orig = C_ScenarioInfo.GetCriteriaInfoByStep
+                C_ScenarioInfo.GetCriteriaInfoByStep = function(step, index)
+                    if index == 2 then return nil end
+                    return orig(step, index)
+                end
+                _SetMockNemesisByStep(1, {
+                    { description = "Defeat Nemesis", quantity = 0, totalQuantity = 1 },
+                    { description = "Second criterion", quantity = 0, totalQuantity = 1 },
+                })
+                local all = ns.GetAllNemesisCriteria()
+                -- Second entry was nil, so only 1 criterion collected
+                assert.equals(1, #all)
+                C_ScenarioInfo.GetCriteriaInfoByStep = orig
+            end)
+
+            it("GetAllNemesisCriteria falls back to single-step when multi-step APIs absent", function()
+                -- Remove multi-step APIs to force fallback path
+                local origGetScenarioInfo = C_ScenarioInfo.GetScenarioInfo
+                local origGetStepInfo     = C_ScenarioInfo.GetStepInfo
+                C_ScenarioInfo.GetScenarioInfo = nil
+                C_ScenarioInfo.GetStepInfo     = nil
+                -- Set legacy single-step criteria
+                _G.C_ScenarioInfo._criteria = {
+                    { description = "Defeat Nemesis", quantity = 1, totalQuantity = 3 }
+                }
+                local all = ns.GetAllNemesisCriteria()
+                assert.equals(1, #all)
+                assert.equals("Defeat Nemesis", all[1].description)
+                C_ScenarioInfo.GetScenarioInfo = origGetScenarioInfo
+                C_ScenarioInfo.GetStepInfo     = origGetStepInfo
+            end)
+
         end)
 
     end)
@@ -1370,6 +1431,74 @@ describe("DelveCompanionStats", function()
             assert.equals(2, ns.UPDATE_THROTTLE_SECS)
         end)
 
+        it("timer events (TIMER_2S_PEW) are throttled like non-critical events", function()
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0   -- delta = 0 → throttle active
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("TIMER_2S_PEW")  -- timer event, not critical
+            assert.equals(0, callCount, "expected TIMER_2S_PEW to be throttled")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("timer events (TIMER_5S_PEW) are throttled like non-critical events", function()
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("TIMER_5S_PEW")
+            assert.equals(0, callCount, "expected TIMER_5S_PEW to be throttled")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("SCENARIO_CRITERIA_UPDATE bypasses throttle (critical event)", function()
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("SCENARIO_CRITERIA_UPDATE")
+            assert.is_true(callCount >= 1, "expected SCENARIO_CRITERIA_UPDATE to bypass throttle")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("MANUAL event bypasses throttle", function()
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("MANUAL")
+            assert.is_true(callCount >= 1, "expected MANUAL event to bypass throttle")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
     end)
 
     -- -------------------------------------------------------------------------
@@ -1433,6 +1562,43 @@ describe("DelveCompanionStats", function()
         it("cache accessors work correctly", function()
             ns._setCachedBoonText("some cached value")
             assert.equals("some cached value", ns._getCachedBoonText())
+        end)
+
+        it("GetBoonsDisplayText returns empty string when cache is empty and GameTooltip is shown", function()
+            -- Edge case: cache starts empty (""), GameTooltip is shown, scan is skipped → returns ""
+            ns._setCachedBoonText("")
+            _G._mockGameTooltipShown = true
+            _SetMockBoonTooltip({ "Boons", "", "", "Movement Speed: 8%." })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("", ns.boonLabel._text)
+            assert.is_false(ns.boonLabel:IsShown())
+        end)
+
+        it("GetBoonsDisplayText returns empty string when cache is empty and in combat lockdown", function()
+            -- Edge case: cache starts empty, in combat → scan skipped → returns ""
+            ns._setCachedBoonText("")
+            _G._mockInCombatLockdown = true
+            _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%." })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("", ns.boonLabel._text)
+            assert.is_false(ns.boonLabel:IsShown())
+        end)
+
+        it("GetBoonsDisplayText updates cache when tooltip is not shown and not in combat", function()
+            -- Normal path: not blocked → scan runs → cache and label both updated
+            ns._setCachedBoonText("")
+            _G._mockGameTooltipShown = false
+            _G._mockInCombatLockdown = false
+            _SetMockBoonTooltip({ "Boons", "", "", "Versatility: 7%." })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Versatility: 7%", ns.boonLabel._text)
+            assert.equals("Versatility: 7%", ns._getCachedBoonText())
         end)
 
     end)
