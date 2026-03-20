@@ -597,9 +597,28 @@ end
 -- Called after expanding collapsed state.
 -------------------------------------------------------------------------------
 function ns:UpdateFrameHeight()
+    if not ns.frame then return end
+    local contentHeight = 30
+    if ns.boonHeaderLabel and ns.boonHeaderLabel:IsShown() then
+        contentHeight = contentHeight + 6 + 16
+    end
+    if ns.boonLabel and ns.boonLabel:IsShown() then
+        local boonText = ns.boonLabel:GetText() or ""
+        local _, newlines = boonText:gsub("\n", "\n")
+        contentHeight = contentHeight + 3 + (newlines + 1) * 16
+    end
+    if ns.nemesisLabel and ns.nemesisLabel:IsShown() then
+        contentHeight = contentHeight + 6 + 16
+    end
+    if ns.nemesisDetailLabel and ns.nemesisDetailLabel:IsShown() then
+        local detailText = ns.nemesisDetailLabel:GetText() or ""
+        local _, newlines = detailText:gsub("\n", "\n")
+        contentHeight = contentHeight + 3 + (newlines + 1) * 16
+    end
+    if ns.contentFrame then ns.contentFrame:SetHeight(contentHeight) end
     local headerH = ns.headerFrame and ns.headerFrame:GetHeight() or 28
     if ns.contentFrame and ns.contentFrame:IsShown() then
-        ns.frame:SetHeight(headerH + 8 + (ns.contentFrame:GetHeight() or 0))
+        ns.frame:SetHeight(headerH + 8 + contentHeight)
     else
         ns.frame:SetHeight(headerH)
     end
@@ -1172,29 +1191,6 @@ GetBoonsDisplayText = function()
     return table.concat(parts, "\n")
 end
 
--------------------------------------------------------------------------------
--- AbbreviateLabel: Shorten a scenario criterion description to a compact label.
--- Strips common trailing action words (slain, destroyed, killed, kills, remaining)
--- then returns the last meaningful word, capitalised, truncated to 12 characters.
-local function AbbreviateLabel(desc)
-    -- Strip trailing action words (case-insensitive)
-    local stripped = desc
-        :gsub("%s+[Ss]lain$",     "")
-        :gsub("%s+[Dd]estroyed$", "")
-        :gsub("%s+[Kk]illed$",    "")
-        :gsub("%s+[Kk]ills$",     "")
-        :gsub("%s+[Rr]emaining$", "")
-    -- Trim whitespace
-    stripped = stripped:match("^%s*(.-)%s*$") or stripped
-    -- Take the last word
-    local lastWord = stripped:match("(%S+)%s*$") or stripped
-    -- Capitalise first letter
-    lastWord = lastWord:sub(1, 1):upper() .. lastWord:sub(2)
-    -- Truncate to 12 characters
-    if #lastWord > 12 then lastWord = lastWord:sub(1, 12) end
-    return lastWord
-end
-
 -- IsCombatCriteria: Returns true only for combat/kill-type scenario criteria.
 -- Filters out quest/interaction objectives (Speak with, Find, Collect, etc.)
 -- so only enemy-kill trackers appear in the nemesis display.
@@ -1449,36 +1445,7 @@ function ns:UpdateCompanionData(event)
     end
 
     -- Dynamic frame height based on visible content
-    if ns.frame then
-        -- Base: 8px top padding + 16px nameLabel + 6px bottom padding = 30
-        local contentHeight = 30
-        -- Boon section: 6px gap + 16px header + 3px gap + body lines(16px each)
-        if ns.boonHeaderLabel and ns.boonHeaderLabel:IsShown() then
-            contentHeight = contentHeight + 6 + 16
-        end
-        if ns.boonLabel and ns.boonLabel:IsShown() then
-            local boonText = ns.boonLabel:GetText() or ""
-            local _, newlines = boonText:gsub("\n", "\n")
-            contentHeight = contentHeight + 3 + (newlines + 1) * 16
-        end
-        -- Nemesis section: 6px gap + 16px header + 3px gap + detail lines(16px each)
-        if ns.nemesisLabel and ns.nemesisLabel:IsShown() then
-            contentHeight = contentHeight + 6 + 16
-        end
-        if ns.nemesisDetailLabel and ns.nemesisDetailLabel:IsShown() then
-            local detailText = ns.nemesisDetailLabel:GetText() or ""
-            local _, newlines = detailText:gsub("\n", "\n")
-            contentHeight = contentHeight + 3 + (newlines + 1) * 16
-        end
-        -- Resize contentFrame then total frame (include 8px header-content gap)
-        if ns.contentFrame then ns.contentFrame:SetHeight(contentHeight) end
-        local headerH = ns.headerFrame and ns.headerFrame:GetHeight() or 28
-        if ns.contentFrame and ns.contentFrame:IsShown() then
-            ns.frame:SetHeight(headerH + 8 + contentHeight)
-        else
-            ns.frame:SetHeight(headerH)
-        end
-    end
+    ns:UpdateFrameHeight()
 
     -- Persist to SavedVariables
     if DelveCompanionStatsDB then
