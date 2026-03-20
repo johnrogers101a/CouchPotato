@@ -24,6 +24,17 @@ local NEMESIS_MIN_TIER = 4
 ns.NEMESIS_MIN_TIER = NEMESIS_MIN_TIER
 
 -------------------------------------------------------------------------------
+-- Private tooltip scanner: reads spell tooltip data without touching the
+-- user-visible GameTooltip.  Prevents periodic data refreshes from
+-- stealing / hiding the player's active tooltip.
+-------------------------------------------------------------------------------
+local SCANNER_TOOLTIP_NAME = "DCSTooltipScanner"
+local scannerTooltip = CreateFrame("GameTooltip", SCANNER_TOOLTIP_NAME, UIParent, "GameTooltipTemplate")
+scannerTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+ns._scannerTooltip = scannerTooltip
+ns.SCANNER_TOOLTIP_NAME = SCANNER_TOOLTIP_NAME
+
+-------------------------------------------------------------------------------
 -- dcsprint: Write a coloured message to the chat frame (or print fallback)
 -------------------------------------------------------------------------------
 local function dcsprint(msg)
@@ -374,10 +385,10 @@ function ns:PrintDebugInfo()
     -- Dump tooltip lines for spell 1280098 (source of boon stat values)
     table.insert(lines, "--- Tooltip for 1280098 ---")
     pcall(function()
-        GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
-        GameTooltip:SetSpellByID(1280098)
-        for i = 1, GameTooltip:NumLines() do
-            local left = _G["GameTooltipTextLeft" .. i]
+        scannerTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+        scannerTooltip:SetSpellByID(1280098)
+        for i = 1, scannerTooltip:NumLines() do
+            local left = _G[SCANNER_TOOLTIP_NAME .. "TextLeft" .. i]
             if left and left:GetText() then
                 local rawText = left:GetText()
                 table.insert(lines, ("  L%d: %s"):format(i, rawText))
@@ -389,7 +400,7 @@ function ns:PrintDebugInfo()
                 end
             end
         end
-        GameTooltip:Hide()
+        scannerTooltip:Hide()
     end)
 
     local boonText = ""
@@ -1167,11 +1178,11 @@ end
 GetBoonsDisplayText = function()
     local parts = {}
     local ok = pcall(function()
-        GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
-        GameTooltip:SetSpellByID(1280098)
-        local numLines = GameTooltip:NumLines()
+        scannerTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+        scannerTooltip:SetSpellByID(1280098)
+        local numLines = scannerTooltip:NumLines()
         for i = 1, numLines do
-            local lineText = _G["GameTooltipTextLeft"..i] and _G["GameTooltipTextLeft"..i]:GetText()
+            local lineText = _G[SCANNER_TOOLTIP_NAME .. "TextLeft" .. i] and _G[SCANNER_TOOLTIP_NAME .. "TextLeft" .. i]:GetText()
             -- Guard: if the tooltip still contains unresolved spell template variables
             -- (e.g. "$w1%"), the boon aura hasn't been applied yet; skip the line.
             if lineText and not lineText:find("%$w%d") then
@@ -1185,7 +1196,7 @@ GetBoonsDisplayText = function()
                 end
             end
         end
-        GameTooltip:Hide()
+        scannerTooltip:Hide()
     end)
     if not ok or #parts == 0 then return "" end
     return table.concat(parts, "\n")
@@ -1219,7 +1230,9 @@ ns.IsCombatCriteria = IsCombatCriteria
 local function IsNemesisCriteria(description)
     if not description then return false end
     local desc = description:lower()
-    return desc:find("nemesis", 1, true) ~= nil or desc:find("strongbox", 1, true) ~= nil
+    return desc:find("nemesis", 1, true) ~= nil
+        or desc:find("strongbox", 1, true) ~= nil
+        or desc:find("enemy group", 1, true) ~= nil
 end
 ns.IsNemesisCriteria = IsNemesisCriteria
 
@@ -1245,14 +1258,6 @@ local function GetDelveTier()
         end
     end
     
-    -- Attempt 2: Try C_Scenario (older API)
-    if _G.C_Scenario and _G.C_Scenario.GetInfo then
-        local ok, _, _, difficulty = pcall(_G.C_Scenario.GetInfo)
-        if ok and difficulty and difficulty > 0 then
-            return difficulty
-        end
-    end
-    
     -- No tier detected or not in a delve
     return nil
 end
@@ -1264,7 +1269,10 @@ ns.GetDelveTier = GetDelveTier
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
     local tier = GetDelveTier()
-    if not tier or tier < NEMESIS_MIN_TIER then return "" end
+    -- Only gate when tier IS detected and is below minimum.
+    -- When tier is nil (API unavailable), criteria existence implies eligibility
+    -- since the server only spawns nemesis in tier 4+.
+    if tier and tier > 0 and tier < NEMESIS_MIN_TIER then return "" end
     if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
     local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
     if not stepInfo or not stepInfo.numCriteria then return "" end
@@ -1285,7 +1293,7 @@ end
 -------------------------------------------------------------------------------
 local function GetNemesisDetailText()
     local tier = GetDelveTier()
-    if not tier or tier < NEMESIS_MIN_TIER then return "" end
+    if tier and tier > 0 and tier < NEMESIS_MIN_TIER then return "" end
     if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
     local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
     if not stepInfo or not stepInfo.numCriteria then return "" end
