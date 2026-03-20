@@ -29,10 +29,7 @@ _G.C_DelvesUI = {
     _SetDelveTier = function(tier) C_DelvesUI._delveTier = tier end,
 }
 
--- Global helper to set mock delve tier for tests
-_G._SetMockDelveTier = function(tier)
-    _G.C_DelvesUI._delveTier = tier
-end
+
 
 -- Core UI frames
 _G.UIParent = {

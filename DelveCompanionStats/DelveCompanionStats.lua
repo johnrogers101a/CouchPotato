@@ -1249,15 +1249,7 @@ local function GetDelveTier()
         end
     end
     
-    -- Attempt 2: Check C_ScenarioInfo for difficulty
-    if C_ScenarioInfo and C_ScenarioInfo.GetScenarioInfo then
-        local ok, info = pcall(C_ScenarioInfo.GetScenarioInfo)
-        if ok and info and info.difficultyID then
-            return info.difficultyID
-        end
-    end
-    
-    -- Attempt 3: Try C_Scenario (older API)
+    -- Attempt 2: Try C_Scenario (older API)
     if _G.C_Scenario and _G.C_Scenario.GetInfo then
         local ok, _, _, difficulty = pcall(_G.C_Scenario.GetInfo)
         if ok and difficulty and difficulty > 0 then
