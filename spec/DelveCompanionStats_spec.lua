@@ -448,7 +448,7 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("Max HP: 6%\nMove Spd: 10%\nStrength: 4%\nMastery: 5%", ns.boonLabel._text)
+            assert.equals("Maximum Health: 6%\nMovement Speed: 10%\nStrength: 4%\nMastery: 5%", ns.boonLabel._text)
         end)
 
         it("boon display hides label when no active boons", function()
@@ -470,7 +470,7 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("Max HP: 3%", ns.boonLabel._text)
+            assert.equals("Maximum Health: 3%", ns.boonLabel._text)
         end)
 
         it("boon label is shown when tooltip has boon lines", function()
@@ -484,7 +484,7 @@ describe("DelveCompanionStats", function()
             ns:UpdateCompanionData()
 
             assert.is_true(ns.boonLabel:IsShown())
-            assert.equals("Vers: 7%", ns.boonLabel._text)
+            assert.equals("Versatility: 7%", ns.boonLabel._text)
             -- boonHeaderLabel must also be shown
             assert.is_true(ns.boonHeaderLabel:IsShown())
             assert.equals("Boons", ns.boonHeaderLabel._text)
@@ -543,7 +543,7 @@ describe("DelveCompanionStats", function()
                 "Maximum Health: 6%.\nMovement Speed: 10%.",
             })
             ns:UpdateCompanionData()
-            assert.equals("Max HP: 6%\nMove Spd: 10%", ns.boonLabel._text)
+            assert.equals("Maximum Health: 6%\nMovement Speed: 10%", ns.boonLabel._text)
             assert.is_true(ns.boonLabel:IsShown())
         end)
 
@@ -579,7 +579,7 @@ describe("DelveCompanionStats", function()
             C_Timer._FireAll()
 
             -- After timers fire, boon label should have resolved data
-            assert.equals("Max HP: 8%", ns.boonLabel._text)
+            assert.equals("Maximum Health: 8%", ns.boonLabel._text)
         end)
 
         it("delayed timers from PLAYER_ENTERING_WORLD do NOT call UpdateCompanionData when not in delve", function()
@@ -857,7 +857,8 @@ describe("DelveCompanionStats", function()
             C_ScenarioInfo._criteria = {}
             C_ScenarioInfo._bonusSteps = {}
             C_ScenarioInfo._bonusCriteria = {}
-            C_DelvesUI._SetDelveTier(8)  -- Tier 8 — above nemesis threshold
+            -- Default to tier 4 (nemesis minimum) so existing tests pass
+            _SetMockDelveTier(4)
         end)
 
         after_each(function()
@@ -865,18 +866,79 @@ describe("DelveCompanionStats", function()
             C_ScenarioInfo._criteria = {}
             C_ScenarioInfo._bonusSteps = {}
             C_ScenarioInfo._bonusCriteria = {}
-            C_DelvesUI._delveTier = nil
+            _SetMockDelveTier(0)
         end)
 
-        it("nemesis progress displays 'Nemesis Strongbox (n/n)' format", function()
+        -- \u2500\u2500 NEMESIS_MIN_TIER constant \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        it("NEMESIS_MIN_TIER constant is exported and equals 4", function()
+            assert.equals(4, ns.NEMESIS_MIN_TIER)
+        end)
+
+        -- \u2500\u2500 GetDelveTier \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        it("GetDelveTier delegates to C_DelvesUI.GetDelveTier", function()
+            C_DelvesUI._SetDelveTier(7)
+            assert.equals(7, ns.GetDelveTier())
+        end)
+
+        it("GetDelveTier returns nil when C_DelvesUI.GetDelveTier is unavailable", function()
+            local saved = C_DelvesUI.GetDelveTier
+            C_DelvesUI.GetDelveTier = nil
+            assert.is_nil(ns.GetDelveTier())
+            C_DelvesUI.GetDelveTier = saved
+        end)
+
+        -- \u2500\u2500 Tier gating \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        it("nemesis section hidden when tier is nil (not in a delve)", function()
+            C_DelvesUI._SetDelveTier(nil)
+            _SetMockNemesis(1, 1)
+
+            ns:UpdateCompanionData()
+
+            assert.equals("", ns.nemesisLabel._text)
+            assert.is_false(ns.nemesisLabel:IsShown())
+            assert.is_false(ns.nemesisDetailLabel:IsShown())
+        end)
+
+        it("nemesis section hidden when tier < 4", function()
+            C_DelvesUI._SetDelveTier(3)
+            _SetMockNemesis(1, 1)
+
+            ns:UpdateCompanionData()
+
+            assert.equals("", ns.nemesisLabel._text)
+            assert.is_false(ns.nemesisLabel:IsShown())
+        end)
+
+        it("nemesis section visible when tier == 4", function()
+            C_DelvesUI._SetDelveTier(4)
+            _SetMockNemesis(1, 1)
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+            assert.is_true(ns.nemesisLabel:IsShown())
+        end)
+
+        it("nemesis section visible when tier > 4", function()
+            C_DelvesUI._SetDelveTier(8)
+            _SetMockNemesis(1, 1)
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+            assert.is_true(ns.nemesisLabel:IsShown())
+        end)
+
+        -- \u2500\u2500 Header format \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        it("nemesis progress displays 'Nemesis Strongbox' with no count in parens", function()
             _SetMockNemesis(2, 4)
 
             ns:UpdateCompanionData()
 
-            assert.equals("Nemesis Strongbox (2/4)", ns.nemesisLabel._text)
+            assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
         end)
 
-        it("nemesis progress hides label if criterion not found", function()
+        it("nemesis progress hides label if no nemesis criterion found", function()
             -- No criteria set
             ns:UpdateCompanionData()
 
@@ -884,7 +946,7 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesis label is shown when criterion is found", function()
+        it("nemesis label is shown when nemesis criterion is found", function()
             _SetMockNemesis(1, 4)
 
             ns:UpdateCompanionData()
@@ -892,40 +954,28 @@ describe("DelveCompanionStats", function()
             assert.is_true(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesis progress sums multiple criteria into one 'Nemesis Strongbox (n/n)' header", function()
+        it("nemesis progress shows 'Nemesis Strongbox' header for multiple nemesis criteria", function()
             _SetMockNemesis({
-                { description = "Vilebranch Skeleton Charmers slain", quantity = 0, totalQuantity = 5 },
-                { description = "Totems destroyed",                   quantity = 1, totalQuantity = 6 },
+                { description = "Nemesis target slain", quantity = 0, totalQuantity = 1 },
             })
 
             ns:UpdateCompanionData()
 
-            -- 0+1 = 1 current, 5+6 = 11 total
-            assert.equals("Nemesis Strongbox (1/11)", ns.nemesisLabel._text)
+            assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
         end)
 
         it("nemesis progress skips criteria with zero totalQuantity", function()
             _SetMockNemesis({
-                { description = "Cultists slain", quantity = 0, totalQuantity = 0 },
-                { description = "Totems destroyed", quantity = 2, totalQuantity = 3 },
+                { description = "Nemesis target slain", quantity = 0, totalQuantity = 0 },
+                { description = "Strongbox nemesis slain", quantity = 2, totalQuantity = 3 },
             })
 
             ns:UpdateCompanionData()
 
-            assert.equals("Nemesis Strongbox (2/3)", ns.nemesisLabel._text)
+            assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
         end)
 
-        it("nemesis counts 'Enemy groups remaining' criterion in header total", function()
-            _SetMockNemesis({
-                { description = "Enemy groups remaining", quantity = 1, totalQuantity = 3 },
-            })
-
-            ns:UpdateCompanionData()
-
-            assert.equals("Nemesis Strongbox (1/3)", ns.nemesisLabel._text)
-        end)
-
-        it("nemesis hides non-combat criteria (Speak with)", function()
+        it("nemesis hides non-nemesis criteria (Speak with)", function()
             _SetMockNemesis({
                 { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
             })
@@ -936,7 +986,7 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesis hides label when all criteria are non-combat", function()
+        it("nemesis hides label when all criteria are non-nemesis", function()
             _SetMockNemesis({
                 { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
                 { description = "Find the hidden passage", quantity = 0, totalQuantity = 1 },
@@ -948,64 +998,62 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesis sums across mixed combat + non-combat (only combat contribute)", function()
+        it("nemesis excludes non-nemesis combat criteria (only nemesis criteria qualify)", function()
             _SetMockNemesis({
                 { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-                { description = "Cultists slain",                 quantity = 2, totalQuantity = 5 },
-                { description = "Totems destroyed",               quantity = 1, totalQuantity = 3 },
+                { description = "Nemesis target slain",           quantity = 1, totalQuantity = 1 },
             })
 
             ns:UpdateCompanionData()
 
-            -- Only combat criteria: 2+1=3 current, 5+3=8 total; non-combat excluded
-            assert.equals("Nemesis Strongbox (3/8)", ns.nemesisLabel._text)
+            -- Only nemesis criteria qualify -- non-nemesis combat excluded too
+            assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
         end)
 
-        -- -------------------------------------------------------------------------
-        -- nemesisDetailLabel: white body lines below the Nemesis Strongbox header
-        -- -------------------------------------------------------------------------
-        it("nemesisDetailLabel shows one white line per combat criterion", function()
+        -- \u2500\u2500 Detail format \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        it("nemesisDetailLabel shows 'current/total' with no description prefix", function()
             _SetMockNemesis({
-                { description = "Infiltrator Garand slain", quantity = 0, totalQuantity = 1 },
+                { description = "Nemesis target slain", quantity = 0, totalQuantity = 1 },
             })
 
             ns:UpdateCompanionData()
 
-            assert.equals("Infiltrator Garand slain: 0/1", ns.nemesisDetailLabel._text)
+            assert.equals("0/1", ns.nemesisDetailLabel._text)
             assert.is_true(ns.nemesisDetailLabel:IsShown())
         end)
 
-        it("nemesisDetailLabel shows multiple lines for multiple combat criteria", function()
+        it("nemesisDetailLabel shows aggregated 'current/total' for multiple nemesis criteria", function()
             _SetMockNemesis({
-                { description = "Cultists slain",  quantity = 2, totalQuantity = 5 },
-                { description = "Totems destroyed", quantity = 1, totalQuantity = 3 },
+                { description = "Nemesis alpha slain",  quantity = 2, totalQuantity = 5 },
+                { description = "Nemesis beta slain",   quantity = 1, totalQuantity = 3 },
             })
 
             ns:UpdateCompanionData()
 
-            assert.equals("Cultists slain: 2/5\nTotems destroyed: 1/3", ns.nemesisDetailLabel._text)
+            -- Aggregated: 2+1=3 current, 5+3=8 total
+            assert.equals("3/8", ns.nemesisDetailLabel._text)
         end)
 
-        it("nemesisDetailLabel excludes non-combat criteria from detail lines", function()
+        it("nemesisDetailLabel excludes non-nemesis criteria from detail lines", function()
             _SetMockNemesis({
                 { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-                { description = "Cultists slain",                 quantity = 1, totalQuantity = 3 },
+                { description = "Nemesis target slain",           quantity = 1, totalQuantity = 3 },
             })
 
             ns:UpdateCompanionData()
 
-            -- Only the combat criterion appears in detail lines
-            assert.equals("Cultists slain: 1/3", ns.nemesisDetailLabel._text)
+            -- Only the nemesis criterion appears in detail lines
+            assert.equals("1/3", ns.nemesisDetailLabel._text)
         end)
 
-        it("nemesisDetailLabel is hidden when no combat criteria qualify", function()
+        it("nemesisDetailLabel is hidden when no nemesis criteria qualify", function()
             -- No criteria at all
             ns:UpdateCompanionData()
 
             assert.is_false(ns.nemesisDetailLabel:IsShown())
         end)
 
-        it("nemesisDetailLabel is hidden when all criteria are non-combat", function()
+        it("nemesisDetailLabel is hidden when all criteria are non-nemesis", function()
             _SetMockNemesis({
                 { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
             })
@@ -1015,7 +1063,74 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.nemesisDetailLabel:IsShown())
         end)
 
+        -- \u2500\u2500 IsNemesisCriteria \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        describe("IsNemesisCriteria", function()
+            it("returns true for description containing 'nemesis' (case-insensitive)", function()
+                assert.is_true(ns.IsNemesisCriteria("Nemesis target slain"))
+            end)
 
+            it("returns true for description containing 'nemesis' in lowercase", function()
+                assert.is_true(ns.IsNemesisCriteria("kill the nemesis bounty"))
+            end)
+
+            it("returns true for description containing 'strongbox'", function()
+                assert.is_true(ns.IsNemesisCriteria("strongbox guardian defeated"))
+            end)
+
+            it("returns true for description containing 'Strongbox' (mixed case)", function()
+                assert.is_true(ns.IsNemesisCriteria("Strongbox Guardian slain"))
+            end)
+
+            it("returns false for 'Devouring Host slain' (regression: original bug)", function()
+                assert.is_false(ns.IsNemesisCriteria("Devouring Host slain"))
+            end)
+
+            it("returns false for 'Totems destroyed'", function()
+                assert.is_false(ns.IsNemesisCriteria("Totems destroyed"))
+            end)
+
+            it("returns false for 'Cultists slain'", function()
+                assert.is_false(ns.IsNemesisCriteria("Cultists slain"))
+            end)
+
+            it("returns false for 'Speak with X'", function()
+                assert.is_false(ns.IsNemesisCriteria("Speak with Celoenus Blackflame"))
+            end)
+
+            it("returns false for nil", function()
+                assert.is_false(ns.IsNemesisCriteria(nil))
+            end)
+        end)
+
+        -- \u2500\u2500 Regression: Devouring Host slain must NOT appear in nemesis section \u2500\u2500
+        it("'Devouring Host slain' criterion does NOT appear in nemesis display", function()
+            _SetMockNemesis({
+                { description = "Devouring Host slain", quantity = 100, totalQuantity = 160 },
+            })
+
+            ns:UpdateCompanionData()
+
+            -- Original bug: this was shown as "Nemesis Strongbox (100/160)"
+            -- After fix: nemesis section should be hidden (no nemesis criteria)
+            assert.equals("", ns.nemesisLabel._text)
+            assert.is_false(ns.nemesisLabel:IsShown())
+            assert.is_false(ns.nemesisDetailLabel:IsShown())
+        end)
+
+        it("mixed nemesis + non-nemesis criteria: only nemesis criteria shown", function()
+            _SetMockNemesis({
+                { description = "Devouring Host slain",  quantity = 100, totalQuantity = 160 },
+                { description = "Nemesis target slain",  quantity = 0,   totalQuantity = 1 },
+            })
+
+            ns:UpdateCompanionData()
+
+            -- Only the nemesis criterion should appear
+            assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+            assert.equals("0/1", ns.nemesisDetailLabel._text)
+        end)
+
+        -- \u2500\u2500 IsCombatCriteria (kept for backward compat) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
         describe("IsCombatCriteria", function()
             it("returns false for 'Speak with X'", function()
                 assert.is_false(ns.IsCombatCriteria("Speak with Celoenus Blackflame"))
@@ -1067,7 +1182,8 @@ describe("DelveCompanionStats", function()
         end)
 
         it("boon and nemesis labels hidden when no delve data present", function()
-            -- No auras, no criteria — simulates not being in a delve
+            -- No auras, no criteria -- simulates not being in a delve
+            C_DelvesUI._SetDelveTier(nil)
             ns:UpdateCompanionData()
 
             assert.is_false(ns.boonLabel:IsShown())
@@ -1359,11 +1475,14 @@ describe("DelveCompanionStats", function()
                 end
                 _ClearMockBoonTooltip()
                 C_ScenarioInfo._criteria = {}
+                -- Set tier so nemesis section can show in height tests
+                C_DelvesUI._SetDelveTier(4)
             end)
 
             after_each(function()
                 _ClearMockBoonTooltip()
                 C_ScenarioInfo._criteria = {}
+                C_DelvesUI._SetDelveTier(nil)
             end)
 
             it("base content height is 24 (4+16+4) when only nameLabel visible", function()
