@@ -952,7 +952,7 @@ describe("DelveCompanionStats", function()
             assert.is_true(ns.nemesisDetailLabel:IsShown())
         end)
 
-        it("nemesisDetailLabel shows one 'current/total' line per nemesis criterion", function()
+        it("nemesisDetailLabel shows aggregated 'current/total' for multiple nemesis criteria", function()
             _SetMockNemesis({
                 { description = "Nemesis alpha slain", quantity = 2, totalQuantity = 5 },
                 { description = "Nemesis beta slain",  quantity = 1, totalQuantity = 3 },
@@ -960,7 +960,7 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("2/5\n1/3", ns.nemesisDetailLabel._text)
+            assert.equals("3/8", ns.nemesisDetailLabel._text)  -- (2+1)/(5+3)
         end)
 
         it("nemesisDetailLabel excludes non-nemesis criteria from detail lines", function()
@@ -1039,6 +1039,112 @@ describe("DelveCompanionStats", function()
 
             it("returns true for 'nemesis' descriptions", function()
                 assert.is_true(ns.IsCombatCriteria("Nemesis bounty target killed"))
+            end)
+        end)
+
+        describe("IsNemesisCriteria", function()
+            it("returns true for descriptions containing 'nemesis' (case-insensitive)", function()
+                assert.is_true(ns.IsNemesisCriteria("Nemesis target slain"))
+                assert.is_true(ns.IsNemesisCriteria("NEMESIS bounty killed"))
+                assert.is_true(ns.IsNemesisCriteria("Defeat the Nemesis"))
+            end)
+
+            it("returns true for descriptions containing 'strongbox' (case-insensitive)", function()
+                assert.is_true(ns.IsNemesisCriteria("Nemesis Strongbox acquired"))
+                assert.is_true(ns.IsNemesisCriteria("STRONGBOX collected"))
+                assert.is_true(ns.IsNemesisCriteria("strongbox found"))
+            end)
+
+            it("returns false for regular combat descriptions", function()
+                assert.is_false(ns.IsNemesisCriteria("Devouring Host slain"))
+                assert.is_false(ns.IsNemesisCriteria("Totems destroyed"))
+                assert.is_false(ns.IsNemesisCriteria("Cultists slain"))
+                assert.is_false(ns.IsNemesisCriteria("Enemies defeated"))
+            end)
+
+            it("returns false for nil", function()
+                assert.is_false(ns.IsNemesisCriteria(nil))
+            end)
+
+            it("returns false for non-nemesis quest descriptions", function()
+                assert.is_false(ns.IsNemesisCriteria("Speak with Celoenus Blackflame"))
+                assert.is_false(ns.IsNemesisCriteria("Find the hidden passage"))
+            end)
+        end)
+
+        describe("Delve tier gating", function()
+            it("nemesis section hidden when tier < 4", function()
+                _SetMockNemesis(2, 4)
+                _SetMockDelveTier(3)  -- Below minimum tier
+                
+                ns:UpdateCompanionData()
+                
+                assert.equals("", ns.nemesisLabel._text)
+                assert.is_false(ns.nemesisLabel:IsShown())
+                assert.is_false(ns.nemesisDetailLabel:IsShown())
+            end)
+
+            it("nemesis section visible when tier == 4", function()
+                _SetMockNemesis(2, 4)
+                _SetMockDelveTier(4)  -- Exact minimum tier
+                
+                ns:UpdateCompanionData()
+                
+                assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+                assert.equals("2/4", ns.nemesisDetailLabel._text)
+                assert.is_true(ns.nemesisLabel:IsShown())
+                assert.is_true(ns.nemesisDetailLabel:IsShown())
+            end)
+
+            it("nemesis section visible when tier > 4", function()
+                _SetMockNemesis(1, 3)
+                _SetMockDelveTier(8)  -- Above minimum tier
+                
+                ns:UpdateCompanionData()
+                
+                assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+                assert.equals("1/3", ns.nemesisDetailLabel._text)
+                assert.is_true(ns.nemesisLabel:IsShown())
+                assert.is_true(ns.nemesisDetailLabel:IsShown())
+            end)
+
+            it("nemesis section hidden when tier is nil (not in delve)", function()
+                _SetMockNemesis(1, 2)
+                _SetMockDelveTier(nil)  -- Not in delve
+                
+                ns:UpdateCompanionData()
+                
+                assert.equals("", ns.nemesisLabel._text)
+                assert.is_false(ns.nemesisLabel:IsShown())
+                assert.is_false(ns.nemesisDetailLabel:IsShown())
+            end)
+        end)
+
+        describe("Mixed nemesis and non-nemesis criteria", function()
+            it("only shows nemesis criteria in nemesis display", function()
+                _SetMockNemesis({
+                    { description = "Devouring Host slain", quantity = 50, totalQuantity = 100 },  -- Non-nemesis
+                    { description = "Nemesis target defeated", quantity = 1, totalQuantity = 2 },  -- Nemesis
+                    { description = "Totems destroyed", quantity = 3, totalQuantity = 5 },         -- Non-nemesis
+                })
+                
+                ns:UpdateCompanionData()
+                
+                assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+                assert.equals("1/2", ns.nemesisDetailLabel._text)  -- Only nemesis criteria counted
+            end)
+
+            it("regression test: 'Devouring Host slain' does NOT appear in nemesis display", function()
+                _SetMockNemesis({
+                    { description = "Devouring Host slain", quantity = 100, totalQuantity = 160 }
+                })
+                
+                ns:UpdateCompanionData()
+                
+                -- This should be hidden because "Devouring Host slain" is not a nemesis criterion
+                assert.equals("", ns.nemesisLabel._text)
+                assert.is_false(ns.nemesisLabel:IsShown())
+                assert.is_false(ns.nemesisDetailLabel:IsShown())
             end)
         end)
 

@@ -19,6 +19,10 @@ _G.DelveCompanionStatsNS = ns
 
 ns.version = "1.0.0"
 
+-- NEMESIS_MIN_TIER: Minimum delve tier required to show nemesis section
+local NEMESIS_MIN_TIER = 4
+ns.NEMESIS_MIN_TIER = NEMESIS_MIN_TIER
+
 -------------------------------------------------------------------------------
 -- dcsprint: Write a coloured message to the chat frame (or print fallback)
 -------------------------------------------------------------------------------
@@ -1223,12 +1227,56 @@ local function IsNemesisCriteria(description)
 end
 ns.IsNemesisCriteria = IsNemesisCriteria
 
+-------------------------------------------------------------------------------
+-- GetDelveTier: Returns the current delve difficulty tier, or nil if not
+-- detectable or not in a delve. Tries multiple WoW API methods in order.
+-------------------------------------------------------------------------------
+local function GetDelveTier()
+    -- Attempt 1: Check if there's a direct C_DelvesUI method for tier
+    if C_DelvesUI then
+        -- Try common method names
+        if C_DelvesUI.GetCurrentDelveTier then
+            local ok, tier = pcall(C_DelvesUI.GetCurrentDelveTier)
+            if ok and tier and tier > 0 then return tier end
+        end
+        if C_DelvesUI.GetDelvesLevel then
+            local ok, tier = pcall(C_DelvesUI.GetDelvesLevel)
+            if ok and tier and tier > 0 then return tier end
+        end
+        if C_DelvesUI.GetDelveTier then
+            local ok, tier = pcall(C_DelvesUI.GetDelveTier)
+            if ok and tier and tier > 0 then return tier end
+        end
+    end
+    
+    -- Attempt 2: Check C_ScenarioInfo for difficulty
+    if C_ScenarioInfo and C_ScenarioInfo.GetScenarioInfo then
+        local ok, info = pcall(C_ScenarioInfo.GetScenarioInfo)
+        if ok and info and info.difficultyID then
+            return info.difficultyID
+        end
+    end
+    
+    -- Attempt 3: Try C_Scenario (older API)
+    if _G.C_Scenario and _G.C_Scenario.GetInfo then
+        local ok, _, _, difficulty = pcall(_G.C_Scenario.GetInfo)
+        if ok and difficulty and difficulty > 0 then
+            return difficulty
+        end
+    end
+    
+    -- No tier detected or not in a delve
+    return nil
+end
+-- Expose for unit testing
+ns.GetDelveTier = GetDelveTier
+
 -- GetNemesisProgress: Returns "Nemesis Strongbox" when at least one
 -- nemesis-specific criterion qualifies and the delve tier is high enough.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
-    local tier = C_DelvesUI and C_DelvesUI.GetDelveTier and C_DelvesUI.GetDelveTier()
-    if not tier or tier < 4 then return "" end
+    local tier = GetDelveTier()
+    if not tier or tier < NEMESIS_MIN_TIER then return "" end
     if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
     local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
     if not stepInfo or not stepInfo.numCriteria then return "" end
@@ -1248,20 +1296,26 @@ end
 -- Returns "" when no criteria qualify (mirrors GetBoonsDisplayText pattern).
 -------------------------------------------------------------------------------
 local function GetNemesisDetailText()
-    local tier = C_DelvesUI and C_DelvesUI.GetDelveTier and C_DelvesUI.GetDelveTier()
-    if not tier or tier < 4 then return "" end
+    local tier = GetDelveTier()
+    if not tier or tier < NEMESIS_MIN_TIER then return "" end
     if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
     local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
     if not stepInfo or not stepInfo.numCriteria then return "" end
 
-    local lines = {}
+    local currentTotal, maxTotal = 0, 0
     for i = 1, stepInfo.numCriteria do
         local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
         if ok and c and IsNemesisCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
-            table.insert(lines, string.format("%d/%d", c.quantity or 0, c.totalQuantity))
+            currentTotal = currentTotal + (c.quantity or 0)
+            maxTotal = maxTotal + c.totalQuantity
         end
     end
-    return table.concat(lines, "\n")
+    
+    if maxTotal == 0 then
+        return ""
+    end
+    
+    return string.format("%d/%d", currentTotal, maxTotal)
 end
 ns.GetNemesisDetailText = GetNemesisDetailText
 
