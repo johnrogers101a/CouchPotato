@@ -99,7 +99,12 @@ end
 _G._SetMockBoonTooltip = function(lines)
     _tooltipNumLines = #lines
     for i = 1, 8 do
-        _G["GameTooltipTextLeft" .. i]._text = lines[i] or ""
+        local text = lines[i] or ""
+        _G["GameTooltipTextLeft" .. i]._text = text
+        -- Also populate scanner tooltip lines if they exist
+        if _G["DCSTooltipScannerTextLeft" .. i] then
+            _G["DCSTooltipScannerTextLeft" .. i]._text = text
+        end
     end
 end
 
@@ -108,6 +113,9 @@ _G._ClearMockBoonTooltip = function()
     _tooltipNumLines = 0
     for i = 1, 8 do
         _G["GameTooltipTextLeft" .. i]._text = ""
+        if _G["DCSTooltipScannerTextLeft" .. i] then
+            _G["DCSTooltipScannerTextLeft" .. i]._text = ""
+        end
     end
 end
 
@@ -392,6 +400,26 @@ local function createMockFrame(frameType, name, parent, template)
     if frameType == "ScrollFrame" then
         function frame:SetScrollChild(child) self._scrollChild = child end
         function frame:GetScrollChild() return self._scrollChild end
+    end
+
+    -- GameTooltip support: add tooltip-specific methods and create TextLeft globals
+    if frameType == "GameTooltip" then
+        frame.SetOwner = function() end
+        frame.SetSpellByID = function() end
+        frame.SetItemByID = function() end
+        frame.NumLines = function() return _tooltipNumLines end
+        -- Create TextLeft font string globals (mirrors "GameTooltipTemplate" child creation)
+        if name then
+            for i = 1, 8 do
+                _G[name .. "TextLeft" .. i] = {
+                    _text = "",
+                    GetText = function(self)
+                        if self._text and self._text ~= "" then return self._text end
+                        return nil
+                    end,
+                }
+            end
+        end
     end
 
     return frame

@@ -490,6 +490,14 @@ describe("DelveCompanionStats", function()
             assert.equals("Boons", ns.boonHeaderLabel._text)
         end)
 
+        it("GetBoonsDisplayText uses private scanner tooltip, not GameTooltip", function()
+            -- Verify the addon exposes a scanner tooltip that is NOT GameTooltip
+            assert.is_not_nil(ns._scannerTooltip)
+            assert.is_not_nil(ns.SCANNER_TOOLTIP_NAME)
+            assert.equals("DCSTooltipScanner", ns.SCANNER_TOOLTIP_NAME)
+            assert.are_not.equal(GameTooltip, ns._scannerTooltip)
+        end)
+
     end)
 
     -- -------------------------------------------------------------------------
@@ -1070,6 +1078,12 @@ describe("DelveCompanionStats", function()
                 assert.is_false(ns.IsNemesisCriteria("Speak with Celoenus Blackflame"))
                 assert.is_false(ns.IsNemesisCriteria("Find the hidden passage"))
             end)
+
+            it("returns true for descriptions containing 'enemy group' (case-insensitive)", function()
+                assert.is_true(ns.IsNemesisCriteria("Enemy groups remaining"))
+                assert.is_true(ns.IsNemesisCriteria("enemy group defeated"))
+                assert.is_true(ns.IsNemesisCriteria("ENEMY GROUP Alpha"))
+            end)
         end)
 
         describe("Delve tier gating", function()
@@ -1108,15 +1122,18 @@ describe("DelveCompanionStats", function()
                 assert.is_true(ns.nemesisDetailLabel:IsShown())
             end)
 
-            it("nemesis section hidden when tier is nil (not in delve)", function()
+            it("nemesis section shown when tier is nil but criteria exist (API unavailable)", function()
                 _SetMockNemesis(1, 2)
-                C_DelvesUI._SetDelveTier(nil)  -- Not in delve
+                C_DelvesUI._SetDelveTier(nil)  -- Tier detection unavailable
                 
                 ns:UpdateCompanionData()
                 
-                assert.equals("", ns.nemesisLabel._text)
-                assert.is_false(ns.nemesisLabel:IsShown())
-                assert.is_false(ns.nemesisDetailLabel:IsShown())
+                -- When tier can't be detected, show nemesis if criteria exist
+                -- (server-side gating ensures nemesis only spawns in tier 4+)
+                assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+                assert.equals("1/2", ns.nemesisDetailLabel._text)
+                assert.is_true(ns.nemesisLabel:IsShown())
+                assert.is_true(ns.nemesisDetailLabel:IsShown())
             end)
         end)
 
