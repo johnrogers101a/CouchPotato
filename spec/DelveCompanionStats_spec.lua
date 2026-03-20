@@ -1157,6 +1157,40 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.nemesisDetailLabel:IsShown())
         end)
 
+        it("nemesis label anchors to nameLabel when boons are hidden", function()
+            _ClearMockBoonTooltip()  -- No boons
+            _SetMockNemesis(1, 3)
+            
+            ns:UpdateCompanionData()
+            
+            -- nemesisLabel should anchor to nameLabel (not boonLabel) when boons hidden
+            local found = false
+            for _, pt in ipairs(ns.nemesisLabel._points or {}) do
+                if pt[2] == ns.nameLabel then
+                    found = true
+                    break
+                end
+            end
+            assert.is_true(found, "expected nemesisLabel anchored to nameLabel when boons hidden")
+        end)
+
+        it("nemesis label anchors to boonLabel when boons are visible", function()
+            _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%." })
+            _SetMockNemesis(1, 3)
+            
+            ns:UpdateCompanionData()
+            
+            -- nemesisLabel should anchor to boonLabel when boons are visible
+            local found = false
+            for _, pt in ipairs(ns.nemesisLabel._points or {}) do
+                if pt[2] == ns.boonLabel then
+                    found = true
+                    break
+                end
+            end
+            assert.is_true(found, "expected nemesisLabel anchored to boonLabel when boons visible")
+        end)
+
     end)
 
     -- -------------------------------------------------------------------------
