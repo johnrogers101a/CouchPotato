@@ -1208,6 +1208,233 @@ describe("DelveCompanionStats", function()
             assert.is_true(found, "expected nemesisLabel anchored to boonLabel when boons visible")
         end)
 
+        -- -----------------------------------------------------------------------
+        -- Multi-step nemesis scan (Bug A: nemesis lives on bonus/non-current step)
+        -- -----------------------------------------------------------------------
+        describe("GetAllNemesisCriteria multi-step scan", function()
+
+            before_each(function()
+                _ClearMockScenarioSteps()
+                C_DelvesUI._SetDelveTier(4)
+            end)
+
+            after_each(function()
+                _ClearMockScenarioSteps()
+            end)
+
+            it("nemesis criteria found on bonus step (not current step)", function()
+                -- Step 1 has no nemesis; step 2 is the bonus objective step
+                _SetMockNemesisByStep(2, {
+                    { description = "Defeat Nemesis", quantity = 0, totalQuantity = 1 }
+                })
+                -- Update nemesisLabel via full UpdateCompanionData flow
+                ns:UpdateCompanionData()
+                assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+                assert.equals("0/1", ns.nemesisDetailLabel._text)
+            end)
+
+            it("nemesis detail text aggregates criteria across multiple steps", function()
+                -- Step 1: one nemesis criterion
+                _SetMockNemesisByStep(1, {
+                    { description = "Nemesis target slain", quantity = 1, totalQuantity = 3 }
+                })
+                -- Step 3: another nemesis criterion
+                _SetMockNemesisByStep(3, {
+                    { description = "Strongbox unlocked", quantity = 0, totalQuantity = 2 }
+                })
+                ns:UpdateCompanionData()
+                assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+                -- Total: (1+0)/(3+2) = 1/5
+                assert.equals("1/5", ns.nemesisDetailLabel._text)
+            end)
+
+            it("returns empty when no criteria on any step match nemesis keywords", function()
+                _SetMockNemesisByStep(1, {
+                    { description = "Cultists slain", quantity = 50, totalQuantity = 100 }
+                })
+                _SetMockNemesisByStep(2, {
+                    { description = "Speak with Brann", quantity = 0, totalQuantity = 1 }
+                })
+                ns:UpdateCompanionData()
+                assert.equals("", ns.nemesisLabel._text)
+                assert.is_false(ns.nemesisLabel:IsShown())
+            end)
+
+            it("GetAllNemesisCriteria returns all criteria from all steps", function()
+                _SetMockNemesisByStep(1, {
+                    { description = "Cultists slain", quantity = 5, totalQuantity = 10 }
+                })
+                _SetMockNemesisByStep(2, {
+                    { description = "Defeat Nemesis", quantity = 0, totalQuantity = 1 }
+                })
+                local all = ns.GetAllNemesisCriteria()
+                assert.equals(2, #all)
+            end)
+
+        end)
+
+    end)
+
+    -- -------------------------------------------------------------------------
+    -- UpdateCompanionData throttle tests (Bug B: rapid UNIT_AURA flooding)
+    -- -------------------------------------------------------------------------
+    describe("UpdateCompanionData throttle", function()
+
+        before_each(function()
+            -- Companion active so we can detect whether the function body ran
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID   = function() return { name = "Brann Bronzebeard" } end
+            C_GossipInfo.GetFriendshipReputation = function()
+                return { friendshipRank = 12, standing = 100, reactionThreshold = 0, nextThreshold = 200 }
+            end
+            _G._mockGetTime = 0
+        end)
+
+        after_each(function()
+            _G._mockGetTime = 0
+            _G._mockInCombatLockdown = false
+            _G._mockGameTooltipShown = false
+        end)
+
+        it("UpdateCompanionData throttles rapid non-critical calls", function()
+            -- Simulate the last update happened just now (t=0)
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0   -- current time also 0 → delta = 0 < 2
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("UNIT_AURA")   -- non-critical, throttled
+            assert.equals(0, callCount, "expected call to be throttled")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("UpdateCompanionData allows critical events through the throttle", function()
+            -- Simulate a very recent update
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("PLAYER_ENTERING_WORLD")  -- critical → bypasses throttle
+            assert.is_true(callCount >= 1, "expected PLAYER_ENTERING_WORLD to bypass throttle")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("UpdateCompanionData processes after the throttle window expires", function()
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 10   -- 10s later → delta = 10 >= 2
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("UNIT_AURA")   -- non-critical, but window expired
+            assert.is_true(callCount >= 1, "expected update after throttle window expired")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("nil event bypasses throttle (treated as critical)", function()
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData(nil)   -- nil = critical
+            assert.is_true(callCount >= 1, "expected nil event to bypass throttle")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("UPDATE_THROTTLE_SECS constant is exposed for testing", function()
+            assert.equals(2, ns.UPDATE_THROTTLE_SECS)
+        end)
+
+    end)
+
+    -- -------------------------------------------------------------------------
+    -- GetBoonsDisplayText tooltip guard tests (Bug B: tooltips closing)
+    -- -------------------------------------------------------------------------
+    describe("GetBoonsDisplayText tooltip guards", function()
+
+        before_each(function()
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID   = function() return { name = "Brann Bronzebeard" } end
+            C_GossipInfo.GetFriendshipReputation = function()
+                return { friendshipRank = 12, standing = 100, reactionThreshold = 0, nextThreshold = 200 }
+            end
+            _ClearMockBoonTooltip()
+            -- Start with a known cached value so we can confirm it is returned
+            ns._setCachedBoonText("Maximum Health: 10%")
+            _G._mockGameTooltipShown = false
+            _G._mockInCombatLockdown = false
+            _G._mockGetTime = 0
+        end)
+
+        after_each(function()
+            _ClearMockBoonTooltip()
+            _G._mockGameTooltipShown = false
+            _G._mockInCombatLockdown = false
+            _G._mockGetTime = 0
+            ns._setCachedBoonText("")
+        end)
+
+        it("GetBoonsDisplayText returns cached value when GameTooltip is shown", function()
+            _G._mockGameTooltipShown = true
+            -- Tooltip has real stats but should NOT scan because GameTooltip is open
+            _SetMockBoonTooltip({ "Boons", "", "", "Movement Speed: 8%." })
+
+            ns:UpdateCompanionData()
+
+            -- boonLabel should reflect the cache, not the scan result
+            assert.equals("Maximum Health: 10%", ns.boonLabel._text)
+        end)
+
+        it("GetBoonsDisplayText scans tooltip when GameTooltip is hidden", function()
+            _G._mockGameTooltipShown = false
+            _SetMockBoonTooltip({ "Boons", "", "", "Movement Speed: 8%." })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Movement Speed: 8%", ns.boonLabel._text)
+        end)
+
+        it("GetBoonsDisplayText returns cached value during combat lockdown", function()
+            _G._mockInCombatLockdown = true
+            -- Even if tooltip has new data, scan is skipped during combat
+            _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%." })
+
+            ns:UpdateCompanionData()
+
+            -- Returns cached value, not live scan
+            assert.equals("Maximum Health: 10%", ns.boonLabel._text)
+        end)
+
+        it("cache accessors work correctly", function()
+            ns._setCachedBoonText("some cached value")
+            assert.equals("some cached value", ns._getCachedBoonText())
+        end)
+
     end)
 
     -- -------------------------------------------------------------------------

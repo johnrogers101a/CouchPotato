@@ -1173,9 +1173,26 @@ end
 -- GetBoonsDisplayText: Reads the tooltip for boon spell 1280098 and returns a
 -- one-per-line summary of non-zero stats, e.g.
 -- "Maximum Health: 6%\nMovement Speed: 10%".
--- Returns "" if no boon lines are found (hides the boon label).
+-- Returns cached value when GameTooltip is visible or during combat lockdown
+-- to prevent tooltip interference. Returns "" on first cold-cache miss.
 -------------------------------------------------------------------------------
+local _cachedBoonText = ""
+
 GetBoonsDisplayText = function()
+    -- Guard: never manipulate scanner tooltip while user's GameTooltip is active.
+    -- This prevents the spell data reload from causing GameTooltip to flicker/close.
+    -- WoW API: GameTooltip.IsShown() — standard tooltip visibility check
+    if GameTooltip and GameTooltip.IsShown and GameTooltip:IsShown() then
+        return _cachedBoonText
+    end
+
+    -- Guard: skip scanner tooltip manipulation during combat lockdown.
+    -- Tooltip manipulation is risky during combat and can cause UI errors.
+    -- WoW API: InCombatLockdown() — returns true when in combat lockdown
+    if InCombatLockdown and InCombatLockdown() then
+        return _cachedBoonText
+    end
+
     local parts = {}
     local ok = pcall(function()
         scannerTooltip:SetOwner(UIParent, "ANCHOR_NONE")
@@ -1198,9 +1215,14 @@ GetBoonsDisplayText = function()
         end
         scannerTooltip:Hide()
     end)
-    if not ok or #parts == 0 then return "" end
-    return table.concat(parts, "\n")
+    if not ok or #parts == 0 then return _cachedBoonText end
+    _cachedBoonText = table.concat(parts, "\n")
+    return _cachedBoonText
 end
+
+-- Expose cache accessors for unit testing
+ns._getCachedBoonText = function() return _cachedBoonText end
+ns._setCachedBoonText = function(t) _cachedBoonText = t end
 
 -- IsCombatCriteria: Returns true only for combat/kill-type scenario criteria.
 -- Filters out quest/interaction objectives (Speak with, Find, Collect, etc.)
@@ -1237,6 +1259,73 @@ end
 ns.IsNemesisCriteria = IsNemesisCriteria
 
 -------------------------------------------------------------------------------
+-- GetAllNemesisCriteria: Collects ALL nemesis-matching criteria from every
+-- scenario step (not just the current step).  In TWW delves the nemesis
+-- strongbox objective lives on a bonus/separate step, so scanning only the
+-- current step misses it.
+--
+-- WoW API used:
+--   C_ScenarioInfo.GetScenarioInfo()          — ScenarioInfo { numStages, … }
+--     Validated: https://warcraft.wiki.gg/wiki/API_C_ScenarioInfo.GetScenarioInfo
+--   C_ScenarioInfo.GetStepInfo(stepIndex)     — StepInfo { numCriteria, … }
+--     Validated: https://warcraft.wiki.gg/wiki/API_C_ScenarioInfo.GetStepInfo
+--   C_ScenarioInfo.GetCriteriaInfoByStep(step, criteriaIndex)
+--     Validated: https://warcraft.wiki.gg/wiki/API_C_ScenarioInfo.GetCriteriaInfoByStep
+--
+-- Falls back to GetScenarioStepInfo + GetCriteriaInfo (current-step-only) when
+-- the multi-step API is absent, for backward compatibility with older WoW builds.
+-------------------------------------------------------------------------------
+local function GetAllNemesisCriteria()
+    local result = {}
+    if not C_ScenarioInfo then return result end
+
+    -- Determine total number of stages via GetScenarioInfo (preferred path)
+    local numStages = 0
+    if C_ScenarioInfo.GetScenarioInfo then
+        local ok, info = pcall(C_ScenarioInfo.GetScenarioInfo)
+        if ok and info and info.numStages and info.numStages > 0 then
+            numStages = info.numStages
+        end
+    end
+
+    -- Scan every stage with per-step API if available
+    if numStages > 0
+       and C_ScenarioInfo.GetStepInfo
+       and C_ScenarioInfo.GetCriteriaInfoByStep then
+        for step = 1, numStages do
+            local ok1, stepInfo = pcall(C_ScenarioInfo.GetStepInfo, step)
+            if ok1 and stepInfo and stepInfo.numCriteria then
+                for i = 1, stepInfo.numCriteria do
+                    local ok2, c = pcall(C_ScenarioInfo.GetCriteriaInfoByStep, step, i)
+                    if ok2 and c then
+                        table.insert(result, c)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Fallback: current step only (legacy / single-step builds)
+    if #result == 0
+       and C_ScenarioInfo.GetScenarioStepInfo
+       and C_ScenarioInfo.GetCriteriaInfo then
+        local ok0, stepInfo = pcall(C_ScenarioInfo.GetScenarioStepInfo)
+        if ok0 and stepInfo and stepInfo.numCriteria then
+            for i = 1, stepInfo.numCriteria do
+                local ok2, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
+                if ok2 and c then
+                    table.insert(result, c)
+                end
+            end
+        end
+    end
+
+    return result
+end
+-- Expose for unit testing
+ns.GetAllNemesisCriteria = GetAllNemesisCriteria
+
+-------------------------------------------------------------------------------
 -- GetDelveTier: Returns the current delve difficulty tier, or nil if not
 -- detectable or not in a delve. Tries multiple WoW API methods in order.
 -------------------------------------------------------------------------------
@@ -1266,6 +1355,8 @@ ns.GetDelveTier = GetDelveTier
 
 -- GetNemesisProgress: Returns "Nemesis Strongbox" when at least one
 -- nemesis-specific criterion qualifies and the delve tier is high enough.
+-- Scans ALL scenario steps via GetAllNemesisCriteria() so bonus-step nemesis
+-- objectives (which are NOT on the current step in TWW delves) are found.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
     local tier = GetDelveTier()
@@ -1273,13 +1364,10 @@ GetNemesisProgress = function()
     -- When tier is nil (API unavailable), criteria existence implies eligibility
     -- since the server only spawns nemesis in tier 4+.
     if tier and tier > 0 and tier < NEMESIS_MIN_TIER then return "" end
-    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
-    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
-    if not stepInfo or not stepInfo.numCriteria then return "" end
 
-    for i = 1, stepInfo.numCriteria do
-        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and IsNemesisCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
+    local criteria = GetAllNemesisCriteria()
+    for _, c in ipairs(criteria) do
+        if IsNemesisCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
             return "Nemesis Strongbox"
         end
     end
@@ -1290,27 +1378,25 @@ end
 -- GetNemesisDetailText: Returns newline-separated white body lines for each
 -- qualifying nemesis criterion, formatted as "quantity/totalQuantity".
 -- Returns "" when no criteria qualify (mirrors GetBoonsDisplayText pattern).
+-- Scans ALL scenario steps via GetAllNemesisCriteria().
 -------------------------------------------------------------------------------
 local function GetNemesisDetailText()
     local tier = GetDelveTier()
     if tier and tier > 0 and tier < NEMESIS_MIN_TIER then return "" end
-    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
-    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
-    if not stepInfo or not stepInfo.numCriteria then return "" end
 
     local currentTotal, maxTotal = 0, 0
-    for i = 1, stepInfo.numCriteria do
-        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and IsNemesisCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
+    local criteria = GetAllNemesisCriteria()
+    for _, c in ipairs(criteria) do
+        if IsNemesisCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
             currentTotal = currentTotal + (c.quantity or 0)
             maxTotal = maxTotal + c.totalQuantity
         end
     end
-    
+
     if maxTotal == 0 then
         return ""
     end
-    
+
     return string.format("%d/%d", currentTotal, maxTotal)
 end
 ns.GetNemesisDetailText = GetNemesisDetailText
@@ -1319,9 +1405,33 @@ ns.GetNemesisDetailText = GetNemesisDetailText
 -- UpdateCompanionData: Fetch active companion from C_DelvesUI and update UI
 -- Uses fully dynamic API calls — no hardcoded faction ID lookup tables.
 -- Called by event handlers and during initialization.
+--
+-- Throttle: non-critical events are suppressed if called more than once every
+-- UPDATE_THROTTLE_SECS seconds, preventing tooltip flicker from high-frequency
+-- events such as UNIT_AURA.
 -------------------------------------------------------------------------------
+local UPDATE_THROTTLE_SECS = 2
+local _lastUpdateTime = -(UPDATE_THROTTLE_SECS + 1)  -- sentinel: first call always runs
+
+-- Expose throttle constants and helpers for unit testing
+ns.UPDATE_THROTTLE_SECS = UPDATE_THROTTLE_SECS
+ns._getLastUpdateTime   = function() return _lastUpdateTime end
+ns._setLastUpdateTime   = function(t) _lastUpdateTime = t end
+
 function ns:UpdateCompanionData(event)
     if not ns.frame then return end
+
+    -- Throttle: skip rapid non-critical calls to prevent tooltip interference.
+    -- Critical events (login, scenario updates, manual refresh) always execute.
+    local now = GetTime()
+    local isCritical = (event == "PLAYER_ENTERING_WORLD"
+                     or event == "SCENARIO_CRITERIA_UPDATE"
+                     or event == "MANUAL"
+                     or event == nil)
+    if not isCritical and (now - _lastUpdateTime) < UPDATE_THROTTLE_SECS then
+        return
+    end
+    _lastUpdateTime = now
 
     -- Step 1: Get the active companion's faction ID directly (no args required)
     local factionID = nil
