@@ -23,8 +23,6 @@ _G.C_DelvesUI = {
     GetCompanionInfoForActivePlayer = function() return nil end,
     HasActiveDelve = function() return C_DelvesUI._hasActiveDelve or false end,
     GetDelveTier = function() return C_DelvesUI._delveTier or 0 end,
-    GetCurrentDelveTier = function() return C_DelvesUI._delveTier or 0 end,
-    GetDelvesLevel = function() return C_DelvesUI._delveTier or 0 end,
     _hasActiveDelve = false,
     _delveTier = 0,
     _SetHasActiveDelve = function(val) C_DelvesUI._hasActiveDelve = val end,
@@ -972,4 +970,9 @@ _G._SetMockNemesis = function(criteriaOrCurrent, total)
             { description = "Defeat Nemesis", quantity = criteriaOrCurrent, totalQuantity = total }
         }
     end
+end
+
+-- Test helper: set delve tier (for nemesis tier gating)
+_G._SetMockDelveTier = function(tier)
+    _G.C_DelvesUI._delveTier = tier
 end
