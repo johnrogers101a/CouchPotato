@@ -1075,7 +1075,7 @@ describe("DelveCompanionStats", function()
         describe("Delve tier gating", function()
             it("nemesis section hidden when tier < 4", function()
                 _SetMockNemesis(2, 4)
-                _SetMockDelveTier(3)  -- Below minimum tier
+                C_DelvesUI._SetDelveTier(3)  -- Below minimum tier
                 
                 ns:UpdateCompanionData()
                 
@@ -1086,7 +1086,7 @@ describe("DelveCompanionStats", function()
 
             it("nemesis section visible when tier == 4", function()
                 _SetMockNemesis(2, 4)
-                _SetMockDelveTier(4)  -- Exact minimum tier
+                C_DelvesUI._SetDelveTier(4)  -- Exact minimum tier
                 
                 ns:UpdateCompanionData()
                 
@@ -1098,7 +1098,7 @@ describe("DelveCompanionStats", function()
 
             it("nemesis section visible when tier > 4", function()
                 _SetMockNemesis(1, 3)
-                _SetMockDelveTier(8)  -- Above minimum tier
+                C_DelvesUI._SetDelveTier(8)  -- Above minimum tier
                 
                 ns:UpdateCompanionData()
                 
@@ -1110,7 +1110,7 @@ describe("DelveCompanionStats", function()
 
             it("nemesis section hidden when tier is nil (not in delve)", function()
                 _SetMockNemesis(1, 2)
-                _SetMockDelveTier(nil)  -- Not in delve
+                C_DelvesUI._SetDelveTier(nil)  -- Not in delve
                 
                 ns:UpdateCompanionData()
                 
