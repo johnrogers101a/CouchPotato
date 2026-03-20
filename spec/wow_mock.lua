@@ -24,7 +24,6 @@ _G.C_DelvesUI = {
     HasActiveDelve = function() return C_DelvesUI._hasActiveDelve or false end,
     _hasActiveDelve = false,
     _SetHasActiveDelve = function(val) C_DelvesUI._hasActiveDelve = val end,
-    -- Tier support for nemesis gating
     _delveTier = nil,
     GetDelveTier = function() return C_DelvesUI._delveTier end,
     _SetDelveTier = function(tier) C_DelvesUI._delveTier = tier end,
@@ -108,6 +107,11 @@ _G._ClearMockBoonTooltip = function()
     for i = 1, 8 do
         _G["GameTooltipTextLeft" .. i]._text = ""
     end
+end
+
+-- Test helper: set mock delve tier (used for nemesis tier gating tests)
+_G._SetMockDelveTier = function(tier)
+    C_DelvesUI._delveTier = tier
 end
 
 -- CreateFrame - returns a FUNCTIONAL frame mock
@@ -982,9 +986,9 @@ _G._SetMockNemesis = function(criteriaOrCurrent, total)
     if type(criteriaOrCurrent) == "table" then
         criteria = criteriaOrCurrent
     else
-        -- Legacy single-criterion form
-        criteria = {
-            { description = "Enemy group kills", quantity = criteriaOrCurrent, totalQuantity = total }
+        -- Legacy single-criterion form — use nemesis-specific description
+        _G.C_ScenarioInfo._criteria = {
+            { description = "Nemesis target slain", quantity = criteriaOrCurrent, totalQuantity = total }
         }
     end
     -- Nemesis minions are tracked as bonus objectives (bonus step 99)
