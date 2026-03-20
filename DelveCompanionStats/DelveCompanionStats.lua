@@ -19,6 +19,21 @@ _G.DelveCompanionStatsNS = ns
 
 ns.version = "1.0.0"
 
+-- NEMESIS_MIN_TIER: Minimum delve tier required to show nemesis section
+local NEMESIS_MIN_TIER = 4
+ns.NEMESIS_MIN_TIER = NEMESIS_MIN_TIER
+
+-------------------------------------------------------------------------------
+-- Private tooltip scanner: reads spell tooltip data without touching the
+-- user-visible GameTooltip.  Prevents periodic data refreshes from
+-- stealing / hiding the player's active tooltip.
+-------------------------------------------------------------------------------
+local SCANNER_TOOLTIP_NAME = "DCSTooltipScanner"
+local scannerTooltip = CreateFrame("GameTooltip", SCANNER_TOOLTIP_NAME, UIParent, "GameTooltipTemplate")
+scannerTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+ns._scannerTooltip = scannerTooltip
+ns.SCANNER_TOOLTIP_NAME = SCANNER_TOOLTIP_NAME
+
 -------------------------------------------------------------------------------
 -- dcsprint: Write a coloured message to the chat frame (or print fallback)
 -------------------------------------------------------------------------------
@@ -165,7 +180,7 @@ end
 -- which are defined later in the file.
 local GetBoonsDisplayText
 local GetNemesisProgress
-local GetBoonAbbrev
+local GetBoonDisplayName
 
 -------------------------------------------------------------------------------
 -- PrintDebugInfo: Dump C_DelvesUI API state and last-known addon values.
@@ -370,22 +385,22 @@ function ns:PrintDebugInfo()
     -- Dump tooltip lines for spell 1280098 (source of boon stat values)
     table.insert(lines, "--- Tooltip for 1280098 ---")
     pcall(function()
-        GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
-        GameTooltip:SetSpellByID(1280098)
-        for i = 1, GameTooltip:NumLines() do
-            local left = _G["GameTooltipTextLeft" .. i]
+        scannerTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+        scannerTooltip:SetSpellByID(1280098)
+        for i = 1, scannerTooltip:NumLines() do
+            local left = _G[SCANNER_TOOLTIP_NAME .. "TextLeft" .. i]
             if left and left:GetText() then
                 local rawText = left:GetText()
                 table.insert(lines, ("  L%d: %s"):format(i, rawText))
                 -- Debug: show raw captured stat name and its resolved abbreviation
                 local rawStat, rawNum = rawText:match("^(.+): (%d+)%%.?%s*$")
                 if rawStat then
-                    table.insert(lines, ("    [boon] raw stat=%q  abbrev=%q"):format(
-                        rawStat, GetBoonAbbrev(rawStat)))
+                    table.insert(lines, ("    [boon] raw stat=%q  display=%q"):format(
+                        rawStat, GetBoonDisplayName(rawStat)))
                 end
             end
         end
-        GameTooltip:Hide()
+        scannerTooltip:Hide()
     end)
 
     local boonText = ""
@@ -593,9 +608,28 @@ end
 -- Called after expanding collapsed state.
 -------------------------------------------------------------------------------
 function ns:UpdateFrameHeight()
+    if not ns.frame then return end
+    local contentHeight = 30
+    if ns.boonHeaderLabel and ns.boonHeaderLabel:IsShown() then
+        contentHeight = contentHeight + 6 + 16
+    end
+    if ns.boonLabel and ns.boonLabel:IsShown() then
+        local boonText = ns.boonLabel:GetText() or ""
+        local _, newlines = boonText:gsub("\n", "\n")
+        contentHeight = contentHeight + 3 + (newlines + 1) * 16
+    end
+    if ns.nemesisLabel and ns.nemesisLabel:IsShown() then
+        contentHeight = contentHeight + 6 + 16
+    end
+    if ns.nemesisDetailLabel and ns.nemesisDetailLabel:IsShown() then
+        local detailText = ns.nemesisDetailLabel:GetText() or ""
+        local _, newlines = detailText:gsub("\n", "\n")
+        contentHeight = contentHeight + 3 + (newlines + 1) * 16
+    end
+    if ns.contentFrame then ns.contentFrame:SetHeight(contentHeight) end
     local headerH = ns.headerFrame and ns.headerFrame:GetHeight() or 28
     if ns.contentFrame and ns.contentFrame:IsShown() then
-        ns.frame:SetHeight(headerH + (ns.contentFrame:GetHeight() or 0))
+        ns.frame:SetHeight(headerH + 8 + contentHeight)
     else
         ns.frame:SetHeight(headerH)
     end
@@ -797,11 +831,11 @@ function ns:OnLoad()
     end
 
     pinBtn:SetScript("OnClick", function()
-        local db = DelveCompanionStatsDB
-        if not db then return end
-        if db.pinned == false then
+        local pinDb = DelveCompanionStatsDB
+        if not pinDb then return end
+        if pinDb.pinned == false then
             -- currently unpinned → pin it
-            db.pinned = true
+            pinDb.pinned = true
             ns.frame:SetMovable(false)
             ns.frame:ClearAllPoints()
             if ScenarioObjectiveTracker then
@@ -815,7 +849,7 @@ function ns:OnLoad()
             end
         else
             -- currently pinned (or nil) → unpin it
-            db.pinned = false
+            pinDb.pinned = false
             ns.frame:SetMovable(true)
             if ns.pinBtn then
                 ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Unlocked-Up")
@@ -846,7 +880,7 @@ function ns:OnLoad()
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
         tile = true, tileSize = 16, edgeSize = 12,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
     })
     contentFrame:SetBackdropColor(0.05, 0.04, 0.01, 0.95)
     contentFrame:SetBackdropBorderColor(1, 0.78, 0.1, 0.8)
@@ -855,7 +889,7 @@ function ns:OnLoad()
 
     -- 5. Name label — GameFontHighlightSmall (11pt) white text, matching tracker body style
     ns.nameLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.nameLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 6, -4)
+    ns.nameLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 6, -8)
     ns.nameLabel:SetWidth(contentWidth)
     ns.nameLabel:SetJustifyH("LEFT")
     ns.nameLabel:SetFontObject("GameFontHighlightSmall")
@@ -869,7 +903,7 @@ function ns:OnLoad()
     -- 6c. Boon header label — "Boons" sub-header, shown only when boons are present
     -- GameFontNormalSmall (11pt, slightly bolder) in muted gold
     ns.boonHeaderLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ns.boonHeaderLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -4)
+    ns.boonHeaderLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -6)
     ns.boonHeaderLabel:SetFontObject("GameFontNormalSmall")
     pcall(function() ns.boonHeaderLabel:SetFontObject(ObjectiveFont) end)
     ns.boonHeaderLabel:SetWidth(contentWidth)
@@ -883,7 +917,7 @@ function ns:OnLoad()
     -- 6d. Boon label — one boon per line, positioned below the Boons sub-header
     -- GameFontHighlightSmall (11pt) in white
     ns.boonLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.boonLabel:SetPoint("TOPLEFT", ns.boonHeaderLabel, "BOTTOMLEFT", 0, -2)
+    ns.boonLabel:SetPoint("TOPLEFT", ns.boonHeaderLabel, "BOTTOMLEFT", 0, -3)
     ns.boonLabel:SetFontObject("GameFontHighlightSmall")
     pcall(function() ns.boonLabel:SetFontObject(ObjectiveFont) end)
     ns.boonLabel:SetWidth(contentWidth)
@@ -903,9 +937,9 @@ function ns:OnLoad()
     ns.xpLabel:SetText("")
     ns.xpLabel:Hide()
 
-    -- 6e. Nemesis label — "Nemesis Strongbox (n/n)" sub-header; GameFontNormalSmall muted-gold
+    -- 6e. Nemesis label — "Nemesis Strongbox" sub-header; GameFontNormalSmall muted-gold
     ns.nemesisLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -4)
+    ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -6)
     ns.nemesisLabel:SetFontObject("GameFontNormalSmall")
     pcall(function() ns.nemesisLabel:SetFontObject(ObjectiveFont) end)
     ns.nemesisLabel:SetWidth(contentWidth)
@@ -919,7 +953,7 @@ function ns:OnLoad()
     -- mirrors boonLabel: one line per combat criterion ("description: qty/total")
     -- GameFontHighlightSmall (11pt) in white
     ns.nemesisDetailLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.nemesisDetailLabel:SetPoint("TOPLEFT", ns.nemesisLabel, "BOTTOMLEFT", 0, -2)
+    ns.nemesisDetailLabel:SetPoint("TOPLEFT", ns.nemesisLabel, "BOTTOMLEFT", 0, -3)
     ns.nemesisDetailLabel:SetFontObject("GameFontHighlightSmall")
     pcall(function() ns.nemesisDetailLabel:SetFontObject(ObjectiveFont) end)
     ns.nemesisDetailLabel:SetWidth(contentWidth)
@@ -1096,29 +1130,29 @@ local function FormatNumber(num)
 end
 
 -------------------------------------------------------------------------------
--- BOON_ABBREV: Maps tooltip stat names (from spell 1280098) to short labels.
+-- BOON_DISPLAY: Maps tooltip stat names (from spell 1280098) to full display names.
 -- Used by GetBoonsDisplayText() to build a one-per-line summary.
 -------------------------------------------------------------------------------
-local BOON_ABBREV = {
-    ["Maximum Health"]         = "Max HP",
-    ["Movement Speed"]         = "Move Spd",
+local BOON_DISPLAY = {
+    ["Maximum Health"]         = "Maximum Health",
+    ["Movement Speed"]         = "Movement Speed",
     ["Strength"]               = "Strength",
     ["Haste"]                  = "Haste",
-    ["Critical Strike"]        = "Crit",
+    ["Critical Strike"]        = "Critical Strike",
     ["Mastery"]                = "Mastery",
-    ["Versatility"]            = "Vers",
-    ["Damage Reduction"]       = "Dmg Red",
+    ["Versatility"]            = "Versatility",
+    ["Damage Reduction"]       = "Damage Reduction",
 }
 
 -------------------------------------------------------------------------------
--- GetBoonAbbrev: Resolves a raw tooltip stat name (which may contain WoW color
--- escape codes or extra whitespace) to its short display label.
+-- GetBoonDisplayName: Resolves a raw tooltip stat name (which may contain WoW
+-- color escape codes or extra whitespace) to its full display name.
 -- Resolution order:
---   1. Strip color codes / whitespace, then exact key match in BOON_ABBREV.
---   2. Case-insensitive substring match against every key in BOON_ABBREV.
+--   1. Strip color codes / whitespace, then exact key match in BOON_DISPLAY.
+--   2. Case-insensitive substring match against every key in BOON_DISPLAY.
 --   3. Fallback: first word of the cleaned name (or first 6 chars).
 -------------------------------------------------------------------------------
-GetBoonAbbrev = function(statName)
+GetBoonDisplayName = function(statName)
     -- Strip WoW color escape codes and trim surrounding whitespace.
     local clean = statName
         :gsub("|c%x%x%x%x%x%x%x%x", "")
@@ -1126,9 +1160,9 @@ GetBoonAbbrev = function(statName)
         :match("^%s*(.-)%s*$")
     local lower = clean:lower()
     -- 1. Exact match.
-    if BOON_ABBREV[clean] then return BOON_ABBREV[clean] end
+    if BOON_DISPLAY[clean] then return BOON_DISPLAY[clean] end
     -- 2. Case-insensitive substring match.
-    for k, v in pairs(BOON_ABBREV) do
+    for k, v in pairs(BOON_DISPLAY) do
         if lower:find(k:lower(), 1, true) then return v end
     end
     -- 3. Fallback: first word or first 6 chars.
@@ -1137,17 +1171,35 @@ end
 
 -------------------------------------------------------------------------------
 -- GetBoonsDisplayText: Reads the tooltip for boon spell 1280098 and returns a
--- one-per-line summary of non-zero stats, e.g. "Max HP: 6%\nMove Spd: 10%".
--- Returns "" if no boon lines are found (hides the boon label).
+-- one-per-line summary of non-zero stats, e.g.
+-- "Maximum Health: 6%\nMovement Speed: 10%".
+-- Returns cached value when GameTooltip is visible or during combat lockdown
+-- to prevent tooltip interference. Returns "" on first cold-cache miss.
 -------------------------------------------------------------------------------
+local _cachedBoonText = ""
+
 GetBoonsDisplayText = function()
+    -- Guard: never manipulate scanner tooltip while user's GameTooltip is active.
+    -- This prevents the spell data reload from causing GameTooltip to flicker/close.
+    -- WoW API: GameTooltip.IsShown() — standard tooltip visibility check
+    if GameTooltip and GameTooltip.IsShown and GameTooltip:IsShown() then
+        return _cachedBoonText
+    end
+
+    -- Guard: skip scanner tooltip manipulation during combat lockdown.
+    -- Tooltip manipulation is risky during combat and can cause UI errors.
+    -- WoW API: InCombatLockdown() — returns true when in combat lockdown
+    if InCombatLockdown and InCombatLockdown() then
+        return _cachedBoonText
+    end
+
     local parts = {}
     local ok = pcall(function()
-        GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
-        GameTooltip:SetSpellByID(1280098)
-        local numLines = GameTooltip:NumLines()
+        scannerTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+        scannerTooltip:SetSpellByID(1280098)
+        local numLines = scannerTooltip:NumLines()
         for i = 1, numLines do
-            local lineText = _G["GameTooltipTextLeft"..i] and _G["GameTooltipTextLeft"..i]:GetText()
+            local lineText = _G[SCANNER_TOOLTIP_NAME .. "TextLeft" .. i] and _G[SCANNER_TOOLTIP_NAME .. "TextLeft" .. i]:GetText()
             -- Guard: if the tooltip still contains unresolved spell template variables
             -- (e.g. "$w1%"), the boon aura hasn't been applied yet; skip the line.
             if lineText and not lineText:find("%$w%d") then
@@ -1155,40 +1207,22 @@ GetBoonsDisplayText = function()
                     local stat, pct = subline:match("^(.+): (%d+)%%.?%s*$")
                     local n = tonumber(pct)
                     if stat and n and n > 0 then
-                        local abbrev = GetBoonAbbrev(stat)
-                        table.insert(parts, abbrev .. ": " .. n .. "%")
+                        local displayName = GetBoonDisplayName(stat)
+                        table.insert(parts, displayName .. ": " .. n .. "%")
                     end
                 end
             end
         end
-        GameTooltip:Hide()
+        scannerTooltip:Hide()
     end)
-    if not ok or #parts == 0 then return "" end
-    return table.concat(parts, "\n")
+    if not ok or #parts == 0 then return _cachedBoonText end
+    _cachedBoonText = table.concat(parts, "\n")
+    return _cachedBoonText
 end
 
--------------------------------------------------------------------------------
--- AbbreviateLabel: Shorten a scenario criterion description to a compact label.
--- Strips common trailing action words (slain, destroyed, killed, kills, remaining)
--- then returns the last meaningful word, capitalised, truncated to 12 characters.
-local function AbbreviateLabel(desc)
-    -- Strip trailing action words (case-insensitive)
-    local stripped = desc
-        :gsub("%s+[Ss]lain$",     "")
-        :gsub("%s+[Dd]estroyed$", "")
-        :gsub("%s+[Kk]illed$",    "")
-        :gsub("%s+[Kk]ills$",     "")
-        :gsub("%s+[Rr]emaining$", "")
-    -- Trim whitespace
-    stripped = stripped:match("^%s*(.-)%s*$") or stripped
-    -- Take the last word
-    local lastWord = stripped:match("(%S+)%s*$") or stripped
-    -- Capitalise first letter
-    lastWord = lastWord:sub(1, 1):upper() .. lastWord:sub(2)
-    -- Truncate to 12 characters
-    if #lastWord > 12 then lastWord = lastWord:sub(1, 12) end
-    return lastWord
-end
+-- Expose cache accessors for unit testing
+ns._getCachedBoonText = function() return _cachedBoonText end
+ns._setCachedBoonText = function(t) _cachedBoonText = t end
 
 -- IsCombatCriteria: Returns true only for combat/kill-type scenario criteria.
 -- Filters out quest/interaction objectives (Speak with, Find, Collect, etc.)
@@ -1214,46 +1248,156 @@ end
 -- Expose for unit testing
 ns.IsCombatCriteria = IsCombatCriteria
 
--- GetNemesisProgress: Returns "Nemesis Strongbox (current/max)" by summing
--- quantity and totalQuantity across all combat criteria, or "" when none qualify.
--- Non-combat objectives (Speak with, Find, Collect, etc.) are excluded so
--- only enemy-kill trackers contribute to the count.
--------------------------------------------------------------------------------
-GetNemesisProgress = function()
-    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
-    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
-    if not stepInfo or not stepInfo.numCriteria then return "" end
+-- IsNemesisCriteria: Returns true only for nemesis-specific criteria.
+local function IsNemesisCriteria(description)
+    if not description then return false end
+    local desc = description:lower()
+    return desc:find("nemesis", 1, true) ~= nil
+        or desc:find("strongbox", 1, true) ~= nil
+        or desc:find("enemy group", 1, true) ~= nil
+end
+ns.IsNemesisCriteria = IsNemesisCriteria
 
-    local currentTotal, maxTotal = 0, 0
-    for i = 1, stepInfo.numCriteria do
-        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and IsCombatCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
-            currentTotal = currentTotal + (c.quantity or 0)
-            maxTotal     = maxTotal + c.totalQuantity
+-------------------------------------------------------------------------------
+-- GetAllNemesisCriteria: Collects ALL nemesis-matching criteria from every
+-- scenario step (not just the current step).  In TWW delves the nemesis
+-- strongbox objective lives on a bonus/separate step, so scanning only the
+-- current step misses it.
+--
+-- WoW API used:
+--   C_ScenarioInfo.GetScenarioInfo()          — ScenarioInfo { numStages, … }
+--     Validated: https://warcraft.wiki.gg/wiki/API_C_ScenarioInfo.GetScenarioInfo
+--   C_ScenarioInfo.GetStepInfo(stepIndex)     — StepInfo { numCriteria, … }
+--     Validated: https://warcraft.wiki.gg/wiki/API_C_ScenarioInfo.GetStepInfo
+--   C_ScenarioInfo.GetCriteriaInfoByStep(step, criteriaIndex)
+--     Validated: https://warcraft.wiki.gg/wiki/API_C_ScenarioInfo.GetCriteriaInfoByStep
+--
+-- Falls back to GetScenarioStepInfo + GetCriteriaInfo (current-step-only) when
+-- the multi-step API is absent, for backward compatibility with older WoW builds.
+-------------------------------------------------------------------------------
+local function GetAllNemesisCriteria()
+    local result = {}
+    if not C_ScenarioInfo then return result end
+
+    -- Determine total number of stages via GetScenarioInfo (preferred path)
+    local numStages = 0
+    if C_ScenarioInfo.GetScenarioInfo then
+        local ok, info = pcall(C_ScenarioInfo.GetScenarioInfo)
+        if ok and info and info.numStages and info.numStages > 0 then
+            numStages = info.numStages
         end
     end
-    if maxTotal == 0 then return "" end
-    return string.format("Nemesis Strongbox (%d/%d)", currentTotal, maxTotal)
+
+    -- Scan every stage with per-step API if available
+    if numStages > 0
+       and C_ScenarioInfo.GetStepInfo
+       and C_ScenarioInfo.GetCriteriaInfoByStep then
+        for step = 1, numStages do
+            local ok1, stepInfo = pcall(C_ScenarioInfo.GetStepInfo, step)
+            if ok1 and stepInfo and stepInfo.numCriteria then
+                for i = 1, stepInfo.numCriteria do
+                    local ok2, c = pcall(C_ScenarioInfo.GetCriteriaInfoByStep, step, i)
+                    if ok2 and c then
+                        table.insert(result, c)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Fallback: current step only (legacy / single-step builds)
+    if #result == 0
+       and C_ScenarioInfo.GetScenarioStepInfo
+       and C_ScenarioInfo.GetCriteriaInfo then
+        local ok0, stepInfo = pcall(C_ScenarioInfo.GetScenarioStepInfo)
+        if ok0 and stepInfo and stepInfo.numCriteria then
+            for i = 1, stepInfo.numCriteria do
+                local ok2, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
+                if ok2 and c then
+                    table.insert(result, c)
+                end
+            end
+        end
+    end
+
+    return result
+end
+-- Expose for unit testing
+ns.GetAllNemesisCriteria = GetAllNemesisCriteria
+
+-------------------------------------------------------------------------------
+-- GetDelveTier: Returns the current delve difficulty tier, or nil if not
+-- detectable or not in a delve. Tries multiple WoW API methods in order.
+-------------------------------------------------------------------------------
+local function GetDelveTier()
+    -- Attempt 1: Check if there's a direct C_DelvesUI method for tier
+    if C_DelvesUI then
+        -- Try common method names
+        if C_DelvesUI.GetCurrentDelveTier then
+            local ok, tier = pcall(C_DelvesUI.GetCurrentDelveTier)
+            if ok and tier and tier > 0 then return tier end
+        end
+        if C_DelvesUI.GetDelvesLevel then
+            local ok, tier = pcall(C_DelvesUI.GetDelvesLevel)
+            if ok and tier and tier > 0 then return tier end
+        end
+        if C_DelvesUI.GetDelveTier then
+            local ok, tier = pcall(C_DelvesUI.GetDelveTier)
+            if ok and tier and tier > 0 then return tier end
+        end
+    end
+    
+    -- No tier detected or not in a delve
+    return nil
+end
+-- Expose for unit testing
+ns.GetDelveTier = GetDelveTier
+
+-- GetNemesisProgress: Returns "Nemesis Strongbox" when at least one
+-- nemesis-specific criterion qualifies and the delve tier is high enough.
+-- Scans ALL scenario steps via GetAllNemesisCriteria() so bonus-step nemesis
+-- objectives (which are NOT on the current step in TWW delves) are found.
+-------------------------------------------------------------------------------
+GetNemesisProgress = function()
+    local tier = GetDelveTier()
+    -- Only gate when tier IS detected and is below minimum.
+    -- When tier is nil (API unavailable), criteria existence implies eligibility
+    -- since the server only spawns nemesis in tier 4+.
+    if tier and tier > 0 and tier < NEMESIS_MIN_TIER then return "" end
+
+    local criteria = GetAllNemesisCriteria()
+    for _, c in ipairs(criteria) do
+        if IsNemesisCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
+            return "Nemesis Strongbox"
+        end
+    end
+    return ""
 end
 
 -------------------------------------------------------------------------------
 -- GetNemesisDetailText: Returns newline-separated white body lines for each
--- qualifying combat criterion, formatted as "description: quantity/totalQuantity".
+-- qualifying nemesis criterion, formatted as "quantity/totalQuantity".
 -- Returns "" when no criteria qualify (mirrors GetBoonsDisplayText pattern).
+-- Scans ALL scenario steps via GetAllNemesisCriteria().
 -------------------------------------------------------------------------------
 local function GetNemesisDetailText()
-    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
-    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
-    if not stepInfo or not stepInfo.numCriteria then return "" end
+    local tier = GetDelveTier()
+    if tier and tier > 0 and tier < NEMESIS_MIN_TIER then return "" end
 
-    local lines = {}
-    for i = 1, stepInfo.numCriteria do
-        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and IsCombatCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
-            table.insert(lines, string.format("%s: %d/%d", c.description, c.quantity or 0, c.totalQuantity))
+    local currentTotal, maxTotal = 0, 0
+    local criteria = GetAllNemesisCriteria()
+    for _, c in ipairs(criteria) do
+        if IsNemesisCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
+            currentTotal = currentTotal + (c.quantity or 0)
+            maxTotal = maxTotal + c.totalQuantity
         end
     end
-    return table.concat(lines, "\n")
+
+    if maxTotal == 0 then
+        return ""
+    end
+
+    return string.format("%d/%d", currentTotal, maxTotal)
 end
 ns.GetNemesisDetailText = GetNemesisDetailText
 
@@ -1261,9 +1405,33 @@ ns.GetNemesisDetailText = GetNemesisDetailText
 -- UpdateCompanionData: Fetch active companion from C_DelvesUI and update UI
 -- Uses fully dynamic API calls — no hardcoded faction ID lookup tables.
 -- Called by event handlers and during initialization.
+--
+-- Throttle: non-critical events are suppressed if called more than once every
+-- UPDATE_THROTTLE_SECS seconds, preventing tooltip flicker from high-frequency
+-- events such as UNIT_AURA.
 -------------------------------------------------------------------------------
+local UPDATE_THROTTLE_SECS = 2
+local _lastUpdateTime = -(UPDATE_THROTTLE_SECS + 1)  -- sentinel: first call always runs
+
+-- Expose throttle constants and helpers for unit testing
+ns.UPDATE_THROTTLE_SECS = UPDATE_THROTTLE_SECS
+ns._getLastUpdateTime   = function() return _lastUpdateTime end
+ns._setLastUpdateTime   = function(t) _lastUpdateTime = t end
+
 function ns:UpdateCompanionData(event)
     if not ns.frame then return end
+
+    -- Throttle: skip rapid non-critical calls to prevent tooltip interference.
+    -- Critical events (login, scenario updates, manual refresh) always execute.
+    local now = GetTime()
+    local isCritical = (event == "PLAYER_ENTERING_WORLD"
+                     or event == "SCENARIO_CRITERIA_UPDATE"
+                     or event == "MANUAL"
+                     or event == nil)
+    if not isCritical and (now - _lastUpdateTime) < UPDATE_THROTTLE_SECS then
+        return
+    end
+    _lastUpdateTime = now
 
     -- Step 1: Get the active companion's faction ID directly (no args required)
     local factionID = nil
@@ -1362,7 +1530,7 @@ function ns:UpdateCompanionData(event)
         end
     end
 
-    -- Nemesis progress display — "Nemesis Strongbox (n/n)" sub-header (gold) + white detail lines
+    -- Nemesis progress display — "Nemesis Strongbox" sub-header (gold) + white detail lines
     if ns.nemesisLabel then
         local nemesisText = GetNemesisProgress()
         ns.nemesisLabel:SetText(nemesisText)
@@ -1373,6 +1541,14 @@ function ns:UpdateCompanionData(event)
                 ns.nemesisDetailLabel:Hide()
             end
         else
+            if ns.nemesisLabel.ClearAllPoints then
+                ns.nemesisLabel:ClearAllPoints()
+                if ns.boonLabel and ns.boonLabel:IsShown() then
+                    ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -6)
+                else
+                    ns.nemesisLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -6)
+                end
+            end
             ns.nemesisLabel:Show()
             if ns.nemesisDetailLabel then
                 local detailText = GetNemesisDetailText()
@@ -1387,36 +1563,7 @@ function ns:UpdateCompanionData(event)
     end
 
     -- Dynamic frame height based on visible content
-    if ns.frame then
-        -- Content frame: 4px top + nameLabel(16) + 4px bottom = 24px base
-        local contentHeight = 24
-        -- Boon section: 3px gap + header(16) + body lines(16 each)
-        if ns.boonHeaderLabel and ns.boonHeaderLabel:IsShown() then
-            contentHeight = contentHeight + 3 + 16
-        end
-        if ns.boonLabel and ns.boonLabel:IsShown() then
-            local boonText = ns.boonLabel:GetText() or ""
-            local _, newlines = boonText:gsub("\n", "\n")
-            contentHeight = contentHeight + (newlines + 1) * 16
-        end
-        -- Nemesis section: 3px gap + header(16) + detail lines(16 each)
-        if ns.nemesisLabel and ns.nemesisLabel:IsShown() then
-            contentHeight = contentHeight + 3 + 16
-        end
-        if ns.nemesisDetailLabel and ns.nemesisDetailLabel:IsShown() then
-            local detailText = ns.nemesisDetailLabel:GetText() or ""
-            local _, newlines = detailText:gsub("\n", "\n")
-            contentHeight = contentHeight + (newlines + 1) * 16
-        end
-        -- Resize contentFrame then total frame (header height + content, or header only when collapsed)
-        if ns.contentFrame then ns.contentFrame:SetHeight(contentHeight) end
-        local headerH = ns.headerFrame and ns.headerFrame:GetHeight() or 28
-        if ns.contentFrame and ns.contentFrame:IsShown() then
-            ns.frame:SetHeight(headerH + contentHeight)
-        else
-            ns.frame:SetHeight(headerH)
-        end
-    end
+    ns:UpdateFrameHeight()
 
     -- Persist to SavedVariables
     if DelveCompanionStatsDB then
@@ -1424,3 +1571,12 @@ function ns:UpdateCompanionData(event)
         DelveCompanionStatsDB.companionLevel = level
     end
 end
+
+-- Expose a RecalculateFrameHeight helper that UpdateCompanionData can share
+-- with the collapse/expand button handler.
+local function RecalculateFrameHeight()
+    if ns.frame and ns.contentFrame and ns.contentFrame:IsShown() then
+        ns:UpdateFrameHeight()
+    end
+end
+ns.RecalculateFrameHeight = RecalculateFrameHeight

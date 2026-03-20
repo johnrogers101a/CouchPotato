@@ -22,9 +22,14 @@ _G.C_DelvesUI = {
     GetFactionForCompanion = function() return 2744 end,
     GetCompanionInfoForActivePlayer = function() return nil end,
     HasActiveDelve = function() return C_DelvesUI._hasActiveDelve or false end,
+    GetDelveTier = function() return C_DelvesUI._delveTier or 0 end,
     _hasActiveDelve = false,
+    _delveTier = 0,
     _SetHasActiveDelve = function(val) C_DelvesUI._hasActiveDelve = val end,
+    _SetDelveTier = function(tier) C_DelvesUI._delveTier = tier end,
 }
+
+
 
 -- Core UI frames
 _G.UIParent = {
@@ -77,7 +82,9 @@ _G.GameTooltip = {
     Show         = function() end,
     Hide         = function() end,
     NumLines     = function() return _tooltipNumLines end,
+    IsShown      = function() return _G._mockGameTooltipShown or false end,
 }
+_G._mockGameTooltipShown = false
 
 -- GameTooltipTextLeft1..8: FontString stubs read by GetBoonsDisplayText()
 for i = 1, 8 do
@@ -94,7 +101,12 @@ end
 _G._SetMockBoonTooltip = function(lines)
     _tooltipNumLines = #lines
     for i = 1, 8 do
-        _G["GameTooltipTextLeft" .. i]._text = lines[i] or ""
+        local text = lines[i] or ""
+        _G["GameTooltipTextLeft" .. i]._text = text
+        -- Also populate scanner tooltip lines if they exist
+        if _G["DCSTooltipScannerTextLeft" .. i] then
+            _G["DCSTooltipScannerTextLeft" .. i]._text = text
+        end
     end
 end
 
@@ -103,6 +115,9 @@ _G._ClearMockBoonTooltip = function()
     _tooltipNumLines = 0
     for i = 1, 8 do
         _G["GameTooltipTextLeft" .. i]._text = ""
+        if _G["DCSTooltipScannerTextLeft" .. i] then
+            _G["DCSTooltipScannerTextLeft" .. i]._text = ""
+        end
     end
 end
 
@@ -234,8 +249,10 @@ local function createMockFrame(frameType, name, parent, template)
         local fs = {
             _text = "",
             _shown = true,
+            _points = {},
         }
-        function fs:SetPoint(...) end
+        function fs:SetPoint(...) self._points[#self._points + 1] = { ... } end
+        function fs:ClearAllPoints() self._points = {} end
         function fs:SetAllPoints(anchor) end
         function fs:SetText(t) self._text = t end
         function fs:GetText() return self._text end
@@ -385,6 +402,26 @@ local function createMockFrame(frameType, name, parent, template)
     if frameType == "ScrollFrame" then
         function frame:SetScrollChild(child) self._scrollChild = child end
         function frame:GetScrollChild() return self._scrollChild end
+    end
+
+    -- GameTooltip support: add tooltip-specific methods and create TextLeft globals
+    if frameType == "GameTooltip" then
+        frame.SetOwner = function() end
+        frame.SetSpellByID = function() end
+        frame.SetItemByID = function() end
+        frame.NumLines = function() return _tooltipNumLines end
+        -- Create TextLeft font string globals (mirrors "GameTooltipTemplate" child creation)
+        if name then
+            for i = 1, 8 do
+                _G[name .. "TextLeft" .. i] = {
+                    _text = "",
+                    GetText = function(self)
+                        if self._text and self._text ~= "" then return self._text end
+                        return nil
+                    end,
+                }
+            end
+        end
     end
 
     return frame
@@ -631,7 +668,8 @@ _G._MockPlayer = _mockPlayer
 
 -- Combat state
 local _inCombat = false
-_G.InCombatLockdown = function() return _inCombat end
+_G._mockInCombatLockdown = false
+_G.InCombatLockdown = function() return _inCombat or _G._mockInCombatLockdown end
 _G._SetCombatState = function(state) _inCombat = state end
 
 -- Binding functions
@@ -826,7 +864,8 @@ _G.WorldMapFrame = {
     Hide     = function(self) self._shown = false end,
 }
 
-_G.GetTime = function() return os.time() end
+_G.GetTime = function() return _G._mockGetTime end
+_G._mockGetTime = 0
 
 _G._stateDrivers = {}  -- {[frame] = {[state] = macro}} — inspectable in tests
 _G.RegisterStateDriver = function(frame, state, macro)
@@ -937,6 +976,46 @@ _G.C_ScenarioInfo = {
         if not c then return nil end
         return c
     end,
+
+    -- Multi-step API: GetScenarioInfo returns overall stage count
+    -- WoW API: C_ScenarioInfo.GetScenarioInfo() — ScenarioInfo { numStages, currentStage, … }
+    GetScenarioInfo = function()
+        return _G.C_ScenarioInfo._scenarioInfo or { currentStage = 1, numStages = 1 }
+    end,
+
+    -- Per-step info (numCriteria for a given step index)
+    -- Falls back to legacy _criteria when _stepCriteria[stepIndex] is absent (step 1 only)
+    -- WoW API: C_ScenarioInfo.GetStepInfo(stepIndex)
+    GetStepInfo = function(stepIndex)
+        local stepData = _G.C_ScenarioInfo._stepCriteria and _G.C_ScenarioInfo._stepCriteria[stepIndex]
+        if stepData then
+            return { numCriteria = #stepData }
+        end
+        -- Backward compat: step 1 mirrors legacy _criteria
+        if stepIndex == 1 then
+            return { numCriteria = #(_G.C_ScenarioInfo._criteria) }
+        end
+        return { numCriteria = 0 }
+    end,
+
+    -- Per-step criteria access
+    -- Falls back to legacy _criteria for step 1 when _stepCriteria is absent
+    -- WoW API: C_ScenarioInfo.GetCriteriaInfoByStep(stepIndex, criteriaIndex)
+    GetCriteriaInfoByStep = function(step, index)
+        local stepData = _G.C_ScenarioInfo._stepCriteria and _G.C_ScenarioInfo._stepCriteria[step]
+        if stepData then
+            return stepData[index]
+        end
+        -- Backward compat: step 1 mirrors legacy _criteria
+        if step == 1 then
+            return _G.C_ScenarioInfo._criteria[index]
+        end
+        return nil
+    end,
+
+    -- Mutable test state
+    _scenarioInfo = nil,       -- override with { numStages = N } for multi-step tests
+    _stepCriteria = {},        -- [stepIndex] = { {description, quantity, totalQuantity}, … }
 }
 
 -- Test helper: set a single boon aura by spell ID (value1 optional; presence is enough)
@@ -957,9 +1036,30 @@ _G._SetMockNemesis = function(criteriaOrCurrent, total)
     if type(criteriaOrCurrent) == "table" then
         _G.C_ScenarioInfo._criteria = criteriaOrCurrent
     else
-        -- Legacy single-criterion form
+        -- Legacy single-criterion form — use nemesis-specific description
         _G.C_ScenarioInfo._criteria = {
-            { description = "Enemy group kills", quantity = criteriaOrCurrent, totalQuantity = total }
+            { description = "Defeat Nemesis", quantity = criteriaOrCurrent, totalQuantity = total }
         }
     end
+end
+
+-- Test helper: set nemesis criteria on a SPECIFIC scenario step (for multi-step tests).
+-- Usage: _SetMockNemesisByStep(stepIndex, { {desc, qty, total}, … })
+-- Also sets _scenarioInfo.numStages to the highest step used so GetAllNemesisCriteria
+-- scans that many steps.
+_G._SetMockNemesisByStep = function(stepIndex, criteriaList)
+    _G.C_ScenarioInfo._stepCriteria = _G.C_ScenarioInfo._stepCriteria or {}
+    _G.C_ScenarioInfo._stepCriteria[stepIndex] = criteriaList
+    -- Update numStages to cover this step
+    local current = (_G.C_ScenarioInfo._scenarioInfo and _G.C_ScenarioInfo._scenarioInfo.numStages) or 1
+    if stepIndex > current then
+        _G.C_ScenarioInfo._scenarioInfo = { currentStage = 1, numStages = stepIndex }
+    end
+end
+
+-- Test helper: clear multi-step scenario state
+_G._ClearMockScenarioSteps = function()
+    _G.C_ScenarioInfo._stepCriteria = {}
+    _G.C_ScenarioInfo._scenarioInfo = nil
+    _G.C_ScenarioInfo._criteria     = {}
 end

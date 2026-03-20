@@ -438,7 +438,7 @@ describe("DelveCompanionStats", function()
             C_ScenarioInfo._criteria = {}
         end)
 
-        it("boon display shows abbreviated stats parsed from tooltip", function()
+        it("boon display shows full stat names parsed from tooltip", function()
             _SetMockBoonTooltip({
                 "Boons",
                 "Maximum Health increased by 0%.\nStrength increased by 0%.\nMovement Speed increased by 0%.\nMastery increased by 0%.",
@@ -448,7 +448,7 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("Max HP: 6%\nMove Spd: 10%\nStrength: 4%\nMastery: 5%", ns.boonLabel._text)
+            assert.equals("Maximum Health: 6%\nMovement Speed: 10%\nStrength: 4%\nMastery: 5%", ns.boonLabel._text)
         end)
 
         it("boon display hides label when no active boons", function()
@@ -470,7 +470,7 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("Max HP: 3%", ns.boonLabel._text)
+            assert.equals("Maximum Health: 3%", ns.boonLabel._text)
         end)
 
         it("boon label is shown when tooltip has boon lines", function()
@@ -484,10 +484,18 @@ describe("DelveCompanionStats", function()
             ns:UpdateCompanionData()
 
             assert.is_true(ns.boonLabel:IsShown())
-            assert.equals("Vers: 7%", ns.boonLabel._text)
+            assert.equals("Versatility: 7%", ns.boonLabel._text)
             -- boonHeaderLabel must also be shown
             assert.is_true(ns.boonHeaderLabel:IsShown())
             assert.equals("Boons", ns.boonHeaderLabel._text)
+        end)
+
+        it("GetBoonsDisplayText uses private scanner tooltip, not GameTooltip", function()
+            -- Verify the addon exposes a scanner tooltip that is NOT GameTooltip
+            assert.is_not_nil(ns._scannerTooltip)
+            assert.is_not_nil(ns.SCANNER_TOOLTIP_NAME)
+            assert.equals("DCSTooltipScanner", ns.SCANNER_TOOLTIP_NAME)
+            assert.are_not.equal(GameTooltip, ns._scannerTooltip)
         end)
 
     end)
@@ -543,7 +551,7 @@ describe("DelveCompanionStats", function()
                 "Maximum Health: 6%.\nMovement Speed: 10%.",
             })
             ns:UpdateCompanionData()
-            assert.equals("Max HP: 6%\nMove Spd: 10%", ns.boonLabel._text)
+            assert.equals("Maximum Health: 6%\nMovement Speed: 10%", ns.boonLabel._text)
             assert.is_true(ns.boonLabel:IsShown())
         end)
 
@@ -579,7 +587,7 @@ describe("DelveCompanionStats", function()
             C_Timer._FireAll()
 
             -- After timers fire, boon label should have resolved data
-            assert.equals("Max HP: 8%", ns.boonLabel._text)
+            assert.equals("Maximum Health: 8%", ns.boonLabel._text)
         end)
 
         it("delayed timers from PLAYER_ENTERING_WORLD do NOT call UpdateCompanionData when not in delve", function()
@@ -836,19 +844,21 @@ describe("DelveCompanionStats", function()
             end
             _ClearMockBoonTooltip()
             C_ScenarioInfo._criteria = {}
+            C_DelvesUI._SetDelveTier(4)
         end)
 
         after_each(function()
             _ClearMockBoonTooltip()
             C_ScenarioInfo._criteria = {}
+            C_DelvesUI._SetDelveTier(0)
         end)
 
-        it("nemesis progress displays 'Nemesis Strongbox (n/n)' format", function()
+        it("nemesis progress displays 'Nemesis Strongbox' with no count in parens", function()
             _SetMockNemesis(2, 4)
 
             ns:UpdateCompanionData()
 
-            assert.equals("Nemesis Strongbox (2/4)", ns.nemesisLabel._text)
+            assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
         end)
 
         it("nemesis progress hides label if criterion not found", function()
@@ -867,40 +877,41 @@ describe("DelveCompanionStats", function()
             assert.is_true(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesis progress sums multiple criteria into one 'Nemesis Strongbox (n/n)' header", function()
+        it("nemesis progress shows 'Nemesis Strongbox' header for multiple nemesis criteria", function()
             _SetMockNemesis({
-                { description = "Vilebranch Skeleton Charmers slain", quantity = 0, totalQuantity = 5 },
-                { description = "Totems destroyed",                   quantity = 1, totalQuantity = 6 },
+                { description = "Nemesis alpha slain", quantity = 0, totalQuantity = 5 },
+                { description = "Nemesis beta slain",  quantity = 1, totalQuantity = 6 },
             })
 
             ns:UpdateCompanionData()
 
-            -- 0+1 = 1 current, 5+6 = 11 total
-            assert.equals("Nemesis Strongbox (1/11)", ns.nemesisLabel._text)
+            assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
         end)
 
         it("nemesis progress skips criteria with zero totalQuantity", function()
             _SetMockNemesis({
-                { description = "Cultists slain", quantity = 0, totalQuantity = 0 },
-                { description = "Totems destroyed", quantity = 2, totalQuantity = 3 },
+                { description = "Nemesis alpha slain", quantity = 0, totalQuantity = 0 },
+                { description = "Nemesis beta slain",  quantity = 2, totalQuantity = 3 },
             })
 
             ns:UpdateCompanionData()
 
-            assert.equals("Nemesis Strongbox (2/3)", ns.nemesisLabel._text)
+            assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+            assert.equals("2/3", ns.nemesisDetailLabel._text)
         end)
 
-        it("nemesis counts 'Enemy groups remaining' criterion in header total", function()
+        it("nemesis progress shows 'Nemesis Strongbox' for enemy-group nemesis criteria", function()
             _SetMockNemesis({
-                { description = "Enemy groups remaining", quantity = 1, totalQuantity = 3 },
+                { description = "Nemesis enemy groups remaining", quantity = 1, totalQuantity = 3 },
             })
 
             ns:UpdateCompanionData()
 
-            assert.equals("Nemesis Strongbox (1/3)", ns.nemesisLabel._text)
+            assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+            assert.equals("1/3", ns.nemesisDetailLabel._text)
         end)
 
-        it("nemesis hides non-combat criteria (Speak with)", function()
+        it("nemesis hides non-nemesis criteria (Speak with)", function()
             _SetMockNemesis({
                 { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
             })
@@ -911,7 +922,7 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesis hides label when all criteria are non-combat", function()
+        it("nemesis hides label when all criteria are non-nemesis", function()
             _SetMockNemesis({
                 { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
                 { description = "Find the hidden passage", quantity = 0, totalQuantity = 1 },
@@ -923,64 +934,62 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesis sums across mixed combat + non-combat (only combat contribute)", function()
+        it("nemesis excludes non-nemesis criteria from the detail display", function()
             _SetMockNemesis({
                 { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-                { description = "Cultists slain",                 quantity = 2, totalQuantity = 5 },
-                { description = "Totems destroyed",               quantity = 1, totalQuantity = 3 },
+                { description = "Nemesis target slain",           quantity = 1, totalQuantity = 3 },
             })
 
             ns:UpdateCompanionData()
 
-            -- Only combat criteria: 2+1=3 current, 5+3=8 total; non-combat excluded
-            assert.equals("Nemesis Strongbox (3/8)", ns.nemesisLabel._text)
+            assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+            assert.equals("1/3", ns.nemesisDetailLabel._text)
         end)
 
         -- -------------------------------------------------------------------------
         -- nemesisDetailLabel: white body lines below the Nemesis Strongbox header
         -- -------------------------------------------------------------------------
-        it("nemesisDetailLabel shows one white line per combat criterion", function()
+        it("nemesisDetailLabel shows 'current/total' with no description prefix", function()
             _SetMockNemesis({
-                { description = "Infiltrator Garand slain", quantity = 0, totalQuantity = 1 },
+                { description = "Nemesis target slain", quantity = 0, totalQuantity = 1 },
             })
 
             ns:UpdateCompanionData()
 
-            assert.equals("Infiltrator Garand slain: 0/1", ns.nemesisDetailLabel._text)
+            assert.equals("0/1", ns.nemesisDetailLabel._text)
             assert.is_true(ns.nemesisDetailLabel:IsShown())
         end)
 
-        it("nemesisDetailLabel shows multiple lines for multiple combat criteria", function()
+        it("nemesisDetailLabel shows aggregated 'current/total' for multiple nemesis criteria", function()
             _SetMockNemesis({
-                { description = "Cultists slain",  quantity = 2, totalQuantity = 5 },
-                { description = "Totems destroyed", quantity = 1, totalQuantity = 3 },
+                { description = "Nemesis alpha slain", quantity = 2, totalQuantity = 5 },
+                { description = "Nemesis beta slain",  quantity = 1, totalQuantity = 3 },
             })
 
             ns:UpdateCompanionData()
 
-            assert.equals("Cultists slain: 2/5\nTotems destroyed: 1/3", ns.nemesisDetailLabel._text)
+            assert.equals("3/8", ns.nemesisDetailLabel._text)  -- (2+1)/(5+3)
         end)
 
-        it("nemesisDetailLabel excludes non-combat criteria from detail lines", function()
+        it("nemesisDetailLabel excludes non-nemesis criteria from detail lines", function()
             _SetMockNemesis({
                 { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-                { description = "Cultists slain",                 quantity = 1, totalQuantity = 3 },
+                { description = "Nemesis target slain",           quantity = 1, totalQuantity = 3 },
             })
 
             ns:UpdateCompanionData()
 
-            -- Only the combat criterion appears in detail lines
-            assert.equals("Cultists slain: 1/3", ns.nemesisDetailLabel._text)
+            assert.equals("1/3", ns.nemesisDetailLabel._text)
         end)
 
-        it("nemesisDetailLabel is hidden when no combat criteria qualify", function()
+        it("nemesisDetailLabel is hidden when no nemesis criteria qualify", function()
             -- No criteria at all
             ns:UpdateCompanionData()
 
             assert.is_false(ns.nemesisDetailLabel:IsShown())
         end)
 
-        it("nemesisDetailLabel is hidden when all criteria are non-combat", function()
+        it("nemesisDetailLabel is hidden when all criteria are non-nemesis", function()
             _SetMockNemesis({
                 { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
             })
@@ -1041,6 +1050,121 @@ describe("DelveCompanionStats", function()
             end)
         end)
 
+        describe("IsNemesisCriteria", function()
+            it("returns true for descriptions containing 'nemesis' (case-insensitive)", function()
+                assert.is_true(ns.IsNemesisCriteria("Nemesis target slain"))
+                assert.is_true(ns.IsNemesisCriteria("NEMESIS bounty killed"))
+                assert.is_true(ns.IsNemesisCriteria("Defeat the Nemesis"))
+            end)
+
+            it("returns true for descriptions containing 'strongbox' (case-insensitive)", function()
+                assert.is_true(ns.IsNemesisCriteria("Nemesis Strongbox acquired"))
+                assert.is_true(ns.IsNemesisCriteria("STRONGBOX collected"))
+                assert.is_true(ns.IsNemesisCriteria("strongbox found"))
+            end)
+
+            it("returns false for regular combat descriptions", function()
+                assert.is_false(ns.IsNemesisCriteria("Devouring Host slain"))
+                assert.is_false(ns.IsNemesisCriteria("Totems destroyed"))
+                assert.is_false(ns.IsNemesisCriteria("Cultists slain"))
+                assert.is_false(ns.IsNemesisCriteria("Enemies defeated"))
+            end)
+
+            it("returns false for nil", function()
+                assert.is_false(ns.IsNemesisCriteria(nil))
+            end)
+
+            it("returns false for non-nemesis quest descriptions", function()
+                assert.is_false(ns.IsNemesisCriteria("Speak with Celoenus Blackflame"))
+                assert.is_false(ns.IsNemesisCriteria("Find the hidden passage"))
+            end)
+
+            it("returns true for descriptions containing 'enemy group' (case-insensitive)", function()
+                assert.is_true(ns.IsNemesisCriteria("Enemy groups remaining"))
+                assert.is_true(ns.IsNemesisCriteria("enemy group defeated"))
+                assert.is_true(ns.IsNemesisCriteria("ENEMY GROUP Alpha"))
+            end)
+        end)
+
+        describe("Delve tier gating", function()
+            it("nemesis section hidden when tier < 4", function()
+                _SetMockNemesis(2, 4)
+                C_DelvesUI._SetDelveTier(3)  -- Below minimum tier
+                
+                ns:UpdateCompanionData()
+                
+                assert.equals("", ns.nemesisLabel._text)
+                assert.is_false(ns.nemesisLabel:IsShown())
+                assert.is_false(ns.nemesisDetailLabel:IsShown())
+            end)
+
+            it("nemesis section visible when tier == 4", function()
+                _SetMockNemesis(2, 4)
+                C_DelvesUI._SetDelveTier(4)  -- Exact minimum tier
+                
+                ns:UpdateCompanionData()
+                
+                assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+                assert.equals("2/4", ns.nemesisDetailLabel._text)
+                assert.is_true(ns.nemesisLabel:IsShown())
+                assert.is_true(ns.nemesisDetailLabel:IsShown())
+            end)
+
+            it("nemesis section visible when tier > 4", function()
+                _SetMockNemesis(1, 3)
+                C_DelvesUI._SetDelveTier(8)  -- Above minimum tier
+                
+                ns:UpdateCompanionData()
+                
+                assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+                assert.equals("1/3", ns.nemesisDetailLabel._text)
+                assert.is_true(ns.nemesisLabel:IsShown())
+                assert.is_true(ns.nemesisDetailLabel:IsShown())
+            end)
+
+            it("nemesis section shown when tier is nil but criteria exist (API unavailable)", function()
+                _SetMockNemesis(1, 2)
+                C_DelvesUI._SetDelveTier(nil)  -- Tier detection unavailable
+                
+                ns:UpdateCompanionData()
+                
+                -- When tier can't be detected, show nemesis if criteria exist
+                -- (server-side gating ensures nemesis only spawns in tier 4+)
+                assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+                assert.equals("1/2", ns.nemesisDetailLabel._text)
+                assert.is_true(ns.nemesisLabel:IsShown())
+                assert.is_true(ns.nemesisDetailLabel:IsShown())
+            end)
+        end)
+
+        describe("Mixed nemesis and non-nemesis criteria", function()
+            it("only shows nemesis criteria in nemesis display", function()
+                _SetMockNemesis({
+                    { description = "Devouring Host slain", quantity = 50, totalQuantity = 100 },  -- Non-nemesis
+                    { description = "Nemesis target defeated", quantity = 1, totalQuantity = 2 },  -- Nemesis
+                    { description = "Totems destroyed", quantity = 3, totalQuantity = 5 },         -- Non-nemesis
+                })
+                
+                ns:UpdateCompanionData()
+                
+                assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+                assert.equals("1/2", ns.nemesisDetailLabel._text)  -- Only nemesis criteria counted
+            end)
+
+            it("regression test: 'Devouring Host slain' does NOT appear in nemesis display", function()
+                _SetMockNemesis({
+                    { description = "Devouring Host slain", quantity = 100, totalQuantity = 160 }
+                })
+                
+                ns:UpdateCompanionData()
+                
+                -- This should be hidden because "Devouring Host slain" is not a nemesis criterion
+                assert.equals("", ns.nemesisLabel._text)
+                assert.is_false(ns.nemesisLabel:IsShown())
+                assert.is_false(ns.nemesisDetailLabel:IsShown())
+            end)
+        end)
+
         it("boon and nemesis labels hidden when no delve data present", function()
             -- No auras, no criteria — simulates not being in a delve
             ns:UpdateCompanionData()
@@ -1048,6 +1172,433 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.boonLabel:IsShown())
             assert.is_false(ns.nemesisLabel:IsShown())
             assert.is_false(ns.nemesisDetailLabel:IsShown())
+        end)
+
+        it("nemesis label anchors to nameLabel when boons are hidden", function()
+            _ClearMockBoonTooltip()  -- No boons
+            _SetMockNemesis(1, 3)
+            
+            ns:UpdateCompanionData()
+            
+            -- nemesisLabel should anchor to nameLabel (not boonLabel) when boons hidden
+            local found = false
+            for _, pt in ipairs(ns.nemesisLabel._points or {}) do
+                if pt[2] == ns.nameLabel then
+                    found = true
+                    break
+                end
+            end
+            assert.is_true(found, "expected nemesisLabel anchored to nameLabel when boons hidden")
+        end)
+
+        it("nemesis label anchors to boonLabel when boons are visible", function()
+            _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%." })
+            _SetMockNemesis(1, 3)
+            
+            ns:UpdateCompanionData()
+            
+            -- nemesisLabel should anchor to boonLabel when boons are visible
+            local found = false
+            for _, pt in ipairs(ns.nemesisLabel._points or {}) do
+                if pt[2] == ns.boonLabel then
+                    found = true
+                    break
+                end
+            end
+            assert.is_true(found, "expected nemesisLabel anchored to boonLabel when boons visible")
+        end)
+
+        -- -----------------------------------------------------------------------
+        -- Multi-step nemesis scan (Bug A: nemesis lives on bonus/non-current step)
+        -- -----------------------------------------------------------------------
+        describe("GetAllNemesisCriteria multi-step scan", function()
+
+            before_each(function()
+                _ClearMockScenarioSteps()
+                C_DelvesUI._SetDelveTier(4)
+            end)
+
+            after_each(function()
+                _ClearMockScenarioSteps()
+            end)
+
+            it("nemesis criteria found on bonus step (not current step)", function()
+                -- Step 1 has no nemesis; step 2 is the bonus objective step
+                _SetMockNemesisByStep(2, {
+                    { description = "Defeat Nemesis", quantity = 0, totalQuantity = 1 }
+                })
+                -- Update nemesisLabel via full UpdateCompanionData flow
+                ns:UpdateCompanionData()
+                assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+                assert.equals("0/1", ns.nemesisDetailLabel._text)
+            end)
+
+            it("nemesis detail text aggregates criteria across multiple steps", function()
+                -- Step 1: one nemesis criterion
+                _SetMockNemesisByStep(1, {
+                    { description = "Nemesis target slain", quantity = 1, totalQuantity = 3 }
+                })
+                -- Step 3: another nemesis criterion
+                _SetMockNemesisByStep(3, {
+                    { description = "Strongbox unlocked", quantity = 0, totalQuantity = 2 }
+                })
+                ns:UpdateCompanionData()
+                assert.equals("Nemesis Strongbox", ns.nemesisLabel._text)
+                -- Total: (1+0)/(3+2) = 1/5
+                assert.equals("1/5", ns.nemesisDetailLabel._text)
+            end)
+
+            it("returns empty when no criteria on any step match nemesis keywords", function()
+                _SetMockNemesisByStep(1, {
+                    { description = "Cultists slain", quantity = 50, totalQuantity = 100 }
+                })
+                _SetMockNemesisByStep(2, {
+                    { description = "Speak with Brann", quantity = 0, totalQuantity = 1 }
+                })
+                ns:UpdateCompanionData()
+                assert.equals("", ns.nemesisLabel._text)
+                assert.is_false(ns.nemesisLabel:IsShown())
+            end)
+
+            it("GetAllNemesisCriteria returns all criteria from all steps", function()
+                _SetMockNemesisByStep(1, {
+                    { description = "Cultists slain", quantity = 5, totalQuantity = 10 }
+                })
+                _SetMockNemesisByStep(2, {
+                    { description = "Defeat Nemesis", quantity = 0, totalQuantity = 1 }
+                })
+                local all = ns.GetAllNemesisCriteria()
+                assert.equals(2, #all)
+            end)
+
+            it("GetAllNemesisCriteria returns empty table when GetScenarioInfo returns nil", function()
+                -- Simulate GetScenarioInfo returning nil (no active scenario)
+                local orig = C_ScenarioInfo.GetScenarioInfo
+                C_ScenarioInfo.GetScenarioInfo = function() return nil end
+                local all = ns.GetAllNemesisCriteria()
+                assert.equals(0, #all)
+                C_ScenarioInfo.GetScenarioInfo = orig
+            end)
+
+            it("GetAllNemesisCriteria skips step when GetStepInfo returns nil", function()
+                -- Step 2 exists in numStages but its GetStepInfo returns nil
+                _G.C_ScenarioInfo._scenarioInfo = { currentStage = 1, numStages = 2 }
+                local orig = C_ScenarioInfo.GetStepInfo
+                C_ScenarioInfo.GetStepInfo = function(stepIndex)
+                    if stepIndex == 2 then return nil end
+                    return orig(stepIndex)
+                end
+                _SetMockNemesisByStep(1, {
+                    { description = "Defeat Nemesis", quantity = 0, totalQuantity = 1 }
+                })
+                local all = ns.GetAllNemesisCriteria()
+                -- Only step 1 is returned; step 2 is silently skipped
+                assert.equals(1, #all)
+                C_ScenarioInfo.GetStepInfo = orig
+            end)
+
+            it("GetAllNemesisCriteria skips criteria entry when GetCriteriaInfoByStep returns nil", function()
+                -- Step has 2 criteria but second returns nil
+                _G.C_ScenarioInfo._scenarioInfo = { currentStage = 1, numStages = 1 }
+                local orig = C_ScenarioInfo.GetCriteriaInfoByStep
+                C_ScenarioInfo.GetCriteriaInfoByStep = function(step, index)
+                    if index == 2 then return nil end
+                    return orig(step, index)
+                end
+                _SetMockNemesisByStep(1, {
+                    { description = "Defeat Nemesis", quantity = 0, totalQuantity = 1 },
+                    { description = "Second criterion", quantity = 0, totalQuantity = 1 },
+                })
+                local all = ns.GetAllNemesisCriteria()
+                -- Second entry was nil, so only 1 criterion collected
+                assert.equals(1, #all)
+                C_ScenarioInfo.GetCriteriaInfoByStep = orig
+            end)
+
+            it("GetAllNemesisCriteria falls back to single-step when multi-step APIs absent", function()
+                -- Remove multi-step APIs to force fallback path
+                local origGetScenarioInfo = C_ScenarioInfo.GetScenarioInfo
+                local origGetStepInfo     = C_ScenarioInfo.GetStepInfo
+                C_ScenarioInfo.GetScenarioInfo = nil
+                C_ScenarioInfo.GetStepInfo     = nil
+                -- Set legacy single-step criteria
+                _G.C_ScenarioInfo._criteria = {
+                    { description = "Defeat Nemesis", quantity = 1, totalQuantity = 3 }
+                }
+                local all = ns.GetAllNemesisCriteria()
+                assert.equals(1, #all)
+                assert.equals("Defeat Nemesis", all[1].description)
+                C_ScenarioInfo.GetScenarioInfo = origGetScenarioInfo
+                C_ScenarioInfo.GetStepInfo     = origGetStepInfo
+            end)
+
+        end)
+
+    end)
+
+    -- -------------------------------------------------------------------------
+    -- UpdateCompanionData throttle tests (Bug B: rapid UNIT_AURA flooding)
+    -- -------------------------------------------------------------------------
+    describe("UpdateCompanionData throttle", function()
+
+        before_each(function()
+            -- Companion active so we can detect whether the function body ran
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID   = function() return { name = "Brann Bronzebeard" } end
+            C_GossipInfo.GetFriendshipReputation = function()
+                return { friendshipRank = 12, standing = 100, reactionThreshold = 0, nextThreshold = 200 }
+            end
+            _G._mockGetTime = 0
+        end)
+
+        after_each(function()
+            _G._mockGetTime = 0
+            _G._mockInCombatLockdown = false
+            _G._mockGameTooltipShown = false
+        end)
+
+        it("UpdateCompanionData throttles rapid non-critical calls", function()
+            -- Simulate the last update happened just now (t=0)
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0   -- current time also 0 → delta = 0 < 2
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("UNIT_AURA")   -- non-critical, throttled
+            assert.equals(0, callCount, "expected call to be throttled")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("UpdateCompanionData allows critical events through the throttle", function()
+            -- Simulate a very recent update
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("PLAYER_ENTERING_WORLD")  -- critical → bypasses throttle
+            assert.is_true(callCount >= 1, "expected PLAYER_ENTERING_WORLD to bypass throttle")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("UpdateCompanionData processes after the throttle window expires", function()
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 10   -- 10s later → delta = 10 >= 2
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("UNIT_AURA")   -- non-critical, but window expired
+            assert.is_true(callCount >= 1, "expected update after throttle window expired")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("nil event bypasses throttle (treated as critical)", function()
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData(nil)   -- nil = critical
+            assert.is_true(callCount >= 1, "expected nil event to bypass throttle")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("UPDATE_THROTTLE_SECS constant is exposed for testing", function()
+            assert.equals(2, ns.UPDATE_THROTTLE_SECS)
+        end)
+
+        it("timer events (TIMER_2S_PEW) are throttled like non-critical events", function()
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0   -- delta = 0 → throttle active
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("TIMER_2S_PEW")  -- timer event, not critical
+            assert.equals(0, callCount, "expected TIMER_2S_PEW to be throttled")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("timer events (TIMER_5S_PEW) are throttled like non-critical events", function()
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("TIMER_5S_PEW")
+            assert.equals(0, callCount, "expected TIMER_5S_PEW to be throttled")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("SCENARIO_CRITERIA_UPDATE bypasses throttle (critical event)", function()
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("SCENARIO_CRITERIA_UPDATE")
+            assert.is_true(callCount >= 1, "expected SCENARIO_CRITERIA_UPDATE to bypass throttle")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+        it("MANUAL event bypasses throttle", function()
+            ns._setLastUpdateTime(0)
+            _G._mockGetTime = 0
+
+            local callCount = 0
+            local origGetFaction = C_DelvesUI.GetFactionForCompanion
+            C_DelvesUI.GetFactionForCompanion = function()
+                callCount = callCount + 1
+                return nil
+            end
+
+            ns:UpdateCompanionData("MANUAL")
+            assert.is_true(callCount >= 1, "expected MANUAL event to bypass throttle")
+
+            C_DelvesUI.GetFactionForCompanion = origGetFaction
+        end)
+
+    end)
+
+    -- -------------------------------------------------------------------------
+    -- GetBoonsDisplayText tooltip guard tests (Bug B: tooltips closing)
+    -- -------------------------------------------------------------------------
+    describe("GetBoonsDisplayText tooltip guards", function()
+
+        before_each(function()
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID   = function() return { name = "Brann Bronzebeard" } end
+            C_GossipInfo.GetFriendshipReputation = function()
+                return { friendshipRank = 12, standing = 100, reactionThreshold = 0, nextThreshold = 200 }
+            end
+            _ClearMockBoonTooltip()
+            -- Start with a known cached value so we can confirm it is returned
+            ns._setCachedBoonText("Maximum Health: 10%")
+            _G._mockGameTooltipShown = false
+            _G._mockInCombatLockdown = false
+            _G._mockGetTime = 0
+        end)
+
+        after_each(function()
+            _ClearMockBoonTooltip()
+            _G._mockGameTooltipShown = false
+            _G._mockInCombatLockdown = false
+            _G._mockGetTime = 0
+            ns._setCachedBoonText("")
+        end)
+
+        it("GetBoonsDisplayText returns cached value when GameTooltip is shown", function()
+            _G._mockGameTooltipShown = true
+            -- Tooltip has real stats but should NOT scan because GameTooltip is open
+            _SetMockBoonTooltip({ "Boons", "", "", "Movement Speed: 8%." })
+
+            ns:UpdateCompanionData()
+
+            -- boonLabel should reflect the cache, not the scan result
+            assert.equals("Maximum Health: 10%", ns.boonLabel._text)
+        end)
+
+        it("GetBoonsDisplayText scans tooltip when GameTooltip is hidden", function()
+            _G._mockGameTooltipShown = false
+            _SetMockBoonTooltip({ "Boons", "", "", "Movement Speed: 8%." })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Movement Speed: 8%", ns.boonLabel._text)
+        end)
+
+        it("GetBoonsDisplayText returns cached value during combat lockdown", function()
+            _G._mockInCombatLockdown = true
+            -- Even if tooltip has new data, scan is skipped during combat
+            _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%." })
+
+            ns:UpdateCompanionData()
+
+            -- Returns cached value, not live scan
+            assert.equals("Maximum Health: 10%", ns.boonLabel._text)
+        end)
+
+        it("cache accessors work correctly", function()
+            ns._setCachedBoonText("some cached value")
+            assert.equals("some cached value", ns._getCachedBoonText())
+        end)
+
+        it("GetBoonsDisplayText returns empty string when cache is empty and GameTooltip is shown", function()
+            -- Edge case: cache starts empty (""), GameTooltip is shown, scan is skipped → returns ""
+            ns._setCachedBoonText("")
+            _G._mockGameTooltipShown = true
+            _SetMockBoonTooltip({ "Boons", "", "", "Movement Speed: 8%." })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("", ns.boonLabel._text)
+            assert.is_false(ns.boonLabel:IsShown())
+        end)
+
+        it("GetBoonsDisplayText returns empty string when cache is empty and in combat lockdown", function()
+            -- Edge case: cache starts empty, in combat → scan skipped → returns ""
+            ns._setCachedBoonText("")
+            _G._mockInCombatLockdown = true
+            _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%." })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("", ns.boonLabel._text)
+            assert.is_false(ns.boonLabel:IsShown())
+        end)
+
+        it("GetBoonsDisplayText updates cache when tooltip is not shown and not in combat", function()
+            -- Normal path: not blocked → scan runs → cache and label both updated
+            ns._setCachedBoonText("")
+            _G._mockGameTooltipShown = false
+            _G._mockInCombatLockdown = false
+            _SetMockBoonTooltip({ "Boons", "", "", "Versatility: 7%." })
+
+            ns:UpdateCompanionData()
+
+            assert.equals("Versatility: 7%", ns.boonLabel._text)
+            assert.equals("Versatility: 7%", ns._getCachedBoonText())
         end)
 
     end)
@@ -1228,40 +1779,42 @@ describe("DelveCompanionStats", function()
                 end
                 _ClearMockBoonTooltip()
                 C_ScenarioInfo._criteria = {}
+                C_DelvesUI._SetDelveTier(4)
             end)
 
             after_each(function()
                 _ClearMockBoonTooltip()
                 C_ScenarioInfo._criteria = {}
+                C_DelvesUI._SetDelveTier(0)
             end)
 
-            it("base content height is 24 (4+16+4) when only nameLabel visible", function()
+            it("base content height is 30 (8+16+6) when only nameLabel visible", function()
                 ns:UpdateCompanionData()
-                -- No boons, no nemesis → contentHeight = 24
-                assert.equals(24, ns.contentFrame._height)
+                -- No boons, no nemesis → contentHeight = 30 (updated for SC-4 spacing)
+                assert.equals(30, ns.contentFrame._height)
             end)
 
-            it("content height adds 3+16 gap+header plus 16-per-boon-line", function()
+            it("content height adds 6+16 gap+header plus 16-per-boon-line", function()
                 -- One boon line
                 _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%." })
                 ns:UpdateCompanionData()
-                -- 24 (base) + 3 (gap) + 16 (boonHeader) + 16 (1 boon line) = 59
-                assert.equals(59, ns.contentFrame._height)
+                -- 30 (base) + 6 (gap) + 16 (boonHeader) + 16 (1 boon line) + 3 (body gap) = 71
+                assert.equals(71, ns.contentFrame._height)
             end)
 
-            it("content height adds 3+16 for nemesis section", function()
+            it("content height adds 6+16 for nemesis section", function()
                 _SetMockNemesis(1, 3)
                 ns:UpdateCompanionData()
-                -- 24 (base) + 3 (gap) + 16 (nemesis header) + 16 (1 detail line) = 59
-                assert.equals(59, ns.contentFrame._height)
+                -- 30 (base) + 6 (gap) + 16 (nemesis header) + 16 (1 detail line) + 3 (body gap) = 71
+                assert.equals(71, ns.contentFrame._height)
             end)
 
-            it("content height stacks boon and nemesis sections with 3px gaps each", function()
+            it("content height stacks boon and nemesis sections with 6px gaps each", function()
                 _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%.\nMastery: 3%." })
                 _SetMockNemesis(2, 5)
                 ns:UpdateCompanionData()
-                -- 24 (base) + 3+16 (boonHeader) + 2*16 (2 boon lines) + 3+16 (nemesis header) + 16 (1 detail line) = 110
-                assert.equals(110, ns.contentFrame._height)
+                -- 30 (base) + 6+16 (boonHeader) + 2*16 (2 boon lines) + 3 (body gap) + 6+16 (nemesis header) + 16 (1 detail line) + 3 (body gap) = 128
+                assert.equals(128, ns.contentFrame._height)
             end)
 
         end)
