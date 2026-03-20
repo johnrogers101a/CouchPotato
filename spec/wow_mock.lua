@@ -22,9 +22,19 @@ _G.C_DelvesUI = {
     GetFactionForCompanion = function() return 2744 end,
     GetCompanionInfoForActivePlayer = function() return nil end,
     HasActiveDelve = function() return C_DelvesUI._hasActiveDelve or false end,
+    GetDelveTier = function() return C_DelvesUI._delveTier or 0 end,
+    GetCurrentDelveTier = function() return C_DelvesUI._delveTier or 0 end,
+    GetDelvesLevel = function() return C_DelvesUI._delveTier or 0 end,
     _hasActiveDelve = false,
+    _delveTier = 0,
     _SetHasActiveDelve = function(val) C_DelvesUI._hasActiveDelve = val end,
+    _SetDelveTier = function(tier) C_DelvesUI._delveTier = tier end,
 }
+
+-- Global helper to set mock delve tier for tests
+_G._SetMockDelveTier = function(tier)
+    _G.C_DelvesUI._delveTier = tier
+end
 
 -- Core UI frames
 _G.UIParent = {
@@ -957,9 +967,9 @@ _G._SetMockNemesis = function(criteriaOrCurrent, total)
     if type(criteriaOrCurrent) == "table" then
         _G.C_ScenarioInfo._criteria = criteriaOrCurrent
     else
-        -- Legacy single-criterion form
+        -- Legacy single-criterion form — use nemesis-specific description
         _G.C_ScenarioInfo._criteria = {
-            { description = "Enemy group kills", quantity = criteriaOrCurrent, totalQuantity = total }
+            { description = "Defeat Nemesis", quantity = criteriaOrCurrent, totalQuantity = total }
         }
     end
 end
