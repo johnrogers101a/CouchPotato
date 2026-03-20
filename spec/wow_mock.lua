@@ -971,8 +971,3 @@ _G._SetMockNemesis = function(criteriaOrCurrent, total)
         }
     end
 end
-
--- Test helper: set delve tier (for nemesis tier gating)
-_G._SetMockDelveTier = function(tier)
-    _G.C_DelvesUI._delveTier = tier
-end
