@@ -165,6 +165,7 @@ end
 -- which are defined later in the file.
 local GetBoonsDisplayText
 local GetNemesisProgress
+local GetNemesisDetailText
 local GetBoonAbbrev
 
 -------------------------------------------------------------------------------
@@ -1243,34 +1244,28 @@ ns.IsNemesisCriteria = IsNemesisCriteria
 -- and the delve tier >= NEMESIS_MIN_TIER, or "" when none qualify or tier too low.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
-    local tier = GetDelveTier()
-    if not tier or tier < NEMESIS_MIN_TIER then return "" end
-
-    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
+    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "", "" end
     local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
-    if not stepInfo or not stepInfo.numCriteria then return "" end
+    if not stepInfo or not stepInfo.numCriteria then return "", "" end
 
     local currentTotal, maxTotal = 0, 0
     for i = 1, stepInfo.numCriteria do
         local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and IsNemesisCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
+        if ok and c and IsCombatCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
             currentTotal = currentTotal + (c.quantity or 0)
             maxTotal     = maxTotal + c.totalQuantity
         end
     end
-    if maxTotal == 0 then return "" end
-    return "Nemesis Strongbox"
+    if maxTotal == 0 then return "", "" end
+    return "Nemesis Strongbox", string.format("%d/%d", currentTotal, maxTotal)
 end
 
 -------------------------------------------------------------------------------
 -- GetNemesisDetailText: Returns newline-separated "current/total" lines for
--- each nemesis criterion.  No description prefix — just the count.
+-- each nemesis criterion. No description prefix — just the count.
 -- Returns "" when no criteria qualify (mirrors GetBoonsDisplayText pattern).
 -------------------------------------------------------------------------------
-local function GetNemesisDetailText()
-    local tier = GetDelveTier()
-    if not tier or tier < NEMESIS_MIN_TIER then return "" end
-
+GetNemesisDetailText = function()
     if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
     local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
     if not stepInfo or not stepInfo.numCriteria then return "" end
