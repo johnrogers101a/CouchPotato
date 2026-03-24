@@ -16,6 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ADDON_NAMES=(
     CouchPotato
+    CouchPotatoDiag
     ControllerCompanion
     ControllerCompanion_Loader
     DelveCompanionStats
