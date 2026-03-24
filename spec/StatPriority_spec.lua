@@ -1071,4 +1071,102 @@ describe("StatPriority", function()
             assert.is_true(data._differs)
         end)
     end)
+
+    -- =========================================================================
+    -- Test 16: Multi-addon anchor chain — SP docks below DCS when DCS visible
+    -- =========================================================================
+    describe("multi-addon anchor chain (SP below DCS)", function()
+        local function makeDCSFrame(shown)
+            return {
+                _name   = "DelveCompanionStatsFrame",
+                _shown  = shown,
+                _points = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return self._name end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = {...} end,
+                ClearAllPoints = function(self) self._points = {} end,
+            }
+        end
+
+        after_each(function()
+            _G.DelveCompanionStatsFrame = nil
+            _G.ObjectiveTrackerFrame    = nil
+        end)
+
+        it("ApplyPinnedState anchors SP below DelveCompanionStatsFrame when DCS is visible", function()
+            local dcsFrame = makeDCSFrame(true)
+            _G.DelveCompanionStatsFrame = dcsFrame
+
+            ns.ApplyPinnedState()
+
+            local anchoredToDCS = false
+            for _, p in ipairs(ns.frame._points) do
+                if p[2] == dcsFrame then anchoredToDCS = true; break end
+            end
+            assert.is_true(anchoredToDCS, "SP should anchor below DCS when DCS is visible")
+        end)
+
+        it("ApplyPinnedState does NOT anchor below DCS when DCS is hidden", function()
+            local dcsFrame = makeDCSFrame(false)
+            _G.DelveCompanionStatsFrame = dcsFrame
+            -- No ObjectiveTrackerFrame either — should fall back to UIParent CENTER
+            _G.ObjectiveTrackerFrame = nil
+
+            ns.ApplyPinnedState()
+
+            local anchoredToDCS = false
+            for _, p in ipairs(ns.frame._points) do
+                if p[2] == dcsFrame then anchoredToDCS = true; break end
+            end
+            assert.is_false(anchoredToDCS, "SP should NOT anchor below hidden DCS")
+        end)
+
+        it("ApplyPinnedState falls back to tracker modules when DCS is absent", function()
+            _G.DelveCompanionStatsFrame = nil
+
+            local questMod = {
+                _shown   = true,
+                _points  = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return "QuestObjectiveTracker" end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = {...} end,
+                ClearAllPoints = function(self) self._points = {} end,
+            }
+            _G.ObjectiveTrackerFrame = {
+                _shown  = true,
+                _points = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return "ObjectiveTrackerFrame" end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = {...} end,
+                ClearAllPoints = function(self) self._points = {} end,
+                MODULES        = { questMod },
+            }
+
+            ns.ApplyPinnedState()
+
+            local anchoredToMod = false
+            for _, p in ipairs(ns.frame._points) do
+                if p[2] == questMod then anchoredToMod = true; break end
+            end
+            assert.is_true(anchoredToMod, "SP should anchor to tracker module when DCS is absent")
+        end)
+    end)
+
+    -- =========================================================================
+    -- Test 17: Icon sizing — lock and collapse buttons are at least 26px
+    -- =========================================================================
+    describe("icon sizing", function()
+        it("pin button is at least 26x26", function()
+            assert.is_not_nil(ns.pinBtn)
+            local w, h = ns.pinBtn:GetSize()
+            assert.is_true(w >= 26, "pin button width should be >= 26, got " .. tostring(w))
+            assert.is_true(h >= 26, "pin button height should be >= 26, got " .. tostring(h))
+        end)
+
+        it("collapse button is at least 26 wide", function()
+            assert.is_not_nil(ns.collapseBtn)
+            local w, _ = ns.collapseBtn:GetSize()
+            assert.is_true(w >= 26, "collapse button width should be >= 26, got " .. tostring(w))
+        end)
+    end)
 end)

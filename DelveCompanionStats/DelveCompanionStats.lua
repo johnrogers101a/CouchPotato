@@ -742,9 +742,10 @@ function ns:OnLoad()
     headerTitle:SetTextColor(1, 0.82, 0.0, 1)
 
     -- Collapse button: gold en-dash, far right, vertically centred
+    -- Sized at 26x26 (at least 10px larger than old 16px variants) for easy clicking.
     local collapseBtn = CreateFrame("Button", nil, header)
-    collapseBtn:SetSize(20, 28)
-    collapseBtn:SetPoint("RIGHT", header, "RIGHT", -6, 0)
+    collapseBtn:SetSize(26, 26)
+    collapseBtn:SetPoint("RIGHT", header, "RIGHT", -4, 0)
     -- Font set explicitly (not as 3rd arg) so text renders even before font objects load
     local collapseBtnText = collapseBtn:CreateFontString(nil, "OVERLAY")
     collapseBtnText:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
@@ -783,9 +784,10 @@ function ns:OnLoad()
     -- Pin button: to the LEFT of the collapse button. Lock icon indicates whether
     -- the frame is anchored to the Blizzard tracker (locked/pinned) or freely draggable
     -- (unlocked/unpinned). Default: pinned (locked icon).
+    -- Pin button: sized at 26x26 (at least 10px larger than old 16x16) for easy clicking.
     local pinBtn = CreateFrame("Button", nil, header)
-    pinBtn:SetSize(16, 16)
-    pinBtn:SetPoint("RIGHT", collapseBtn, "LEFT", -6, 0)
+    pinBtn:SetSize(26, 26)
+    pinBtn:SetPoint("RIGHT", collapseBtn, "LEFT", -4, 0)
     pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
     pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
     pinBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight", "ADD")
