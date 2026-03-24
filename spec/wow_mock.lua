@@ -242,7 +242,6 @@ local function createMockFrame(frameType, name, parent, template)
         function fs:SetTextColor(r,g,b,a) self._r = r; self._g = g; self._b = b; self._a = a end
         function fs:GetTextColor() return self._r or 1, self._g or 1, self._b or 1, self._a or 1 end
         function fs:SetFont(font, size, flags) self._fontPath = font; self._fontSize = size; self._fontFlags = flags end
-        function fs:SetVerticalAlign(v) self._verticalAlign = v end
         function fs:SetFontObject(obj)
             if type(obj) == "table" and obj._name then
                 self._fontPath = obj._name
