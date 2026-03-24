@@ -238,6 +238,7 @@ local function createMockFrame(frameType, name, parent, template)
             _shown = true,
         }
         function fs:SetPoint(...) end
+        function fs:ClearAllPoints() end
         function fs:SetAllPoints(anchor) end
         function fs:SetText(t) self._text = t end
         function fs:GetText() return self._text end
