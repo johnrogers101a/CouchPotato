@@ -449,6 +449,66 @@ describe("StatPriority", function()
     end)
 
     -- =========================================================================
+    -- Test 9b: Equal-priority stats use "=" separator (Holy Paladin specID 65)
+    -- =========================================================================
+    describe("equal-priority stat display", function()
+        before_each(function()
+            _G.GetSpecialization = function() return 2 end
+            _G.GetSpecializationInfo = function(specIndex)
+                if specIndex == 2 then
+                    return 65, "Holy Paladin", "", "", "HEALER"
+                end
+                return nil
+            end
+        end)
+
+        it("Holy Paladin data has a sub-array for equal-priority stats", function()
+            local data = StatPriorityData[65]
+            assert.is_not_nil(data)
+            local found = false
+            for _, entry in ipairs(data.stats) do
+                if type(entry) == "table" then found = true; break end
+            end
+            assert.is_true(found)
+        end)
+
+        it("Holy Paladin stats label contains '=' separator for equal-priority stats", function()
+            ns:UpdateStatPriority()
+            local text = ns.statsLabel:GetText()
+            assert.is_not_nil(text)
+            assert.is_truthy(text:find("|cffFFD100=|r", 1, true))
+        end)
+
+        it("Holy Paladin stats label contains '>' separator between priority tiers", function()
+            ns:UpdateStatPriority()
+            local text = ns.statsLabel:GetText()
+            assert.is_truthy(text:find("|cffFFD100>|r", 1, true))
+        end)
+
+        it("Holy Paladin stats label contains both Haste and Critical Strike", function()
+            ns:UpdateStatPriority()
+            local text = ns.statsLabel:GetText()
+            assert.is_truthy(text:find("Haste", 1, true))
+            assert.is_truthy(text:find("Critical Strike", 1, true))
+        end)
+
+        it("Holy Paladin stats label contains Intellect before the = group", function()
+            ns:UpdateStatPriority()
+            local text = ns.statsLabel:GetText()
+            local intPos   = text:find("Intellect", 1, true)
+            local eqPos    = text:find("|cffFFD100=|r", 1, true)
+            assert.is_truthy(intPos)
+            assert.is_truthy(eqPos)
+            assert.is_true(intPos < eqPos)
+        end)
+
+        it("Holy Paladin _differs is false (all sources agree)", function()
+            local data = StatPriorityData[65]
+            assert.is_false(data._differs)
+        end)
+    end)
+
+    -- =========================================================================
     -- Test 10: URL popup behaviour
     -- =========================================================================
     describe("URL popup", function()
@@ -1028,10 +1088,18 @@ describe("StatPriority", function()
         end)
 
         it("_differs is consistent with actual array comparison", function()
-            -- Helper to check if two arrays match
+            -- Helper to compare entries that may be strings or sub-arrays (tables).
+            local function entryEq(x, y)
+                if type(x) == "table" and type(y) == "table" then
+                    if #x ~= #y then return false end
+                    for i = 1, #x do if x[i] ~= y[i] then return false end end
+                    return true
+                end
+                return x == y
+            end
             local function arrEq(a, b)
                 if #a ~= #b then return false end
-                for i = 1, #a do if a[i] ~= b[i] then return false end end
+                for i = 1, #a do if not entryEq(a[i], b[i]) then return false end end
                 return true
             end
             for specID, entry in pairs(StatPriorityData) do
