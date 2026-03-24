@@ -161,6 +161,7 @@ local function createMockFrame(frameType, name, parent, template)
     function frame:RegisterForDrag(...) end
     function frame:StartMoving() end
     function frame:StopMovingOrSizing() end
+    function frame:Raise() end
     function frame:GetPoint(index)
         return "BOTTOMLEFT", nil, "BOTTOMLEFT", 0, 0
     end
@@ -297,6 +298,27 @@ local function createMockFrame(frameType, name, parent, template)
         frame._text = ""
         function frame:SetText(t) self._text = t end
         function frame:GetText() return self._text end
+    end
+
+    -- BasicFrameTemplateWithInset support
+    -- Provides .TitleBg (texture), .CloseButton (button), .Inset (frame) children
+    -- matching the real Blizzard template's child widget names.
+    if template and template:find("BasicFrameTemplate") then
+        frame.TitleBg = {
+            _points = {},
+            SetPoint = function(self, ...) self._points[#self._points + 1] = { ... } end,
+            ClearAllPoints = function(self) self._points = {} end,
+        }
+        frame.CloseButton = {
+            _scripts = {},
+            SetScript = function(self, event, fn) self._scripts[event] = fn end,
+            GetScript = function(self, event) return self._scripts[event] end,
+            SetPoint   = function(self, ...) end,
+        }
+        frame.Inset = {
+            SetPoint   = function(self, ...) end,
+            ClearAllPoints = function(self) end,
+        }
     end
 
     -- ObjectiveTrackerSectionHeaderTemplate support

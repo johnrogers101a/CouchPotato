@@ -1,0 +1,12 @@
+## Interface: 120001
+## Title: CouchPotato
+## Notes: Shared configuration hub and error logger for all CouchPotato suite addons.
+## Author: CouchPotato Addons
+## Version: 1.0.0
+## SavedVariables: CouchPotatoDB
+## X-Category: Interface Enhancements
+
+CouchPotatoLog.lua
+CouchPotato.lua
+MinimapButton.lua
+ConfigWindow.lua
