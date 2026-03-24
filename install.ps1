@@ -11,6 +11,7 @@
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
 $AddonNames = @(
+    'CouchPotato',
     'ControllerCompanion',
     'ControllerCompanion_Loader',
     'DelveCompanionStats',
