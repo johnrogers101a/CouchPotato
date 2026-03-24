@@ -1,6 +1,8 @@
 # install.ps1 — PowerShell 5.1+ installer for CouchPotato WoW addons
-# Installs: ControllerCompanion, ControllerCompanion_Loader, DelveCompanionStats
-# into the user's WoW Retail Interface\AddOns folder.
+# Installs all addons in this repo into the user's WoW Retail Interface\AddOns folder.
+# Performs a CLEAN install: removes the destination addon directory before
+# copying, so stale files from previously-installed-but-now-removed addons
+# cannot persist and cause load failures.
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
@@ -143,6 +145,13 @@ foreach ($AddonName in $AddonNames) {
         continue
     }
 
+    $DestPath = Join-Path $AddOnsPath $AddonName
+
+    # Clean remove the destination first so no stale files survive a rename/move.
+    if (Test-Path -LiteralPath $DestPath -PathType Container) {
+        Remove-Item -LiteralPath $DestPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
     Write-Host "Installing $AddonName ..." -ForegroundColor Cyan
     try {
         Copy-Item -LiteralPath $SourcePath -Destination $AddOnsPath -Recurse -Force -ErrorAction Stop
@@ -155,6 +164,23 @@ foreach ($AddonName in $AddonNames) {
     } catch {
         Write-Host "Error: Failed to copy ${AddonName}: $($_.Exception.Message)" -ForegroundColor Red
         exit 1
+    }
+}
+
+#endregion
+
+#region --- Remove stale suite addons no longer in source ---
+
+# Any addon directory matching our naming patterns that is NOT in $AddonNames
+# is a leftover from a previous layout and must be removed.
+$SuitePatterns = @('CouchPotato*', 'ControllerCompanion*', 'DelveCompanion*', 'StatPriority*')
+foreach ($Pattern in $SuitePatterns) {
+    $Matches = Get-ChildItem -LiteralPath $AddOnsPath -Directory -Filter $Pattern -ErrorAction SilentlyContinue
+    foreach ($Dir in $Matches) {
+        if ($AddonNames -notcontains $Dir.Name) {
+            Write-Host "Removing stale addon: $($Dir.Name)" -ForegroundColor Yellow
+            Remove-Item -LiteralPath $Dir.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
