@@ -156,9 +156,12 @@ local function BuildButton()
     hl:SetAllPoints()
     hl:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
-    -- Border ring
+    -- Border ring — MiniMap-TrackingBorder is designed for ~54x54; using SetAllPoints()
+    -- would squish it to 32x32 and cover the icon entirely.  Size it to 52x52 and
+    -- offset TOPLEFT by (-6, 6) so the ring frames the button without obscuring it.
     local border = btn:CreateTexture(nil, "OVERLAY")
-    border:SetAllPoints()
+    border:SetSize(52, 52)
+    border:SetPoint("TOPLEFT", btn, "TOPLEFT", -6, 6)
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 
     -- Tooltip

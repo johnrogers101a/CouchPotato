@@ -1381,13 +1381,16 @@ function ns:UpdateCompanionData(event)
     end
 
     -- Boon display — sub-header "Boons" + body lines; both shown/hidden together
+    local boonsShown = false
     if ns.boonLabel then
         local boonText = GetBoonsDisplayText()
+        dcslog("Debug", "UpdateCompanionData: boonText=" .. (boonText == "" and "(empty)" or boonText))
         ns.boonLabel:SetText(boonText)
         if boonText == "" then
             if ns.boonHeaderLabel then ns.boonHeaderLabel:Hide() end
             ns.boonLabel:Hide()
         else
+            boonsShown = true
             if ns.boonHeaderLabel then
                 ns.boonHeaderLabel:SetText("Boons")
                 ns.boonHeaderLabel:Show()
@@ -1396,9 +1399,22 @@ function ns:UpdateCompanionData(event)
         end
     end
 
-    -- Nemesis progress display — "Nemesis Strongbox (n/n)" sub-header (gold) + white detail lines
+    -- Nemesis progress display — "Enemy groups remaining (n/n)" sub-header (gold) + white detail lines
+    -- Re-anchor nemesisLabel each update so it always sits below the last visible element
+    -- in the boon/companion chain rather than collapsing onto a hidden boonLabel.
     if ns.nemesisLabel then
+        -- Re-anchor: below boonLabel when boons are shown, otherwise below nameLabel
+        ns.nemesisLabel:ClearAllPoints()
+        if boonsShown and ns.boonLabel then
+            ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -4)
+            dcslog("Debug", "UpdateCompanionData: nemesisLabel re-anchored below boonLabel")
+        else
+            ns.nemesisLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -4)
+            dcslog("Debug", "UpdateCompanionData: nemesisLabel re-anchored below nameLabel (no boons)")
+        end
+
         local nemesisText = GetNemesisProgress()
+        dcslog("Debug", "UpdateCompanionData: nemesisText=" .. (nemesisText == "" and "(empty)" or nemesisText))
         ns.nemesisLabel:SetText(nemesisText)
         if nemesisText == "" then
             ns.nemesisLabel:Hide()
@@ -1408,8 +1424,10 @@ function ns:UpdateCompanionData(event)
             end
         else
             ns.nemesisLabel:Show()
+            dcslog("Info", "UpdateCompanionData: showing nemesisLabel with text=" .. nemesisText)
             if ns.nemesisDetailLabel then
                 local detailText = GetNemesisDetailText()
+                dcslog("Debug", "UpdateCompanionData: nemesisDetailText=" .. (detailText == "" and "(empty)" or detailText))
                 ns.nemesisDetailLabel:SetText(detailText)
                 if detailText == "" then
                     ns.nemesisDetailLabel:Hide()
