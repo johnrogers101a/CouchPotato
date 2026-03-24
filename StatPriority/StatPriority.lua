@@ -2,6 +2,8 @@
 -- Displays stat priority for the player's current specialization.
 -- UI matches DelveCompanionStats: gold-bordered olive header, tooltip content frame.
 --
+-- Phase 2: Multi-source display (Wowhead, Icy Veins, Method) with URL copy buttons.
+--
 -- DESIGN NOTE: All initialization (SavedVars, frame creation, UI setup,
 -- position restore) happens atomically inside the ADDON_LOADED handler.
 -- We intentionally do NOT register PLAYER_LOGIN — same pattern as DCS.
@@ -14,7 +16,7 @@ if not ns then
 end
 _G.StatPriorityNS = ns
 
-ns.version = "1.0.0"
+ns.version = "2.0.0"
 
 -------------------------------------------------------------------------------
 -- spprint: Write a coloured message to the chat frame (or print fallback).
@@ -78,10 +80,26 @@ SlashCmdList["SP"] = function(msg)
             spprint("specID:", tostring(specID))
             local data = StatPriorityData and StatPriorityData[specID]
             spprint("data:", data and data.specName or "nil")
+            if data then
+                spprint("_differs:", tostring(data._differs))
+            end
         end
     else
         spprint("Usage: /sp [show|hide|toggle|reset|debug]")
     end
+end
+
+-------------------------------------------------------------------------------
+-- ShowURLPopup: Show the singleton URL popup with the given URL pre-selected.
+-------------------------------------------------------------------------------
+function ns:ShowURLPopup(url)
+    if not ns.urlPopup then return end
+    if ns.urlPopupEditBox then
+        ns.urlPopupEditBox:SetText(url or "")
+        pcall(function() ns.urlPopupEditBox:HighlightText() end)
+        pcall(function() ns.urlPopupEditBox:SetFocus() end)
+    end
+    ns.urlPopup:Show()
 end
 
 -------------------------------------------------------------------------------
@@ -93,6 +111,7 @@ function ns:UpdateStatPriority()
     -- Default state
     local specName   = "No Specialization"
     local statsText  = ""
+    local data       = nil
 
     local specIndex = nil
     if GetSpecialization then
@@ -102,14 +121,14 @@ function ns:UpdateStatPriority()
     if specIndex and specIndex > 0 then
         local specID, name = GetSpecializationInfo(specIndex)
         if specID then
-            local data = StatPriorityData and StatPriorityData[specID]
+            data = StatPriorityData and StatPriorityData[specID]
             if data then
-                specName  = data.specName or name or "Unknown Spec"
+                specName = data.specName or name or "Unknown Spec"
                 -- Join stats with gold ">" separator
                 local sep = " |cffFFD100>|r "
                 statsText = table.concat(data.stats, sep)
             else
-                specName  = name or ("Spec " .. tostring(specID))
+                specName = name or ("Spec " .. tostring(specID))
                 statsText = ""
                 spprint("Warning: no data for specID", specID)
             end
@@ -121,9 +140,64 @@ function ns:UpdateStatPriority()
         ns.headerTitle:SetText(specName)
     end
 
-    -- Update content label
-    if ns.statsLabel then
-        ns.statsLabel:SetText(statsText)
+    local sep = " |cffFFD100>|r "
+
+    if data and data._differs then
+        -- Multi-source display
+        if ns.statsLabel then ns.statsLabel:Hide() end
+
+        if ns.wowheadLabel then
+            local text = "|cff00ccffWowhead:|r " .. table.concat(data.wowhead, sep)
+            ns.wowheadLabel:SetText(text)
+            ns.wowheadLabel:Show()
+        end
+        if ns.icyveinsLabel then
+            local text = "|cff33cc33Icy Veins:|r " .. table.concat(data.icyveins, sep)
+            ns.icyveinsLabel:SetText(text)
+            ns.icyveinsLabel:Show()
+        end
+        if ns.methodLabel then
+            local text = "|cffff6600Method:|r " .. table.concat(data.method, sep)
+            ns.methodLabel:SetText(text)
+            ns.methodLabel:Show()
+        end
+
+        -- Show URL buttons for each source (if URL exists)
+        if ns.wowheadUrlBtn then
+            if data.urls and data.urls.wowhead then
+                ns.wowheadUrlBtn:Show()
+            else
+                ns.wowheadUrlBtn:Hide()
+            end
+        end
+        if ns.icyveinsUrlBtn then
+            if data.urls and data.urls.icyveins then
+                ns.icyveinsUrlBtn:Show()
+            else
+                ns.icyveinsUrlBtn:Hide()
+            end
+        end
+        if ns.methodUrlBtn then
+            if data.urls and data.urls.method then
+                ns.methodUrlBtn:Show()
+            else
+                ns.methodUrlBtn:Hide()
+            end
+        end
+    else
+        -- Unified display (Phase 1 behavior)
+        if ns.statsLabel then
+            ns.statsLabel:SetText(statsText)
+            ns.statsLabel:Show()
+        end
+
+        if ns.wowheadLabel  then ns.wowheadLabel:Hide()  end
+        if ns.icyveinsLabel then ns.icyveinsLabel:Hide() end
+        if ns.methodLabel   then ns.methodLabel:Hide()   end
+
+        if ns.wowheadUrlBtn  then ns.wowheadUrlBtn:Hide()  end
+        if ns.icyveinsUrlBtn then ns.icyveinsUrlBtn:Hide() end
+        if ns.methodUrlBtn   then ns.methodUrlBtn:Hide()   end
     end
 
     -- Resize content frame to fit label
@@ -136,13 +210,62 @@ end
 function ns:UpdateFrameHeight()
     local headerH = ns.headerFrame and ns.headerFrame:GetHeight() or 28
     if ns.contentFrame and ns.contentFrame:IsShown() then
-        -- Estimate content height: ~20px per line plus padding
-        local labelH = 20
-        ns.contentFrame:SetHeight(labelH + 16)
-        ns.frame:SetHeight(headerH + ns.contentFrame:GetHeight() + 8)
+        -- Count visible source lines
+        local visibleLines = 0
+        if ns.statsLabel and ns.statsLabel:IsShown() then
+            visibleLines = 1
+        else
+            if ns.wowheadLabel  and ns.wowheadLabel:IsShown()  then visibleLines = visibleLines + 1 end
+            if ns.icyveinsLabel and ns.icyveinsLabel:IsShown() then visibleLines = visibleLines + 1 end
+            if ns.methodLabel   and ns.methodLabel:IsShown()   then visibleLines = visibleLines + 1 end
+        end
+        if visibleLines == 0 then visibleLines = 1 end
+        local contentH = visibleLines * 20 + 16
+        ns.contentFrame:SetHeight(contentH)
+        ns.frame:SetHeight(headerH + contentH + 8)
     else
         ns.frame:SetHeight(headerH)
     end
+end
+
+-------------------------------------------------------------------------------
+-- CreateURLButton: Helper to create a small gold ">" URL button.
+-------------------------------------------------------------------------------
+local function createURLButton(parent, anchorLabel, getURL)
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetSize(16, 16)
+    btn:SetPoint("LEFT", anchorLabel, "RIGHT", 4, 0)
+
+    local fs = btn:CreateFontString(nil, "OVERLAY")
+    fs:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+    fs:SetAllPoints(btn)
+    fs:SetJustifyH("CENTER")
+    fs:SetJustifyV("MIDDLE")
+    fs:SetTextColor(1, 0.78, 0.1, 1)
+    fs:SetText(">")
+    btn:SetFontString(fs)
+
+    btn:SetScript("OnClick", function()
+        local url = getURL()
+        if url and ns.ShowURLPopup then
+            ns:ShowURLPopup(url)
+        end
+    end)
+
+    btn:SetScript("OnEnter", function(self)
+        if GameTooltip then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            pcall(function()
+                GameTooltip:SetText("Click to copy URL")
+                GameTooltip:Show()
+            end)
+        end
+    end)
+    btn:SetScript("OnLeave", function()
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+
+    return btn
 end
 
 -------------------------------------------------------------------------------
@@ -307,11 +430,11 @@ function ns:OnLoad()
     ns.contentFrame = contentFrame
 
     -- -----------------------------------------------------------------------
-    -- 5. Stats label — GameFontHighlightSmall / ObjectiveFont, white
+    -- 5a. Unified stats label (shown when _differs is false)
     -- -----------------------------------------------------------------------
     local statsLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     statsLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 6, -6)
-    statsLabel:SetWidth(contentWidth)
+    statsLabel:SetWidth(contentWidth - 20)  -- leave room for URL button
     statsLabel:SetJustifyH("LEFT")
     statsLabel:SetFontObject("GameFontHighlightSmall")
     pcall(function() statsLabel:SetFontObject(ObjectiveFont) end)
@@ -323,7 +446,160 @@ function ns:OnLoad()
     ns.statsLabel = statsLabel
 
     -- -----------------------------------------------------------------------
-    -- 6. Restore collapsed state
+    -- 5b. Per-source labels (shown when _differs is true)
+    -- -----------------------------------------------------------------------
+    local labelWidth = contentWidth - 24  -- leave room for URL button
+
+    -- Wowhead label (cyan)
+    local wowheadLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    wowheadLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 6, -6)
+    wowheadLabel:SetWidth(labelWidth)
+    wowheadLabel:SetJustifyH("LEFT")
+    pcall(function() wowheadLabel:SetFontObject(ObjectiveFont) end)
+    wowheadLabel:SetTextColor(1, 1, 1, 1)
+    wowheadLabel:SetText("")
+    wowheadLabel:SetShadowOffset(1, -1)
+    wowheadLabel:SetShadowColor(0, 0, 0, 1)
+    wowheadLabel:SetWordWrap(true)
+    wowheadLabel:Hide()
+    ns.wowheadLabel = wowheadLabel
+
+    -- Icy Veins label (green)
+    local icyveinsLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    icyveinsLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 6, -26)
+    icyveinsLabel:SetWidth(labelWidth)
+    icyveinsLabel:SetJustifyH("LEFT")
+    pcall(function() icyveinsLabel:SetFontObject(ObjectiveFont) end)
+    icyveinsLabel:SetTextColor(1, 1, 1, 1)
+    icyveinsLabel:SetText("")
+    icyveinsLabel:SetShadowOffset(1, -1)
+    icyveinsLabel:SetShadowColor(0, 0, 0, 1)
+    icyveinsLabel:SetWordWrap(true)
+    icyveinsLabel:Hide()
+    ns.icyveinsLabel = icyveinsLabel
+
+    -- Method label (orange)
+    local methodLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    methodLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 6, -46)
+    methodLabel:SetWidth(labelWidth)
+    methodLabel:SetJustifyH("LEFT")
+    pcall(function() methodLabel:SetFontObject(ObjectiveFont) end)
+    methodLabel:SetTextColor(1, 1, 1, 1)
+    methodLabel:SetText("")
+    methodLabel:SetShadowOffset(1, -1)
+    methodLabel:SetShadowColor(0, 0, 0, 1)
+    methodLabel:SetWordWrap(true)
+    methodLabel:Hide()
+    ns.methodLabel = methodLabel
+
+    -- -----------------------------------------------------------------------
+    -- 5c. URL buttons — one per source, anchored to the right of each label
+    -- -----------------------------------------------------------------------
+    -- We need a deferred data lookup for buttons, so use a closure
+    local function getCurrentData()
+        local specIndex = GetSpecialization and GetSpecialization() or nil
+        if specIndex and specIndex > 0 then
+            local specID = select(1, GetSpecializationInfo(specIndex))
+            if specID and StatPriorityData then
+                return StatPriorityData[specID]
+            end
+        end
+        return nil
+    end
+
+    ns.wowheadUrlBtn = createURLButton(contentFrame, wowheadLabel, function()
+        local d = getCurrentData()
+        return d and d.urls and d.urls.wowhead
+    end)
+    ns.wowheadUrlBtn:Hide()
+
+    ns.icyveinsUrlBtn = createURLButton(contentFrame, icyveinsLabel, function()
+        local d = getCurrentData()
+        return d and d.urls and d.urls.icyveins
+    end)
+    ns.icyveinsUrlBtn:Hide()
+
+    ns.methodUrlBtn = createURLButton(contentFrame, methodLabel, function()
+        local d = getCurrentData()
+        return d and d.urls and d.urls.method
+    end)
+    ns.methodUrlBtn:Hide()
+
+    -- -----------------------------------------------------------------------
+    -- 6. URL popup — singleton EditBox popup for copying URLs
+    -- -----------------------------------------------------------------------
+    local urlPopup
+    local popupOk, popupResult = pcall(function()
+        return CreateFrame("Frame", "StatPriorityURLPopup", UIParent, "BackdropTemplate")
+    end)
+    if popupOk and popupResult then
+        urlPopup = popupResult
+    else
+        urlPopup = CreateFrame("Frame", "StatPriorityURLPopup", UIParent)
+    end
+    urlPopup:SetSize(360, 80)
+    urlPopup:SetPoint("CENTER", UIParent, "CENTER", 0, 50)
+    urlPopup:SetFrameStrata("TOOLTIP")
+    urlPopup:SetFrameLevel(200)
+    urlPopup:SetMovable(true)
+    pcall(function()
+        urlPopup:SetBackdrop({
+            bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true, tileSize = 32, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 },
+        })
+        urlPopup:SetBackdropColor(0.05, 0.04, 0.01, 0.95)
+        urlPopup:SetBackdropBorderColor(1, 0.78, 0.1, 0.9)
+    end)
+    urlPopup:Hide()
+    urlPopup:EnableMouse(true)
+    urlPopup:RegisterForDrag("LeftButton")
+    urlPopup:SetScript("OnDragStart", function() urlPopup:StartMoving() end)
+    urlPopup:SetScript("OnDragStop",  function() urlPopup:StopMovingOrSizing() end)
+
+    -- Label
+    local urlTitle = urlPopup:CreateFontString(nil, "OVERLAY")
+    urlTitle:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+    urlTitle:SetPoint("TOPLEFT", urlPopup, "TOPLEFT", 10, -10)
+    urlTitle:SetTextColor(1, 0.82, 0.0, 1)
+    urlTitle:SetText("Copy URL (Ctrl+C):")
+
+    -- EditBox for URL
+    local editBox = CreateFrame("EditBox", nil, urlPopup)
+    editBox:SetPoint("TOPLEFT",  urlPopup, "TOPLEFT",  10, -26)
+    editBox:SetPoint("TOPRIGHT", urlPopup, "TOPRIGHT", -10, -26)
+    editBox:SetHeight(20)
+    editBox:SetFontObject("GameFontHighlightSmall")
+    pcall(function() editBox:SetFont("Fonts\\FRIZQT__.TTF", 11, "") end)
+    editBox:SetAutoFocus(false)
+    editBox:SetMultiLine(false)
+    editBox:EnableMouse(true)
+    editBox:SetScript("OnEscapePressed", function()
+        urlPopup:Hide()
+    end)
+    ns.urlPopupEditBox = editBox
+
+    -- Close button
+    local closeBtn = CreateFrame("Button", nil, urlPopup, "UIPanelButtonTemplate")
+    closeBtn:SetSize(60, 22)
+    closeBtn:SetPoint("BOTTOM", urlPopup, "BOTTOM", 0, 6)
+    pcall(function() closeBtn:SetText("Close") end)
+    closeBtn:SetScript("OnClick", function()
+        urlPopup:Hide()
+    end)
+
+    urlPopup:SetScript("OnKeyDown", function(self, key)
+        if key == "ESCAPE" then
+            urlPopup:Hide()
+        end
+    end)
+    pcall(function() urlPopup:EnableKeyboard(true) end)
+
+    ns.urlPopup = urlPopup
+
+    -- -----------------------------------------------------------------------
+    -- 7. Restore collapsed state
     -- -----------------------------------------------------------------------
     if db.collapsed then
         contentFrame:Hide()
@@ -332,12 +608,12 @@ function ns:OnLoad()
     end
 
     -- -----------------------------------------------------------------------
-    -- 7. Initial data load
+    -- 8. Initial data load
     -- -----------------------------------------------------------------------
     ns:UpdateStatPriority()
 
     -- -----------------------------------------------------------------------
-    -- 8. Register for spec change events
+    -- 9. Register for spec change events
     -- -----------------------------------------------------------------------
     local specEventFrame = CreateFrame("Frame")
     specEventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
@@ -353,7 +629,10 @@ function ns:OnLoad()
         C_Timer.After(0.5, function()
             if ns.frame then ns.frame:SetWidth(frameWidth) end
             if ns.headerFrame then ns.headerFrame:SetWidth(frameWidth) end
-            if ns.statsLabel then ns.statsLabel:SetWidth(contentWidth) end
+            if ns.statsLabel then ns.statsLabel:SetWidth(contentWidth - 20) end
+            if ns.wowheadLabel  then ns.wowheadLabel:SetWidth(contentWidth - 24)  end
+            if ns.icyveinsLabel then ns.icyveinsLabel:SetWidth(contentWidth - 24) end
+            if ns.methodLabel   then ns.methodLabel:SetWidth(contentWidth - 24)   end
         end)
     end
 
