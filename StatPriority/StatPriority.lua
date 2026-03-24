@@ -128,7 +128,7 @@ function ns:UpdateStatPriority()
                 local sep = " |cffFFD100>|r "
                 statsText = table.concat(data.stats, sep)
             else
-                specName = name or ("Spec " .. tostring(specID))
+                specName = name or "Unknown Spec"
                 statsText = ""
                 spprint("Warning: no data for specID", specID)
             end
@@ -617,8 +617,9 @@ function ns:OnLoad()
     -- -----------------------------------------------------------------------
     local specEventFrame = CreateFrame("Frame")
     specEventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    specEventFrame:RegisterEvent("PLAYER_LOGIN")
     specEventFrame:SetScript("OnEvent", function(self, event)
-        if event == "PLAYER_SPECIALIZATION_CHANGED" then
+        if event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_LOGIN" then
             ns:UpdateStatPriority()
         end
     end)
