@@ -221,6 +221,7 @@ local function createMockFrame(frameType, name, parent, template)
         function tex:GetWidth() return self._width or 0 end
         function tex:SetTexture(t) self._texture = t; return t ~= nil end
         function tex:GetTexture() return self._texture end
+        function tex:SetTexCoord(ul, ur, vl, vr) self._texCoord = {ul, ur, vl, vr} end
         function tex:SetColorTexture(r,g,b,a) self._color = {r,g,b,a} end
         function tex:SetVertexColor(r,g,b,a) end
         function tex:SetBlendMode(m) end
