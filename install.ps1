@@ -13,7 +13,8 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $AddonNames = @(
     'ControllerCompanion',
     'ControllerCompanion_Loader',
-    'DelveCompanionStats'
+    'DelveCompanionStats',
+    'StatPriority'
 )
 
 #endregion
