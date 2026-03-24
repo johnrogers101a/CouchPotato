@@ -33,6 +33,9 @@ end
 local function SaveAngle(angle)
     if CouchPotatoDB then
         CouchPotatoDB.minimapAngle = angle
+        if _G.CouchPotatoLog then
+            _G.CouchPotatoLog:Debug("CP", "MinimapButton: position saved, angle=" .. tostring(angle))
+        end
     end
 end
 
@@ -103,6 +106,9 @@ local function BuildButton()
 
     -- Tooltip
     btn:SetScript("OnEnter", function(self)
+        if _G.CouchPotatoLog then
+            _G.CouchPotatoLog:Debug("CP", "MinimapButton: tooltip shown")
+        end
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine("CouchPotato")
         GameTooltip:AddLine("Left-click to open config", 1, 1, 1)
@@ -115,6 +121,9 @@ local function BuildButton()
     -- Left-click: toggle config window
     btn:SetScript("OnClick", function(self, button)
         if button == "LeftButton" and not _isDragging then
+            if _G.CouchPotatoLog then
+                _G.CouchPotatoLog:Info("CP", "MinimapButton: clicked, toggling config window")
+            end
             if CP.ConfigWindow then
                 CP.ConfigWindow.Toggle()
             end
@@ -140,6 +149,10 @@ local function BuildButton()
 
     PositionButton(btn, _currentAngle)
     _button = btn
+
+    if _G.CouchPotatoLog then
+        _G.CouchPotatoLog:Info("CP", "MinimapButton: created at angle=" .. tostring(_currentAngle))
+    end
 end
 
 -- Public API
@@ -168,6 +181,9 @@ local _loginFrame = CreateFrame("Frame")
 _loginFrame:RegisterEvent("PLAYER_LOGIN")
 _loginFrame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGIN" then
+        if _G.CouchPotatoLog then
+            _G.CouchPotatoLog:Info("CP", "MinimapButton: PLAYER_LOGIN received, building button")
+        end
         CP.MinimapButton.Build()
         self:UnregisterEvent("PLAYER_LOGIN")
     end

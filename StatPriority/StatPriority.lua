@@ -19,6 +19,15 @@ _G.StatPriorityNS = ns
 ns.version = "2.0.0"
 
 -------------------------------------------------------------------------------
+-- splog: Structured logging via CouchPotatoLog. Falls back gracefully.
+-------------------------------------------------------------------------------
+local function splog(level, msg)
+    if _G.CouchPotatoLog and _G.CouchPotatoLog[level] then
+        _G.CouchPotatoLog[level](_G.CouchPotatoLog, "SP", msg)
+    end
+end
+
+-------------------------------------------------------------------------------
 -- spprint: Write a coloured message to the chat frame (or print fallback).
 -- Delegates to CouchPotatoLog when available; bare fallback otherwise.
 -------------------------------------------------------------------------------
@@ -43,6 +52,7 @@ SLASH_SP1 = "/sp"
 SLASH_SP2 = "/statpriority"
 SlashCmdList["SP"] = function(msg)
     local cmd = msg and msg:lower():match("^%s*(%S+)") or ""
+    splog("Info", "Slash /sp received, cmd='" .. cmd .. "'")
     if cmd == "show" then
         if ns.frame then ns.frame:Show() end
         spprint("Frame shown manually")
@@ -54,9 +64,11 @@ SlashCmdList["SP"] = function(msg)
             if ns.frame:IsShown() then
                 ns.frame:Hide()
                 spprint("Frame hidden (toggle)")
+                splog("Info", "Frame hidden via /sp toggle")
             else
                 ns.frame:Show()
                 spprint("Frame shown (toggle)")
+                splog("Info", "Frame shown via /sp toggle")
                 ns:UpdateStatPriority()
             end
         end
@@ -71,6 +83,7 @@ SlashCmdList["SP"] = function(msg)
             end
         end
         spprint("Frame position reset to default")
+        splog("Info", "Frame position reset to default via /sp reset")
     elseif cmd == "debug" then
         spprint("StatPriority v" .. ns.version)
         local specIndex = GetSpecialization and GetSpecialization() or nil
@@ -93,6 +106,7 @@ end
 -- ShowURLPopup: Show the singleton URL popup with the given URL pre-selected.
 -------------------------------------------------------------------------------
 function ns:ShowURLPopup(url)
+    splog("Info", "URL popup opened, url=" .. tostring(url))
     if not ns.urlPopup then return end
     if ns.urlPopupEditBox then
         ns.urlPopupEditBox:SetText(url or "")
@@ -106,7 +120,12 @@ end
 -- UpdateStatPriority: Reads player spec, looks up data, updates UI.
 -------------------------------------------------------------------------------
 function ns:UpdateStatPriority()
-    if not ns.frame then return end
+    if not ns.frame then
+        splog("Warn", "UpdateStatPriority called but ns.frame is nil")
+        return
+    end
+
+    splog("Debug", "UpdateStatPriority: starting")
 
     -- Default state
     local specName   = "No Specialization"
@@ -116,33 +135,45 @@ function ns:UpdateStatPriority()
     local specIndex = nil
     if GetSpecialization then
         specIndex = GetSpecialization()
+        splog("Debug", "GetSpecialization() returned: " .. tostring(specIndex))
+    else
+        splog("Warn", "GetSpecialization is nil — API not available")
     end
 
     if specIndex and specIndex > 0 then
         local specID, name = GetSpecializationInfo(specIndex)
+        splog("Debug", "GetSpecializationInfo(" .. tostring(specIndex) .. ") => specID=" .. tostring(specID) .. " name=" .. tostring(name))
         if specID then
             data = StatPriorityData and StatPriorityData[specID]
             if data then
+                splog("Info", "StatPriorityData lookup: found data for specID=" .. tostring(specID) .. " specName=" .. tostring(data.specName))
                 specName = data.specName or name or "Unknown Spec"
                 -- Join stats with gold ">" separator
                 local sep = " |cffFFD100>|r "
                 statsText = table.concat(data.stats, sep)
             else
+                splog("Warn", "StatPriorityData lookup: NO data for specID=" .. tostring(specID))
                 specName = name or "Unknown Spec"
                 statsText = ""
                 spprint("Warning: no data for specID", specID)
             end
+        else
+            splog("Warn", "GetSpecializationInfo returned nil specID for index=" .. tostring(specIndex))
         end
+    else
+        splog("Debug", "No active specialization (specIndex=" .. tostring(specIndex) .. ")")
     end
 
     -- Update header title
     if ns.headerTitle then
         ns.headerTitle:SetText(specName)
+        splog("Debug", "Header text set to: " .. tostring(specName))
     end
 
     local sep = " |cffFFD100>|r "
 
     if data and data._differs then
+        splog("Info", "Display mode: multi-source (sources differ), specID=" .. tostring(data and data.specName))
         -- Multi-source display
         if ns.statsLabel then ns.statsLabel:Hide() end
 
@@ -166,6 +197,7 @@ function ns:UpdateStatPriority()
         if ns.wowheadUrlBtn then
             if data.urls and data.urls.wowhead then
                 ns.wowheadUrlBtn:Show()
+                splog("Debug", "Wowhead URL button shown")
             else
                 ns.wowheadUrlBtn:Hide()
             end
@@ -173,6 +205,7 @@ function ns:UpdateStatPriority()
         if ns.icyveinsUrlBtn then
             if data.urls and data.urls.icyveins then
                 ns.icyveinsUrlBtn:Show()
+                splog("Debug", "IcyVeins URL button shown")
             else
                 ns.icyveinsUrlBtn:Hide()
             end
@@ -180,15 +213,18 @@ function ns:UpdateStatPriority()
         if ns.methodUrlBtn then
             if data.urls and data.urls.method then
                 ns.methodUrlBtn:Show()
+                splog("Debug", "Method URL button shown")
             else
                 ns.methodUrlBtn:Hide()
             end
         end
     else
+        splog("Info", "Display mode: unified (single source or no data)")
         -- Unified display (Phase 1 behavior)
         if ns.statsLabel then
             ns.statsLabel:SetText(statsText)
             ns.statsLabel:Show()
+            splog("Debug", "Stats text set to: " .. tostring(statsText):sub(1, 80))
         end
 
         if ns.wowheadLabel  then ns.wowheadLabel:Hide()  end
@@ -202,6 +238,7 @@ function ns:UpdateStatPriority()
 
     -- Resize content frame to fit label
     ns:UpdateFrameHeight()
+    splog("Debug", "UpdateStatPriority: complete")
 end
 
 -------------------------------------------------------------------------------
@@ -247,6 +284,7 @@ local function createURLButton(parent, anchorLabel, getURL)
 
     btn:SetScript("OnClick", function()
         local url = getURL()
+        splog("Info", "URL button clicked, url=" .. tostring(url))
         if url and ns.ShowURLPopup then
             ns:ShowURLPopup(url)
         end
@@ -275,17 +313,24 @@ end
 -------------------------------------------------------------------------------
 function ns:OnLoad()
     -- Guard: idempotent — never initialize twice
-    if ns.frame then return end
+    if ns.frame then
+        splog("Warn", "OnLoad called but ns.frame already exists — skipping (idempotent guard)")
+        return
+    end
+
+    splog("Info", "OnLoad: starting initialization, version=" .. ns.version)
 
     -- 1. Initialize SavedVariables
     StatPriorityDB = StatPriorityDB or {}
     local db = StatPriorityDB
+    splog("Debug", "SavedVariables: StatPriorityDB initialized")
 
     -- 2. Create the main display frame
     local frameOk, frameResult = pcall(function()
         return CreateFrame("Frame", "StatPriorityFrame", UIParent, "BackdropTemplate")
     end)
     if not frameOk or not frameResult then
+        splog("Warn", "CreateFrame with BackdropTemplate failed, retrying without template")
         local ok2, f2 = pcall(function()
             return CreateFrame("Frame", "StatPriorityFrame", UIParent)
         end)
@@ -295,6 +340,7 @@ function ns:OnLoad()
         end
     end
     if not frameOk or not frameResult then
+        splog("Error", "Could not create display frame — addon disabled")
         spprint("Error: Could not create display frame. Addon disabled.")
         ns.frame = nil
         return
@@ -304,6 +350,7 @@ function ns:OnLoad()
     ns.frame:SetFrameStrata("DIALOG")
     ns.frame:SetFrameLevel(100)
     ns.frame:SetMovable(true)
+    splog("Info", "Frame created successfully: StatPriorityFrame")
 
     local frameWidth  = 248
     local contentWidth = frameWidth - 12
@@ -314,10 +361,14 @@ function ns:OnLoad()
         ns.frame:ClearAllPoints()
         ns.frame:SetPoint(db.position.point, UIParent, db.position.relativePoint,
                           db.position.x, db.position.y)
+        splog("Info", "Frame position restored from SavedVars: " .. tostring(db.position.point) ..
+              " x=" .. tostring(db.position.x) .. " y=" .. tostring(db.position.y))
     elseif ChatFrame1 then
         ns.frame:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 40)
+        splog("Debug", "Frame positioned: BOTTOMLEFT of ChatFrame1 + 40px")
     else
         ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 160)
+        splog("Debug", "Frame positioned: BOTTOMLEFT of UIParent fallback")
     end
 
     -- -----------------------------------------------------------------------
@@ -339,6 +390,8 @@ function ns:OnLoad()
         if StatPriorityDB then
             local point, _, relPoint, x, y = ns.frame:GetPoint()
             StatPriorityDB.position = { point = point, relativePoint = relPoint, x = x, y = y }
+            splog("Info", "Frame position saved: " .. tostring(point) ..
+                  " x=" .. tostring(x) .. " y=" .. tostring(y))
         end
     end)
 
@@ -392,11 +445,13 @@ function ns:OnLoad()
             collapseBtnText:SetText("+")
             if StatPriorityDB then StatPriorityDB.collapsed = true end
             ns.frame:SetHeight(header:GetHeight())
+            splog("Info", "Frame collapsed")
         else
             ns.contentFrame:Show()
             collapseBtnText:SetText("\226\128\147")
             if StatPriorityDB then StatPriorityDB.collapsed = false end
             ns:UpdateFrameHeight()
+            splog("Info", "Frame expanded")
         end
     end)
 
@@ -597,6 +652,7 @@ function ns:OnLoad()
     pcall(function() urlPopup:EnableKeyboard(true) end)
 
     ns.urlPopup = urlPopup
+    splog("Debug", "URL popup created")
 
     -- -----------------------------------------------------------------------
     -- 7. Restore collapsed state
@@ -605,11 +661,15 @@ function ns:OnLoad()
         contentFrame:Hide()
         collapseBtnText:SetText("+")
         ns.frame:SetHeight(header:GetHeight())
+        splog("Info", "Restored collapsed state: frame is collapsed")
+    else
+        splog("Debug", "Collapsed state: expanded (default)")
     end
 
     -- -----------------------------------------------------------------------
     -- 8. Initial data load
     -- -----------------------------------------------------------------------
+    splog("Info", "Running initial UpdateStatPriority on load")
     ns:UpdateStatPriority()
 
     -- -----------------------------------------------------------------------
@@ -619,11 +679,16 @@ function ns:OnLoad()
     specEventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     specEventFrame:RegisterEvent("PLAYER_LOGIN")
     specEventFrame:SetScript("OnEvent", function(self, event)
-        if event == "PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_LOGIN" then
+        if event == "PLAYER_SPECIALIZATION_CHANGED" then
+            splog("Info", "PLAYER_SPECIALIZATION_CHANGED fired — calling UpdateStatPriority")
+            ns:UpdateStatPriority()
+        elseif event == "PLAYER_LOGIN" then
+            splog("Info", "PLAYER_LOGIN fired — calling UpdateStatPriority")
             ns:UpdateStatPriority()
         end
     end)
     ns.specEventFrame = specEventFrame
+    splog("Debug", "Registered for PLAYER_SPECIALIZATION_CHANGED and PLAYER_LOGIN")
 
     -- Delayed width fix (matches DCS pattern)
     if C_Timer and C_Timer.After then
@@ -637,6 +702,7 @@ function ns:OnLoad()
         end)
     end
 
+    splog("Info", "OnLoad complete — StatPriority v" .. ns.version .. " ready")
     spprint("Loaded v" .. ns.version)
 end
 
@@ -647,6 +713,7 @@ local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
+        splog("Info", "ADDON_LOADED fired for: " .. tostring(arg1))
         self:UnregisterEvent("ADDON_LOADED")
         ns:OnLoad()
     end

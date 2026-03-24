@@ -15,11 +15,13 @@ CP.version = "1.0.0"
 -------------------------------------------------------------------------------
 local DB_DEFAULTS = {
     errorLog      = {},
+    debugLog      = {},
     minimapAngle  = 225,   -- degrees clockwise from top
     windowState   = { shown = false },
 }
 
 local function InitDB()
+    local isNew = (CouchPotatoDB == nil)
     if not CouchPotatoDB then
         CouchPotatoDB = {}
     end
@@ -35,6 +37,10 @@ local function InitDB()
                 db[k] = v
             end
         end
+    end
+    if _G.CouchPotatoLog then
+        local state = isNew and "fresh" or "restored"
+        _G.CouchPotatoLog:Info("CP", "DB initialized: " .. state)
     end
 end
 
@@ -75,17 +81,23 @@ local _originalErrorHandler = nil
 local function CouchPotatoErrorHandler(msg, stack)
     local isSuite, _ = IsSuiteError(msg, stack)
     if isSuite and CouchPotatoDB then
+        local addonGuess = GuessAddonName(msg, stack)
         local log = CouchPotatoDB.errorLog
         local entry = {
             timestamp = GetTime and GetTime() or 0,
             message   = tostring(msg or ""),
             stack     = tostring(stack or ""),
-            addonName = GuessAddonName(msg, stack),
+            addonName = addonGuess,
         }
         table.insert(log, 1, entry)  -- newest first
         -- Cap at MAX_ERROR_LOG entries
         while #log > MAX_ERROR_LOG do
             table.remove(log)
+        end
+        -- Also write to debug log
+        local summary = tostring(msg or ""):sub(1, 120)
+        if _G.CouchPotatoLog then
+            _G.CouchPotatoLog:Error(addonGuess, "Captured error: " .. summary)
         end
     end
     -- Always forward to original handler
@@ -99,9 +111,16 @@ local function HookErrorHandler()
         _originalErrorHandler = geterrorhandler and geterrorhandler() or nil
         seterrorhandler(CouchPotatoErrorHandler)
     end)
-    if not ok then
+    if ok then
+        if _G.CouchPotatoLog then
+            _G.CouchPotatoLog:Info("CP", "Error handler hooked successfully")
+        end
+    else
         -- If hooking fails (e.g., protected environment), proceed without it
         _originalErrorHandler = nil
+        if _G.CouchPotatoLog then
+            _G.CouchPotatoLog:Warn("CP", "Error handler hook failed: " .. tostring(err))
+        end
     end
 end
 
@@ -112,6 +131,9 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:SetScript("OnEvent", function(self, event, addonName)
     if event == "ADDON_LOADED" and addonName == ADDON_NAME then
+        if _G.CouchPotatoLog then
+            _G.CouchPotatoLog:Info("CP", "ADDON_LOADED fired for: " .. tostring(addonName))
+        end
         InitDB()
         HookErrorHandler()
         self:UnregisterEvent("ADDON_LOADED")
@@ -127,6 +149,9 @@ SLASH_CP1 = "/cp"
 SLASH_CP2 = "/couchpotato"
 SlashCmdList["CP"] = function(msg)
     msg = strtrim(strlower(msg or ""))
+    if _G.CouchPotatoLog then
+        _G.CouchPotatoLog:Info("CP", "Slash /cp received, args: '" .. msg .. "'")
+    end
     if CouchPotatoShared.ConfigWindow then
         CouchPotatoShared.ConfigWindow.Toggle()
     end
@@ -137,17 +162,26 @@ SLASH_CC1 = "/cc"
 SLASH_CC2 = "/controllercompanion"
 SlashCmdList["CC"] = function(msg)
     msg = strtrim(strlower(msg or ""))
+    if _G.CouchPotatoLog then
+        _G.CouchPotatoLog:Info("CP", "Slash /cc received, args: '" .. msg .. "'")
+    end
     if ControllerCompanion and ControllerCompanion.ConfigWindow then
         ControllerCompanion.ConfigWindow.Show()
     else
         -- Try force-loading ControllerCompanion if not loaded
         if C_AddOns and not C_AddOns.IsAddOnLoaded("ControllerCompanion") then
+            if _G.CouchPotatoLog then
+                _G.CouchPotatoLog:Info("CP", "Requesting load of ControllerCompanion")
+            end
             C_AddOns.EnableAddOn("ControllerCompanion")
             C_AddOns.LoadAddOn("ControllerCompanion")
         end
         if ControllerCompanion and ControllerCompanion.ConfigWindow then
             ControllerCompanion.ConfigWindow.Show()
         else
+            if _G.CouchPotatoLog then
+                _G.CouchPotatoLog:Warn("CP", "ControllerCompanion not available after load attempt")
+            end
             if CouchPotatoLog then
                 CouchPotatoLog:Print("CP", "ControllerCompanion not available.")
             end
