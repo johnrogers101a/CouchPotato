@@ -651,6 +651,33 @@ _G.GetSpecializationInfo = function(specIndex)
     return specIndex, "Unknown", "", "", "DAMAGER"
 end
 
+-- GetLootSpecialization: returns specID of loot spec, or 0 if "Current Spec".
+-- Default returns 0 (follow current spec). Tests can override _mockLootSpec.
+_G._mockLootSpec = 0
+_G.GetLootSpecialization = function()
+    return _G._mockLootSpec or 0
+end
+
+-- GetNumSpecializations: returns number of specs available to the current class.
+-- Default returns 4 (most classes have 4 specs in retail). Tests can override.
+_G.GetNumSpecializations = function()
+    return _G._mockNumSpecializations or 4
+end
+
+-- GetSpecializationInfoByID: returns info by specID directly.
+-- Used by StatPriority to get the spec name when displaying a fixed override.
+_G.GetSpecializationInfoByID = function(specID)
+    -- Return minimal info for known mock specIDs
+    if specID == 105 then
+        return 105, "Restoration Druid", "Heals allies.", "", "HEALER"
+    elseif specID == 251 then
+        return 251, "Frost Death Knight", "", "", "DAMAGER"
+    elseif specID == 250 then
+        return 250, "Blood Death Knight", "", "", "TANK"
+    end
+    return specID, "Unknown Spec", "", "", "DAMAGER"
+end
+
 _G.GetNumGroupMembers = function() return 0 end
 
 -- Test helper to change mock state

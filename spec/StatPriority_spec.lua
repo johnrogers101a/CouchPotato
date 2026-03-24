@@ -628,6 +628,183 @@ describe("StatPriority", function()
     end)
 
     -- =========================================================================
+    -- Test 12: GetDisplaySpecID — spec override logic
+    -- =========================================================================
+    describe("GetDisplaySpecID", function()
+        before_each(function()
+            -- Reset loot spec mock to default (0 = follow current)
+            _G._mockLootSpec = 0
+            -- Ensure specOverride starts as default
+            _G.StatPriorityDB.specOverride = "current"
+        end)
+
+        it("specOverride=nil returns current spec's specID", function()
+            _G.StatPriorityDB.specOverride = nil
+            -- Default mock: GetSpecialization()=4, GetSpecializationInfo(4)=105
+            local specID = ns:GetDisplaySpecID()
+            assert.equals(105, specID)
+        end)
+
+        it("specOverride='current' returns current spec's specID", function()
+            _G.StatPriorityDB.specOverride = "current"
+            local specID = ns:GetDisplaySpecID()
+            assert.equals(105, specID)
+        end)
+
+        it("specOverride='loot' with non-zero loot spec returns loot specID", function()
+            _G.StatPriorityDB.specOverride = "loot"
+            _G._mockLootSpec = 251  -- Frost Death Knight
+            local specID = ns:GetDisplaySpecID()
+            assert.equals(251, specID)
+        end)
+
+        it("specOverride='loot' with loot spec=0 falls back to current spec", function()
+            _G.StatPriorityDB.specOverride = "loot"
+            _G._mockLootSpec = 0  -- "Current Spec" in WoW loot spec UI
+            local specID = ns:GetDisplaySpecID()
+            -- Should fall back to current spec (105 = Restoration Druid)
+            assert.equals(105, specID)
+        end)
+
+        it("specOverride=integer specID returns that specID directly", function()
+            _G.StatPriorityDB.specOverride = 250  -- Blood Death Knight
+            local specID = ns:GetDisplaySpecID()
+            assert.equals(250, specID)
+        end)
+
+        it("returns nil when GetSpecialization returns nil (no spec)", function()
+            _G.StatPriorityDB.specOverride = "current"
+            _G.GetSpecialization = function() return nil end
+            local specID = ns:GetDisplaySpecID()
+            assert.is_nil(specID)
+        end)
+    end)
+
+    -- =========================================================================
+    -- Test 13: UpdateStatPriority with spec overrides
+    -- =========================================================================
+    describe("UpdateStatPriority with spec override", function()
+        before_each(function()
+            _G._mockLootSpec = 0
+            -- Reset to default (Restoration Druid)
+            _G.GetSpecialization = function() return 4 end
+            _G.GetSpecializationInfo = function(specIndex)
+                if specIndex == 4 then return 105, "Restoration Druid", "Heals allies.", "", "HEALER" end
+                return nil
+            end
+        end)
+
+        it("override='current' shows current spec (Restoration Druid)", function()
+            _G.StatPriorityDB.specOverride = "current"
+            ns:UpdateStatPriority()
+            assert.equals("Restoration Druid", ns.headerTitle:GetText())
+        end)
+
+        it("override='loot' with loot specID=251 shows Frost Death Knight", function()
+            _G.StatPriorityDB.specOverride = "loot"
+            _G._mockLootSpec = 251
+            ns:UpdateStatPriority()
+            assert.equals("Frost Death Knight", ns.headerTitle:GetText())
+        end)
+
+        it("override='loot' with loot specID=0 falls back to current spec", function()
+            _G.StatPriorityDB.specOverride = "loot"
+            _G._mockLootSpec = 0
+            ns:UpdateStatPriority()
+            -- Falls back to current spec = Restoration Druid
+            assert.equals("Restoration Druid", ns.headerTitle:GetText())
+        end)
+
+        it("override=integer specID=250 shows Blood Death Knight", function()
+            _G.StatPriorityDB.specOverride = 250
+            ns:UpdateStatPriority()
+            assert.equals("Blood Death Knight", ns.headerTitle:GetText())
+        end)
+
+        it("override='loot' with loot specID=251 shows _differs content for Frost DK", function()
+            _G.StatPriorityDB.specOverride = "loot"
+            _G._mockLootSpec = 251
+            ns:UpdateStatPriority()
+            -- Frost DK has _differs=true, should show per-source labels
+            assert.is_true(ns.wowheadLabel:IsShown())
+            assert.is_true(ns.icyveinsLabel:IsShown())
+            assert.is_true(ns.methodLabel:IsShown())
+        end)
+    end)
+
+    -- =========================================================================
+    -- Test 14: specOverride persistence and initialization
+    -- =========================================================================
+    describe("specOverride SavedVariables", function()
+        it("specOverride is initialized to 'current' by OnLoad when nil", function()
+            _G.StatPriorityDB = {}  -- no specOverride set
+            _G.StatPriorityNS = nil
+            _G.StatPriorityFrame = nil
+            dofile("StatPriority/StatPriority.lua")
+            local ns2 = _G.StatPriorityNS
+            ns2:OnLoad()
+            assert.equals("current", _G.StatPriorityDB.specOverride)
+        end)
+
+        it("specOverride value is preserved across OnLoad when already set", function()
+            _G.StatPriorityDB = { specOverride = "loot" }
+            _G.StatPriorityNS = nil
+            _G.StatPriorityFrame = nil
+            dofile("StatPriority/StatPriority.lua")
+            local ns2 = _G.StatPriorityNS
+            ns2:OnLoad()
+            assert.equals("loot", _G.StatPriorityDB.specOverride)
+        end)
+
+        it("stale integer specOverride not matching current class is reset to 'current'", function()
+            -- 99998 is not a valid spec in any test mock
+            _G.StatPriorityDB = { specOverride = 99998 }
+            _G.GetNumSpecializations = function() return 4 end
+            _G.GetSpecializationInfo = function(i)
+                local ids = { 105, 102, 103, 104 }
+                return ids[i], "Spec " .. i, "", "", "DAMAGER"
+            end
+            _G.StatPriorityNS = nil
+            _G.StatPriorityFrame = nil
+            dofile("StatPriority/StatPriority.lua")
+            local ns2 = _G.StatPriorityNS
+            ns2:OnLoad()
+            assert.equals("current", _G.StatPriorityDB.specOverride)
+        end)
+    end)
+
+    -- =========================================================================
+    -- Test 15: PLAYER_LOOT_SPEC_UPDATED event
+    -- =========================================================================
+    describe("PLAYER_LOOT_SPEC_UPDATED event", function()
+        it("specEventFrame is registered for PLAYER_LOOT_SPEC_UPDATED", function()
+            assert.is_not_nil(ns.specEventFrame)
+            assert.is_true(ns.specEventFrame:IsEventRegistered("PLAYER_LOOT_SPEC_UPDATED"))
+        end)
+
+        it("fires UpdateStatPriority when override='loot'", function()
+            _G.StatPriorityDB.specOverride = "loot"
+            _G._mockLootSpec = 251  -- Frost DK
+            local onEvent = ns.specEventFrame:GetScript("OnEvent")
+            assert.is_not_nil(onEvent)
+            onEvent(ns.specEventFrame, "PLAYER_LOOT_SPEC_UPDATED")
+            assert.equals("Frost Death Knight", ns.headerTitle:GetText())
+        end)
+
+        it("does not change display when override='current' on PLAYER_LOOT_SPEC_UPDATED", function()
+            _G.StatPriorityDB.specOverride = "current"
+            -- Start with Restoration Druid displayed
+            ns:UpdateStatPriority()
+            assert.equals("Restoration Druid", ns.headerTitle:GetText())
+            -- Fire loot spec update — should NOT update (override is not "loot")
+            local onEvent = ns.specEventFrame:GetScript("OnEvent")
+            onEvent(ns.specEventFrame, "PLAYER_LOOT_SPEC_UPDATED")
+            -- Header should still show Restoration Druid (no update happened)
+            assert.equals("Restoration Druid", ns.headerTitle:GetText())
+        end)
+    end)
+
+    -- =========================================================================
     -- Bonus: Data table completeness (Phase 1 + Phase 2)
     -- =========================================================================
     describe("StatPriorityData", function()
