@@ -34,6 +34,13 @@ local function LoadControllerCompanion()
         return
     end
 
+    -- Check if ControllerCompanion is functionally disabled via CouchPotato suite
+    if _G.CouchPotatoDB and _G.CouchPotatoDB.addonStates and
+       _G.CouchPotatoDB.addonStates.ControllerCompanion == false then
+        ldrlog("Info", "ControllerCompanion is disabled via /cp disable — skipping load")
+        return
+    end
+
     -- Already loaded?
     if C_AddOns.IsAddOnLoaded(MAIN_ADDON) then
         ldrlog("Info", "ControllerCompanion already loaded — signalling OnControllerActivated")

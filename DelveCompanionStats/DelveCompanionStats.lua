@@ -520,6 +520,14 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         self:UnregisterEvent("ADDON_LOADED")
         dcslog("Info", "ADDON_LOADED fired for: " .. tostring(arg1))
 
+        -- Check if this addon is functionally disabled via CouchPotato suite
+        if _G.CouchPotatoDB and _G.CouchPotatoDB.addonStates and
+           _G.CouchPotatoDB.addonStates.DelveCompanionStats == false then
+            dcslog("Info", "DelveCompanionStats is disabled via /cp disable — skipping init")
+            ns._cpDisabled = true
+            return
+        end
+
         -- All initialization happens here, atomically, before any other events fire
         ns:OnLoad()
 
@@ -1033,6 +1041,8 @@ function ns:OnLoad()
         -- when the boon aura (spell 1280098) becomes active after zone-in.
         ns.frame:RegisterEvent("UNIT_AURA")
         ns.frame:SetScript("OnEvent", function(self, event, ...)
+            -- Suppress all event handling if functionally disabled via /cp disable
+            if ns._cpDisabled then return end
             -- UNIT_AURA: only refresh boon data when player's own auras change in a delve.
             -- Avoids redundant updates for non-player units (party members, NPCs, etc.).
             if event == "UNIT_AURA" then

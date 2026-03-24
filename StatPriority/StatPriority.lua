@@ -988,6 +988,8 @@ function ns:OnLoad()
     specEventFrame:RegisterEvent("PLAYER_LOGIN")
     specEventFrame:RegisterEvent("PLAYER_LOOT_SPEC_UPDATED")
     specEventFrame:SetScript("OnEvent", function(self, event)
+        -- Suppress all event handling if functionally disabled via /cp disable
+        if ns._cpDisabled then return end
         if event == "PLAYER_SPECIALIZATION_CHANGED" then
             splog("Info", "PLAYER_SPECIALIZATION_CHANGED fired — calling UpdateStatPriority")
             ns:UpdateStatPriority()
@@ -1027,6 +1029,8 @@ function ns:OnLoad()
     anchorEventFrame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
     anchorEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     anchorEventFrame:SetScript("OnEvent", function(self, event)
+        -- Suppress all event handling if functionally disabled via /cp disable
+        if ns._cpDisabled then return end
         splog("Debug", "ReAnchor event: " .. event .. " — scheduling delayed re-anchor")
         if C_Timer and C_Timer.After then
             C_Timer.After(0.15, ReAnchorIfPinned)
@@ -1062,6 +1066,15 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
         splog("Info", "ADDON_LOADED fired for: " .. tostring(arg1))
         self:UnregisterEvent("ADDON_LOADED")
+
+        -- Check if this addon is functionally disabled via CouchPotato suite
+        if _G.CouchPotatoDB and _G.CouchPotatoDB.addonStates and
+           _G.CouchPotatoDB.addonStates.StatPriority == false then
+            splog("Info", "StatPriority is disabled via /cp disable — skipping init")
+            ns._cpDisabled = true
+            return
+        end
+
         ns:OnLoad()
     end
 end)

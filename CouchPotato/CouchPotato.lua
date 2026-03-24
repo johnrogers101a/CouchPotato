@@ -18,6 +18,11 @@ local DB_DEFAULTS = {
     debugLog      = {},
     minimapAngle  = 225,   -- degrees clockwise from top
     windowState   = { shown = false },
+    addonStates   = {
+        ControllerCompanion  = true,
+        DelveCompanionStats  = true,
+        StatPriority         = true,
+    },
 }
 
 local function InitDB()
@@ -38,6 +43,17 @@ local function InitDB()
             end
         end
     end
+    -- Migration: ensure addonStates sub-keys exist for addons added after initial install
+    if not db.addonStates then
+        db.addonStates = {}
+    end
+    local stateDefaults = DB_DEFAULTS.addonStates
+    for addonKey, defaultVal in pairs(stateDefaults) do
+        if db.addonStates[addonKey] == nil then
+            db.addonStates[addonKey] = defaultVal
+        end
+    end
+
     if _G.CouchPotatoLog then
         local state = isNew and "fresh" or "restored"
         _G.CouchPotatoLog:Info("CP", "DB initialized: " .. state)
@@ -141,10 +157,176 @@ frame:SetScript("OnEvent", function(self, event, addonName)
 end)
 
 -------------------------------------------------------------------------------
+-- Enable/Disable addon management
+-------------------------------------------------------------------------------
+
+-- Canonical addon name → display name mapping.
+-- Keys are lowercase aliases; value is the canonical SavedVars key.
+local ADDON_ALIASES = {
+    controllercompanion  = "ControllerCompanion",
+    cc                   = "ControllerCompanion",
+    delvecompanionstats  = "DelveCompanionStats",
+    dcs                  = "DelveCompanionStats",
+    statpriority         = "StatPriority",
+    sp                   = "StatPriority",
+}
+
+-- cpprint: write a coloured [CP] message to the chat frame.
+local function cpprint(msg)
+    if _G.CouchPotatoLog then
+        _G.CouchPotatoLog:Print("CP", msg)
+    elseif DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff6600CP:|r " .. tostring(msg))
+    else
+        print("|cffff6600CP:|r " .. tostring(msg))
+    end
+end
+
+-- EnsureAddonStates: guarantee CouchPotatoDB.addonStates is populated.
+-- Safe to call before ADDON_LOADED (e.g. if the slash cmd fires early).
+local function EnsureAddonStates()
+    if not CouchPotatoDB then
+        CouchPotatoDB = {}
+    end
+    if not CouchPotatoDB.addonStates then
+        CouchPotatoDB.addonStates = {}
+    end
+    local stateDefaults = DB_DEFAULTS.addonStates
+    for addonKey, defaultVal in pairs(stateDefaults) do
+        if CouchPotatoDB.addonStates[addonKey] == nil then
+            CouchPotatoDB.addonStates[addonKey] = defaultVal
+        end
+    end
+end
+
+-- PrintAddonStatus: list all suite addons and their current enabled/disabled state.
+local function PrintAddonStatus()
+    EnsureAddonStates()
+    cpprint("Suite addon states:")
+    local order = { "ControllerCompanion", "DelveCompanionStats", "StatPriority" }
+    for _, name in ipairs(order) do
+        local state = CouchPotatoDB.addonStates[name]
+        local label = (state == false) and "|cffff4444disabled|r" or "|cff44ff44enabled|r"
+        cpprint("  " .. name .. ": " .. label)
+    end
+end
+
+-- Combat deferral for ControllerCompanion disable (protected frames)
+local pendingCombatActions = {}
+
+local combatFrame = CreateFrame("Frame")
+combatFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+combatFrame:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_REGEN_ENABLED" then
+        for _, action in ipairs(pendingCombatActions) do
+            action()
+        end
+        pendingCombatActions = {}
+    end
+end)
+
+-- DoDisableAddon: perform the functional disable for a canonical addon name.
+local function DoDisableAddon(name)
+    if name == "ControllerCompanion" then
+        if _G.ControllerCompanion and _G.ControllerCompanion.OnControllerDeactivated then
+            _G.ControllerCompanion:OnControllerDeactivated()
+        end
+        -- Hide all CC frames if accessible
+        if _G.ControllerCompanion and _G.ControllerCompanion._mainFrame then
+            _G.ControllerCompanion._mainFrame:Hide()
+        end
+    elseif name == "DelveCompanionStats" then
+        local ns = _G.DelveCompanionStatsNS
+        if ns then
+            ns._cpDisabled = true
+            if ns.frame then ns.frame:Hide() end
+        end
+    elseif name == "StatPriority" then
+        local ns = _G.StatPriorityNS
+        if ns then
+            ns._cpDisabled = true
+            if ns.frame then ns.frame:Hide() end
+        end
+    end
+end
+
+-- DoEnableAddon: perform the functional enable for a canonical addon name.
+local function DoEnableAddon(name)
+    if name == "ControllerCompanion" then
+        if _G.ControllerCompanion and _G.ControllerCompanion.OnControllerActivated then
+            _G.ControllerCompanion:OnControllerActivated()
+        end
+    elseif name == "DelveCompanionStats" then
+        local ns = _G.DelveCompanionStatsNS
+        if ns then
+            ns._cpDisabled = false
+            if ns.frame then ns.frame:Show() end
+        end
+    elseif name == "StatPriority" then
+        local ns = _G.StatPriorityNS
+        if ns then
+            ns._cpDisabled = false
+            if ns.frame then ns.frame:Show() end
+            if ns.UpdateStatPriority then ns:UpdateStatPriority() end
+        end
+    end
+end
+
+-- HandleEnableDisable: main entry point for /cp enable|disable <addon>
+local function HandleEnableDisable(action, rawName)
+    EnsureAddonStates()
+
+    if not rawName or rawName == "" then
+        PrintAddonStatus()
+        return
+    end
+
+    local alias = strlower(rawName)
+    local canonical = ADDON_ALIASES[alias]
+    if not canonical then
+        cpprint("Unknown addon '" .. rawName .. "'. Valid names: controllercompanion (cc), delvecompanionstats (dcs), statpriority (sp)")
+        return
+    end
+
+    local states = CouchPotatoDB.addonStates
+    local isEnabled = (states[canonical] ~= false)
+
+    if action == "disable" then
+        if not isEnabled then
+            cpprint(canonical .. " is already disabled.")
+            return
+        end
+        states[canonical] = false
+        -- ControllerCompanion: warn+defer if in combat
+        if canonical == "ControllerCompanion" then
+            local inCombat = InCombatLockdown and InCombatLockdown() or false
+            if inCombat then
+                cpprint(canonical .. " will be disabled after combat ends.")
+                table.insert(pendingCombatActions, function()
+                    DoDisableAddon(canonical)
+                    cpprint(canonical .. " disabled (post-combat).")
+                end)
+                return
+            end
+        end
+        DoDisableAddon(canonical)
+        cpprint(canonical .. " disabled.")
+    elseif action == "enable" then
+        if isEnabled then
+            cpprint(canonical .. " is already enabled.")
+            return
+        end
+        states[canonical] = true
+        DoEnableAddon(canonical)
+        cpprint(canonical .. " enabled.")
+    end
+end
+
+-------------------------------------------------------------------------------
 -- Slash commands
 -------------------------------------------------------------------------------
 
--- /cp  — open CouchPotato shared config window
+-- /cp  — open CouchPotato shared config window, or enable/disable addons
 SLASH_CP1 = "/cp"
 SLASH_CP2 = "/couchpotato"
 SlashCmdList["CP"] = function(msg)
@@ -152,6 +334,17 @@ SlashCmdList["CP"] = function(msg)
     if _G.CouchPotatoLog then
         _G.CouchPotatoLog:Info("CP", "Slash /cp received, args: '" .. msg .. "'")
     end
+
+    -- Parse subcommand
+    local subcmd, rest = msg:match("^(%S+)%s*(.*)")
+    subcmd = subcmd or ""
+    rest   = rest   or ""
+
+    if subcmd == "enable" or subcmd == "disable" then
+        HandleEnableDisable(subcmd, rest ~= "" and rest or nil)
+        return
+    end
+
     if CouchPotatoShared.ConfigWindow then
         CouchPotatoShared.ConfigWindow.Toggle()
     end
@@ -194,3 +387,12 @@ CP._errorHandler    = CouchPotatoErrorHandler
 CP._isSuiteError    = IsSuiteError
 CP._guessAddonName  = GuessAddonName
 CP._hookErrorHandler = HookErrorHandler
+
+-- Enable/disable API exposed for tests and other addons
+CP._addonAliases          = ADDON_ALIASES
+CP._handleEnableDisable   = HandleEnableDisable
+CP._doDisableAddon        = DoDisableAddon
+CP._doEnableAddon         = DoEnableAddon
+CP._printAddonStatus      = PrintAddonStatus
+CP._ensureAddonStates     = EnsureAddonStates
+CP._cpprint               = cpprint
