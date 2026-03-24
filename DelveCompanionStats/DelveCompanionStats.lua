@@ -20,10 +20,13 @@ _G.DelveCompanionStatsNS = ns
 ns.version = "1.0.0"
 
 -------------------------------------------------------------------------------
--- dcsprint: Write a coloured message to the chat frame (or print fallback)
+-- dcsprint: Write a coloured message to the chat frame (or print fallback).
+-- Delegates to CouchPotatoLog when available; bare fallback otherwise.
 -------------------------------------------------------------------------------
 local function dcsprint(msg)
-    if DEFAULT_CHAT_FRAME then
+    if _G.CouchPotatoLog then
+        _G.CouchPotatoLog:Print("DCS", msg)
+    elseif DEFAULT_CHAT_FRAME then
         DEFAULT_CHAT_FRAME:AddMessage("|cff00ccffDCS:|r " .. tostring(msg))
     else
         print("|cff00ccffDCS:|r " .. tostring(msg))

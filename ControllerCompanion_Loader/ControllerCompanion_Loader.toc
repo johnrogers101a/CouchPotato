@@ -3,6 +3,7 @@
 ## Notes: Gamepad detection and dynamic loader for ControllerCompanion. Keep this enabled.
 ## Author: CouchPotato Addons
 ## Version: 1.0.0
+## Dependencies: CouchPotato
 ## SavedVariables: ControllerCompanionLoaderDB
 ## X-Category: Interface Enhancements
 ## IconTexture: Interface\Icons\Achievement_BG_winAV
