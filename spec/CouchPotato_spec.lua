@@ -368,13 +368,20 @@ describe("CouchPotato minimap button", function()
         assert.is_true(y < 0, "angle=225 should place button below centre (y<0), got y=" .. tostring(y))
     end)
 
-    it("icon texture is a non-empty string (not the missing SpicedFishBite path)", function()
-        -- Verify the icon path was changed away from the broken INV_Misc_Food_Cooked_SpicedFishBite
+    it("icon texture is set to a valid value (FileDataID or non-empty string, not the missing SpicedFishBite path)", function()
+        -- Verify the icon is set to a usable texture value.
+        -- The implementation now uses a numeric FileDataID (134046) which resolves
+        -- reliably in WoW 12.x without string-path lookup failures.
         local btn = cp.MinimapButton.GetButton()
         local iconTex = btn._icon and btn._icon._texture
-        assert.is_string(iconTex, "icon texture should be a string")
-        assert.is_true(#iconTex > 0, "icon texture should not be empty")
-        assert.is_nil(iconTex:find("SpicedFishBite"), "broken SpicedFishBite texture path must not be used")
+        assert.is_not_nil(iconTex, "icon texture should be set (not nil)")
+        if type(iconTex) == "string" then
+            assert.is_true(#iconTex > 0, "icon texture string should not be empty")
+            assert.is_nil(iconTex:find("SpicedFishBite"), "broken SpicedFishBite texture path must not be used")
+        else
+            assert.equals("number", type(iconTex), "icon texture should be a string or numeric FileDataID")
+            assert.is_true(iconTex > 0, "icon FileDataID should be a positive integer")
+        end
     end)
 end)
 

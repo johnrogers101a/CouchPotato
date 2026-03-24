@@ -5,15 +5,11 @@
 
 local CP = CouchPotatoShared
 
--- Icon texture: INV_Misc_QuestionMark is the guaranteed-present WoW built-in
--- fallback icon and is always safe to use.  A food-themed icon whose file name
--- is confirmed present in the 12.x client is used as primary; the question-mark
--- path is kept as an in-code comment so reviewers know it exists as a fallback.
---
--- BUG FIX (2026-03-24): INV_Misc_Food_Cooked_SpicedFishBite does not exist in
--- Interface 120001 and caused a red question-mark to appear on the button.
--- Replaced with INV_Misc_Food_15 which ships with all retail client builds.
-local ICON_TEXTURE = "Interface\\Icons\\INV_Misc_Food_15"
+-- Icon texture: use the numeric FileDataID 134046 which maps to
+-- INV_Misc_Food_15 and is guaranteed to resolve in WoW 12.x regardless of
+-- any string-path lookup changes.  String paths like "Interface\\Icons\\..."
+-- can silently fail in newer clients, rendering as an invisible (nil) texture.
+local ICON_TEXTURE = 134046
 
 local BUTTON_SIZE = 32
 
@@ -122,7 +118,7 @@ local function BuildButton()
     _currentAngle = GetSavedAngle()
 
     if _G.CouchPotatoLog then
-        _G.CouchPotatoLog:Info("CP", "MinimapButton: BuildButton starting, icon=" .. ICON_TEXTURE
+        _G.CouchPotatoLog:Info("CP", "MinimapButton: BuildButton starting, icon=" .. tostring(ICON_TEXTURE)
             .. " size=" .. BUTTON_SIZE .. " savedAngle=" .. tostring(_currentAngle))
     end
 
@@ -140,15 +136,19 @@ local function BuildButton()
     bg:SetAllPoints()
     bg:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Background")
 
-    -- Icon
-    local icon = btn:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(BUTTON_SIZE - 8, BUTTON_SIZE - 8)
+    -- Icon: use BACKGROUND layer so it sits above the background circle but
+    -- below any overlays.  20x20 keeps it comfortably inside the 32x32 button.
+    -- SetTexCoord trims the built-in icon border that WoW bakes into every
+    -- Interface/Icons texture, preventing a washed-out or clipped appearance.
+    local icon = btn:CreateTexture(nil, "BACKGROUND", nil, 1)
+    icon:SetSize(20, 20)
     icon:SetPoint("CENTER")
     icon:SetTexture(ICON_TEXTURE)
+    icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
     btn._icon = icon
 
     if _G.CouchPotatoLog then
-        _G.CouchPotatoLog:Debug("CP", "MinimapButton: icon texture set to " .. ICON_TEXTURE)
+        _G.CouchPotatoLog:Debug("CP", "MinimapButton: icon texture set to " .. tostring(ICON_TEXTURE))
     end
 
     -- Highlight overlay
