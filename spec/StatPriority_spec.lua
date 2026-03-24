@@ -153,6 +153,71 @@ describe("StatPriority", function()
             ns:UpdateStatPriority()
             assert.equals("No Specialization", ns.headerTitle:GetText())
         end)
+
+        -- This simulates the ADDON_LOADED race: GetSpecialization returns a
+        -- valid index but GetSpecializationInfo returns specID=0 (not yet ready).
+        it("shows 'Unknown Spec' (not 'Spec 0') when specID is 0 but name is nil", function()
+            _G.GetSpecialization = function() return 2 end
+            _G.GetSpecializationInfo = function(specIndex)
+                -- Simulates early-load state: specID=0, name=nil
+                return 0, nil, nil, nil, nil
+            end
+            ns:UpdateStatPriority()
+            local title = ns.headerTitle:GetText()
+            assert.is_falsy(title:find("Spec 0", 1, true),
+                "header should not show 'Spec 0' but got: " .. tostring(title))
+            assert.equals("Unknown Spec", title)
+        end)
+
+        it("shows 'Unknown Spec' when specID has no data entry (API name fallback)", function()
+            _G.GetSpecialization = function() return 1 end
+            _G.GetSpecializationInfo = function(specIndex)
+                -- specID 99999 does not exist in StatPriorityData
+                return 99999, nil, nil, nil, nil
+            end
+            ns:UpdateStatPriority()
+            assert.equals("Unknown Spec", ns.headerTitle:GetText())
+        end)
+
+        it("shows API spec name when specID has no data but name is available", function()
+            _G.GetSpecialization = function() return 1 end
+            _G.GetSpecializationInfo = function(specIndex)
+                return 99999, "Some Future Spec", nil, nil, nil
+            end
+            ns:UpdateStatPriority()
+            assert.equals("Some Future Spec", ns.headerTitle:GetText())
+        end)
+    end)
+
+    -- =========================================================================
+    -- Test 3b: PLAYER_LOGIN event triggers spec refresh
+    -- =========================================================================
+    describe("PLAYER_LOGIN event handling", function()
+        it("specEventFrame is registered for PLAYER_LOGIN", function()
+            assert.is_not_nil(ns.specEventFrame)
+            -- Fire the OnEvent script with PLAYER_LOGIN to verify it calls UpdateStatPriority
+            local onEvent = ns.specEventFrame:GetScript("OnEvent")
+            assert.is_not_nil(onEvent)
+            -- Switch spec before firing the event
+            _G.GetSpecialization = function() return 1 end
+            _G.GetSpecializationInfo = function(specIndex)
+                if specIndex == 1 then return 251, "Frost Death Knight", "", "", "DAMAGER" end
+                return nil
+            end
+            onEvent(ns.specEventFrame, "PLAYER_LOGIN")
+            assert.equals("Frost Death Knight", ns.headerTitle:GetText())
+        end)
+
+        it("PLAYER_SPECIALIZATION_CHANGED still updates spec display", function()
+            local onEvent = ns.specEventFrame:GetScript("OnEvent")
+            _G.GetSpecialization = function() return 1 end
+            _G.GetSpecializationInfo = function(specIndex)
+                if specIndex == 1 then return 250, "Blood Death Knight", "", "", "TANK" end
+                return nil
+            end
+            onEvent(ns.specEventFrame, "PLAYER_SPECIALIZATION_CHANGED")
+            assert.equals("Blood Death Knight", ns.headerTitle:GetText())
+        end)
     end)
 
     -- =========================================================================
