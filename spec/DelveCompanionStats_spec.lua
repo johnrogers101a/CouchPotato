@@ -843,12 +843,12 @@ describe("DelveCompanionStats", function()
             C_ScenarioInfo._criteria = {}
         end)
 
-        it("nemesis progress displays 'Nemesis Strongbox (n/n)' format", function()
+        it("nemesis progress displays 'Enemy groups remaining: n / n' format", function()
             _SetMockNemesis(2, 4)
 
             ns:UpdateCompanionData()
 
-            assert.equals("Nemesis Strongbox (2/4)", ns.nemesisLabel._text)
+            assert.equals("Enemy groups remaining: 2 / 4", ns.nemesisLabel._text)
         end)
 
         it("nemesis progress hides label if criterion not found", function()
@@ -876,7 +876,7 @@ describe("DelveCompanionStats", function()
             ns:UpdateCompanionData()
 
             -- 0+1 = 1 current, 5+6 = 11 total
-            assert.equals("Nemesis Strongbox (1/11)", ns.nemesisLabel._text)
+            assert.equals("Enemy groups remaining: 1 / 11", ns.nemesisLabel._text)
         end)
 
         it("nemesis progress skips criteria with zero totalQuantity", function()
@@ -887,7 +887,7 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("Nemesis Strongbox (2/3)", ns.nemesisLabel._text)
+            assert.equals("Enemy groups remaining: 2 / 3", ns.nemesisLabel._text)
         end)
 
         it("nemesis counts 'Enemy groups remaining' criterion in header total", function()
@@ -897,7 +897,7 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("Nemesis Strongbox (1/3)", ns.nemesisLabel._text)
+            assert.equals("Enemy groups remaining: 1 / 3", ns.nemesisLabel._text)
         end)
 
         it("nemesis hides non-combat criteria (Speak with)", function()
@@ -933,7 +933,7 @@ describe("DelveCompanionStats", function()
             ns:UpdateCompanionData()
 
             -- Only combat criteria: 2+1=3 current, 5+3=8 total; non-combat excluded
-            assert.equals("Nemesis Strongbox (3/8)", ns.nemesisLabel._text)
+            assert.equals("Enemy groups remaining: 3 / 8", ns.nemesisLabel._text)
         end)
 
         -- -------------------------------------------------------------------------

@@ -859,8 +859,8 @@ function ns:OnLoad()
     else
         contentFrame = CreateFrame("Frame", nil, ns.frame)
     end
-    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",  10, -8)
-    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT", 0, -8)
+    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",  0, -4)
+    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT", 0, -4)
     -- Subtle dark content background with rounded gold border
     contentFrame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -1253,7 +1253,7 @@ GetNemesisProgress = function()
         end
     end
     if maxTotal == 0 then return "" end
-    return string.format("Nemesis Strongbox (%d/%d)", currentTotal, maxTotal)
+    return string.format("Enemy groups remaining: %d / %d", currentTotal, maxTotal)
 end
 
 -------------------------------------------------------------------------------
