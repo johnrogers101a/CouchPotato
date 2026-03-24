@@ -73,16 +73,16 @@ SlashCmdList["SP"] = function(msg)
             end
         end
     elseif cmd == "reset" then
-        if StatPriorityDB then StatPriorityDB.position = nil end
-        if ns.frame then
-            ns.frame:ClearAllPoints()
-            if ChatFrame1 then
-                ns.frame:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 40)
-            else
-                ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 160)
-            end
+        if StatPriorityDB then
+            StatPriorityDB.position = nil
+            StatPriorityDB.pinned   = nil
+            splog("Info", "/sp reset: cleared position and pinned from SavedVars")
         end
-        spprint("Frame position reset to default")
+        if ns.frame and ns.ApplyPinnedState then
+            ns.ApplyPinnedState()
+            splog("Info", "/sp reset: re-applied pinned state (docked)")
+        end
+        spprint("Frame position reset to default (docked)")
         splog("Info", "Frame position reset to default via /sp reset")
     elseif cmd == "debug" then
         spprint("StatPriority v" .. ns.version)
@@ -307,6 +307,21 @@ local function createURLButton(parent, anchorLabel, getURL)
 end
 
 -------------------------------------------------------------------------------
+-- GetTrackerAnchor: Returns ObjectiveTrackerFrame if it exists and is shown.
+-- Returns nil otherwise. Used by pinned-state anchor logic.
+-------------------------------------------------------------------------------
+local function GetTrackerAnchor()
+    if ObjectiveTrackerFrame
+        and ObjectiveTrackerFrame.IsShown
+        and ObjectiveTrackerFrame:IsShown() then
+        splog("Debug", "GetTrackerAnchor: ObjectiveTrackerFrame is visible — returning it")
+        return ObjectiveTrackerFrame
+    end
+    splog("Debug", "GetTrackerAnchor: ObjectiveTrackerFrame not available/visible — returning nil")
+    return nil
+end
+
+-------------------------------------------------------------------------------
 -- OnLoad: Frame creation + UI setup + SavedVars init + position restore.
 -- Called exactly once from ADDON_LOADED handler below.
 -- Guard: if ns.frame already exists, skip (idempotent safety).
@@ -355,21 +370,7 @@ function ns:OnLoad()
     local frameWidth  = 248
     local contentWidth = frameWidth - 12
 
-    -- Default anchor: above ChatFrame1, 40px above (30px above DCS default of 10)
     ns.frame:SetSize(frameWidth, 60)
-    if db.position then
-        ns.frame:ClearAllPoints()
-        ns.frame:SetPoint(db.position.point, UIParent, db.position.relativePoint,
-                          db.position.x, db.position.y)
-        splog("Info", "Frame position restored from SavedVars: " .. tostring(db.position.point) ..
-              " x=" .. tostring(db.position.x) .. " y=" .. tostring(db.position.y))
-    elseif ChatFrame1 then
-        ns.frame:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 40)
-        splog("Debug", "Frame positioned: BOTTOMLEFT of ChatFrame1 + 40px")
-    else
-        ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 160)
-        splog("Debug", "Frame positioned: BOTTOMLEFT of UIParent fallback")
-    end
 
     -- -----------------------------------------------------------------------
     -- 3. Header frame — matches DCS exactly
@@ -383,14 +384,21 @@ function ns:OnLoad()
     header:RegisterForDrag("LeftButton")
 
     header:SetScript("OnDragStart", function()
-        ns.frame:StartMoving()
+        -- Guard: only start moving when unpinned (matching DCS pattern)
+        if StatPriorityDB and StatPriorityDB.pinned == false then
+            splog("Info", "OnDragStart: unpinned — StartMoving")
+            ns.frame:StartMoving()
+        else
+            splog("Debug", "OnDragStart: pinned — drag blocked")
+        end
     end)
     header:SetScript("OnDragStop", function()
         ns.frame:StopMovingOrSizing()
         if StatPriorityDB then
             local point, _, relPoint, x, y = ns.frame:GetPoint()
-            StatPriorityDB.position = { point = point, relativePoint = relPoint, x = x, y = y }
-            splog("Info", "Frame position saved: " .. tostring(point) ..
+            StatPriorityDB.position = { point = point, relPoint = relPoint, x = x, y = y }
+            splog("Info", "Frame position saved: point=" .. tostring(point) ..
+                  " relPoint=" .. tostring(relPoint) ..
                   " x=" .. tostring(x) .. " y=" .. tostring(y))
         end
     end)
@@ -452,6 +460,83 @@ function ns:OnLoad()
             if StatPriorityDB then StatPriorityDB.collapsed = false end
             ns:UpdateFrameHeight()
             splog("Info", "Frame expanded")
+        end
+    end)
+
+    -- Pin button: to the LEFT of the collapse button. Lock icon indicates whether
+    -- the frame is anchored to ObjectiveTrackerFrame (locked/pinned) or freely
+    -- draggable (unlocked/unpinned). Default: pinned (locked icon).
+    local pinBtn = CreateFrame("Button", nil, header)
+    pinBtn:SetSize(16, 16)
+    pinBtn:SetPoint("RIGHT", collapseBtn, "LEFT", -6, 0)
+    pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
+    pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
+    pinBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight", "ADD")
+    pinBtn:EnableMouse(true)
+    ns.pinBtn = pinBtn
+    splog("Debug", "Pin button created: 16x16, LEFT of collapseBtn")
+
+    -- ApplyPinnedState: anchor frame to ObjectiveTrackerFrame, disable dragging, lock icon.
+    local function ApplyPinnedState()
+        ns.frame:SetMovable(false)
+        local anchor = GetTrackerAnchor()
+        ns.frame:ClearAllPoints()
+        if anchor then
+            ns.frame:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
+            splog("Info", "ApplyPinnedState: anchored to ObjectiveTrackerFrame BOTTOM with -4px gap")
+        else
+            ns.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+            splog("Info", "ApplyPinnedState: no tracker visible — anchored to UIParent CENTER fallback")
+        end
+        ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
+        ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
+        StatPriorityDB.pinned = true
+        splog("Info", "ApplyPinnedState: complete — frame immovable, pinned=true")
+    end
+
+    -- ApplyUnpinnedState: detach from tracker, enable free drag, unlock icon.
+    local function ApplyUnpinnedState()
+        ns.frame:SetMovable(true)
+        ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Unlocked-Up")
+        ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Unlocked-Down")
+        StatPriorityDB.pinned = false
+        splog("Info", "ApplyUnpinnedState: complete — frame movable, pinned=false")
+    end
+
+    -- Expose for tests and external helpers
+    ns.ApplyPinnedState   = ApplyPinnedState
+    ns.ApplyUnpinnedState = ApplyUnpinnedState
+
+    pinBtn:SetScript("OnClick", function()
+        local db = StatPriorityDB
+        if not db then return end
+        if db.pinned == false then
+            -- currently unpinned → pin it
+            splog("Info", "PinButton OnClick: was unpinned → pinning now")
+            db.pinned = true
+            ns.frame:SetMovable(false)
+            ns.frame:ClearAllPoints()
+            local anchor = GetTrackerAnchor()
+            if anchor then
+                ns.frame:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
+                splog("Info", "PinButton OnClick: anchored to ObjectiveTrackerFrame")
+            else
+                ns.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+                splog("Info", "PinButton OnClick: no tracker — anchored to UIParent CENTER")
+            end
+            if ns.pinBtn then
+                ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
+                ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
+            end
+        else
+            -- currently pinned (or nil) → unpin it
+            splog("Info", "PinButton OnClick: was pinned → unpinning now")
+            db.pinned = false
+            ns.frame:SetMovable(true)
+            if ns.pinBtn then
+                ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Unlocked-Up")
+                ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Unlocked-Down")
+            end
         end
     end)
 
@@ -664,6 +749,54 @@ function ns:OnLoad()
         splog("Info", "Restored collapsed state: frame is collapsed")
     else
         splog("Debug", "Collapsed state: expanded (default)")
+    end
+
+    -- -----------------------------------------------------------------------
+    -- 7b. Restore pin/unpin state. Default (nil) is treated as pinned.
+    -- -----------------------------------------------------------------------
+    if db.pinned == false then
+        -- unpinned: restore saved position, allow dragging, unlock icon
+        ns.frame:SetMovable(true)
+        local pos = db.position
+        if pos and pos.point then
+            ns.frame:ClearAllPoints()
+            -- Support both legacy key (relativePoint) and new key (relPoint)
+            ns.frame:SetPoint(pos.point, UIParent, pos.relativePoint or pos.relPoint or pos.point,
+                              pos.x or 0, pos.y or 0)
+            splog("Info", "Pin restore: unpinned — restored saved position point=" .. tostring(pos.point) ..
+                  " x=" .. tostring(pos.x) .. " y=" .. tostring(pos.y))
+        else
+            splog("Info", "Pin restore: unpinned but no saved position available")
+        end
+        if ns.pinBtn then
+            ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Unlocked-Up")
+            ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Unlocked-Down")
+        end
+        splog("Info", "Pin state restored: unpinned (pinned=false)")
+    else
+        -- pinned (true or nil) → immovable, locked icon, normalise to true
+        db.pinned = true
+        ns.frame:SetMovable(false)
+        local anchor = GetTrackerAnchor()
+        ns.frame:ClearAllPoints()
+        if anchor then
+            ns.frame:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
+            splog("Info", "Pin restore: pinned — anchored to ObjectiveTrackerFrame")
+        else
+            -- Default fallback: above ChatFrame1 or UIParent (same as old default)
+            if ChatFrame1 then
+                ns.frame:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 40)
+                splog("Info", "Pin restore: pinned but no tracker — anchored above ChatFrame1")
+            else
+                ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 160)
+                splog("Info", "Pin restore: pinned but no tracker — anchored UIParent fallback")
+            end
+        end
+        if ns.pinBtn then
+            ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
+            ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
+        end
+        splog("Info", "Pin state restored: pinned (pinned=true)")
     end
 
     -- -----------------------------------------------------------------------

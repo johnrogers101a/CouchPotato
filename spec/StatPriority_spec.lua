@@ -319,9 +319,10 @@ describe("StatPriority", function()
             assert.is_not_nil(StatPriorityDB.position)
         end)
 
-        it("restores saved position on load", function()
-            -- Set a saved position and reload
+        it("restores saved position on load when unpinned", function()
+            -- Set a saved position with pinned=false (position is only restored when unpinned)
             _G.StatPriorityDB = {
+                pinned   = false,
                 position = { point = "CENTER", relativePoint = "CENTER", x = 100, y = 200 }
             }
             _G.StatPriorityNS   = nil
@@ -521,6 +522,108 @@ describe("StatPriority", function()
 
             local url = ns.urlPopupEditBox:GetText()
             assert.is_truthy(url:find("method.gg", 1, true))
+        end)
+    end)
+
+    -- =========================================================================
+    -- Test 11: Pin/lock behavior
+    -- =========================================================================
+    describe("pin and lock behavior", function()
+        it("creates a pin button (ns.pinBtn)", function()
+            assert.is_not_nil(ns.pinBtn)
+        end)
+
+        it("exposes ApplyPinnedState on ns", function()
+            assert.is_not_nil(ns.ApplyPinnedState)
+        end)
+
+        it("exposes ApplyUnpinnedState on ns", function()
+            assert.is_not_nil(ns.ApplyUnpinnedState)
+        end)
+
+        it("default state is pinned (StatPriorityDB.pinned == true)", function()
+            assert.is_true(StatPriorityDB.pinned)
+        end)
+
+        it("frame is not movable by default (pinned)", function()
+            assert.is_false(ns.frame:IsMovable())
+        end)
+
+        it("ApplyUnpinnedState sets pinned=false and makes frame movable", function()
+            ns.ApplyUnpinnedState()
+            assert.is_false(StatPriorityDB.pinned)
+            assert.is_true(ns.frame:IsMovable())
+        end)
+
+        it("ApplyPinnedState sets pinned=true and makes frame immovable", function()
+            ns.ApplyUnpinnedState()  -- start unpinned
+            ns.ApplyPinnedState()
+            assert.is_true(StatPriorityDB.pinned)
+            assert.is_false(ns.frame:IsMovable())
+        end)
+
+        it("OnDragStart does not call StartMoving when pinned", function()
+            -- pinned by default, so drag should be blocked
+            local onDragStart = ns.headerFrame:GetScript("OnDragStart")
+            assert.is_not_nil(onDragStart)
+            StatPriorityDB.pinned = true
+            -- StartMoving on the frame mock would set _moving = true
+            ns.frame._moving = false
+            onDragStart()
+            assert.is_false(ns.frame._moving)
+        end)
+
+        it("OnDragStart calls StartMoving when unpinned", function()
+            StatPriorityDB.pinned = false
+            local onDragStart = ns.headerFrame:GetScript("OnDragStart")
+            ns.frame._moving = false
+            onDragStart()
+            assert.is_true(ns.frame._moving)
+        end)
+
+        it("pin button OnClick toggles from pinned to unpinned", function()
+            assert.is_true(StatPriorityDB.pinned)
+            local onClick = ns.pinBtn:GetScript("OnClick")
+            assert.is_not_nil(onClick)
+            onClick()
+            assert.is_false(StatPriorityDB.pinned)
+            assert.is_true(ns.frame:IsMovable())
+        end)
+
+        it("pin button OnClick toggles from unpinned back to pinned", function()
+            local onClick = ns.pinBtn:GetScript("OnClick")
+            onClick()  -- unpin
+            assert.is_false(StatPriorityDB.pinned)
+            onClick()  -- re-pin
+            assert.is_true(StatPriorityDB.pinned)
+            assert.is_false(ns.frame:IsMovable())
+        end)
+
+        it("OnDragStop saves position with relPoint key", function()
+            StatPriorityDB.pinned = false
+            local onDragStop = ns.headerFrame:GetScript("OnDragStop")
+            onDragStop()
+            assert.is_not_nil(StatPriorityDB.position)
+            assert.is_not_nil(StatPriorityDB.position.relPoint)
+        end)
+
+        it("position restore supports legacy relativePoint key when unpinned", function()
+            _G.StatPriorityDB = {
+                pinned   = false,
+                position = { point = "TOPLEFT", relativePoint = "TOPLEFT", x = 50, y = -50 }
+            }
+            _G.StatPriorityNS    = nil
+            _G.StatPriorityFrame = nil
+            dofile("StatPriority/StatPriority.lua")
+            local ns2 = _G.StatPriorityNS
+            ns2:OnLoad()
+            -- Frame should have been anchored with TOPLEFT
+            local points = ns2.frame._points
+            local found = false
+            for _, p in ipairs(points) do
+                if p[1] == "TOPLEFT" then found = true; break end
+            end
+            assert.is_true(found)
         end)
     end)
 

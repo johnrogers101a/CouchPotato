@@ -157,10 +157,11 @@ local function createMockFrame(frameType, name, parent, template)
     function frame:SetBackdropColor(r,g,b,a) self._backdropColor = {r,g,b,a} end
     function frame:SetBackdropBorderColor(r,g,b,a) self._backdropBorderColor = {r,g,b,a} end
     function frame:SetMovable(v) self._movable = v end
+    function frame:IsMovable() return self._movable == true end
     function frame:EnableMouse(v) self._mouseEnabled = v end
     function frame:RegisterForDrag(...) end
-    function frame:StartMoving() end
-    function frame:StopMovingOrSizing() end
+    function frame:StartMoving() self._moving = true end
+    function frame:StopMovingOrSizing() self._moving = false end
     function frame:Raise() end
     function frame:GetPoint(index)
         return "BOTTOMLEFT", nil, "BOTTOMLEFT", 0, 0
