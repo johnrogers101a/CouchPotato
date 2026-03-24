@@ -372,6 +372,8 @@ local function createMockFrame(frameType, name, parent, template)
     -- EditBox support
     if frameType == "EditBox" then
         frame._text = ""
+        frame._highlighted = false
+        frame._focused = false
         function frame:SetText(t) self._text = t end
         function frame:GetText() return self._text end
         function frame:SetMultiLine(v) end
@@ -379,6 +381,9 @@ local function createMockFrame(frameType, name, parent, template)
         function frame:SetFontObject(f) end
         function frame:SetFont(font, size, flags) end
         function frame:EnableMouse(v) self._mouseEnabled = v end
+        function frame:HighlightText() self._highlighted = true end
+        function frame:SetFocus() self._focused = true end
+        function frame:ClearFocus() self._focused = false end
     end
 
     -- ScrollFrame support

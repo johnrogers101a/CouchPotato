@@ -1,5 +1,5 @@
 -- spec/StatPriority_spec.lua
--- Busted tests for StatPriority addon
+-- Busted tests for StatPriority addon (Phase 1 + Phase 2)
 
 require("spec/wow_mock")
 
@@ -17,6 +17,8 @@ describe("StatPriority", function()
         _G.StatPriorityFrame = nil
 
         -- Default spec mock: Restoration Druid (specID 105, specIndex 4)
+        -- Restoration Druid has _differs = false (all 3 sources agree)
+        _G._MockPlayer = _G._MockPlayer or {}
         _G._MockPlayer.spec = 4
         _G.GetSpecialization = function() return 4 end
         _G.GetSpecializationInfo = function(specIndex)
@@ -59,6 +61,26 @@ describe("StatPriority", function()
             assert.is_not_nil(ns.collapseBtn)
         end)
 
+        it("creates the three source labels", function()
+            assert.is_not_nil(ns.wowheadLabel)
+            assert.is_not_nil(ns.icyveinsLabel)
+            assert.is_not_nil(ns.methodLabel)
+        end)
+
+        it("creates the three URL buttons", function()
+            assert.is_not_nil(ns.wowheadUrlBtn)
+            assert.is_not_nil(ns.icyveinsUrlBtn)
+            assert.is_not_nil(ns.methodUrlBtn)
+        end)
+
+        it("creates the URL popup frame", function()
+            assert.is_not_nil(ns.urlPopup)
+        end)
+
+        it("creates the URL popup editbox", function()
+            assert.is_not_nil(ns.urlPopupEditBox)
+        end)
+
         it("frame is shown by default", function()
             assert.is_true(ns.frame:IsShown())
         end)
@@ -72,6 +94,10 @@ describe("StatPriority", function()
             ns:OnLoad()
             assert.equals(originalFrame, ns.frame)
         end)
+
+        it("has version 2.0.0", function()
+            assert.equals("2.0.0", ns.version)
+        end)
     end)
 
     -- =========================================================================
@@ -83,7 +109,7 @@ describe("StatPriority", function()
             assert.equals("Restoration Druid", ns.headerTitle:GetText())
         end)
 
-        it("sets stats label with > separators for known specID", function()
+        it("sets stats label with > separators for known specID (unified)", function()
             ns:UpdateStatPriority()
             local text = ns.statsLabel:GetText()
             assert.is_not_nil(text)
@@ -251,7 +277,190 @@ describe("StatPriority", function()
     end)
 
     -- =========================================================================
-    -- Bonus: Data table completeness
+    -- Test 8: Unified display when _differs is false
+    -- =========================================================================
+    describe("unified display (_differs = false)", function()
+        -- Restoration Druid (105) has _differs = false
+        it("statsLabel is shown when _differs is false", function()
+            ns:UpdateStatPriority()
+            assert.is_true(ns.statsLabel:IsShown())
+        end)
+
+        it("source labels are hidden when _differs is false", function()
+            ns:UpdateStatPriority()
+            assert.is_false(ns.wowheadLabel:IsShown())
+            assert.is_false(ns.icyveinsLabel:IsShown())
+            assert.is_false(ns.methodLabel:IsShown())
+        end)
+
+        it("URL buttons are hidden when _differs is false", function()
+            ns:UpdateStatPriority()
+            assert.is_false(ns.wowheadUrlBtn:IsShown())
+            assert.is_false(ns.icyveinsUrlBtn:IsShown())
+            assert.is_false(ns.methodUrlBtn:IsShown())
+        end)
+    end)
+
+    -- =========================================================================
+    -- Test 9: Multi-source display when _differs is true
+    -- =========================================================================
+    describe("multi-source display (_differs = true)", function()
+        -- Switch to Frost Death Knight (specID 251) which has _differs = true
+        before_each(function()
+            _G.GetSpecialization = function() return 1 end
+            _G.GetSpecializationInfo = function(specIndex)
+                if specIndex == 1 then
+                    return 251, "Frost Death Knight", "", "", "DAMAGER"
+                end
+                return nil
+            end
+        end)
+
+        it("Frost Death Knight data has _differs = true", function()
+            local data = StatPriorityData[251]
+            assert.is_not_nil(data)
+            assert.is_true(data._differs)
+        end)
+
+        it("statsLabel is hidden when _differs is true", function()
+            ns:UpdateStatPriority()
+            assert.is_false(ns.statsLabel:IsShown())
+        end)
+
+        it("all three source labels are shown when _differs is true", function()
+            ns:UpdateStatPriority()
+            assert.is_true(ns.wowheadLabel:IsShown())
+            assert.is_true(ns.icyveinsLabel:IsShown())
+            assert.is_true(ns.methodLabel:IsShown())
+        end)
+
+        it("wowhead label contains cyan color code and source name", function()
+            ns:UpdateStatPriority()
+            local text = ns.wowheadLabel:GetText()
+            assert.is_truthy(text:find("|cff00ccffWowhead:|r", 1, true))
+        end)
+
+        it("icyveins label contains green color code and source name", function()
+            ns:UpdateStatPriority()
+            local text = ns.icyveinsLabel:GetText()
+            assert.is_truthy(text:find("|cff33cc33Icy Veins:|r", 1, true))
+        end)
+
+        it("method label contains orange color code and source name", function()
+            ns:UpdateStatPriority()
+            local text = ns.methodLabel:GetText()
+            assert.is_truthy(text:find("|cffff6600Method:|r", 1, true))
+        end)
+
+        it("wowhead label shows per-source stat priority for Frost DK", function()
+            ns:UpdateStatPriority()
+            local text = ns.wowheadLabel:GetText()
+            local data = StatPriorityData[251]
+            -- Should contain first wowhead stat
+            assert.is_truthy(text:find(data.wowhead[1], 1, true))
+        end)
+
+        it("icyveins label shows per-source stat priority for Frost DK", function()
+            ns:UpdateStatPriority()
+            local text = ns.icyveinsLabel:GetText()
+            local data = StatPriorityData[251]
+            assert.is_truthy(text:find(data.icyveins[1], 1, true))
+        end)
+
+        it("method label shows per-source stat priority for Frost DK", function()
+            ns:UpdateStatPriority()
+            local text = ns.methodLabel:GetText()
+            local data = StatPriorityData[251]
+            assert.is_truthy(text:find(data.method[1], 1, true))
+        end)
+
+        it("URL buttons are shown when _differs is true", function()
+            ns:UpdateStatPriority()
+            assert.is_true(ns.wowheadUrlBtn:IsShown())
+            assert.is_true(ns.icyveinsUrlBtn:IsShown())
+            assert.is_true(ns.methodUrlBtn:IsShown())
+        end)
+    end)
+
+    -- =========================================================================
+    -- Test 10: URL popup behaviour
+    -- =========================================================================
+    describe("URL popup", function()
+        it("popup is hidden by default", function()
+            assert.is_false(ns.urlPopup:IsShown())
+        end)
+
+        it("ShowURLPopup shows the popup", function()
+            ns:ShowURLPopup("https://www.wowhead.com/test")
+            assert.is_true(ns.urlPopup:IsShown())
+        end)
+
+        it("ShowURLPopup sets the editbox URL text", function()
+            local url = "https://www.wowhead.com/test-url"
+            ns:ShowURLPopup(url)
+            assert.equals(url, ns.urlPopupEditBox:GetText())
+        end)
+
+        it("ShowURLPopup highlights the editbox text", function()
+            ns:ShowURLPopup("https://www.example.com/")
+            assert.is_true(ns.urlPopupEditBox._highlighted)
+        end)
+
+        it("URL button OnClick shows popup with correct wowhead URL for Frost DK", function()
+            -- Switch to Frost DK
+            _G.GetSpecialization = function() return 1 end
+            _G.GetSpecializationInfo = function(specIndex)
+                if specIndex == 1 then return 251, "Frost Death Knight", "", "", "DAMAGER" end
+                return nil
+            end
+            ns:UpdateStatPriority()
+
+            -- Click the wowhead URL button
+            local onClick = ns.wowheadUrlBtn:GetScript("OnClick")
+            assert.is_not_nil(onClick)
+            onClick(ns.wowheadUrlBtn)
+
+            assert.is_true(ns.urlPopup:IsShown())
+            local url = ns.urlPopupEditBox:GetText()
+            assert.is_truthy(url:find("wowhead.com", 1, true))
+            assert.is_truthy(url:find("death-knight", 1, true))
+        end)
+
+        it("URL button OnClick shows popup with correct icyveins URL for Frost DK", function()
+            _G.GetSpecialization = function() return 1 end
+            _G.GetSpecializationInfo = function(specIndex)
+                if specIndex == 1 then return 251, "Frost Death Knight", "", "", "DAMAGER" end
+                return nil
+            end
+            ns:UpdateStatPriority()
+
+            local onClick = ns.icyveinsUrlBtn:GetScript("OnClick")
+            assert.is_not_nil(onClick)
+            onClick(ns.icyveinsUrlBtn)
+
+            local url = ns.urlPopupEditBox:GetText()
+            assert.is_truthy(url:find("icy-veins.com", 1, true))
+        end)
+
+        it("URL button OnClick shows popup with correct method URL for Frost DK", function()
+            _G.GetSpecialization = function() return 1 end
+            _G.GetSpecializationInfo = function(specIndex)
+                if specIndex == 1 then return 251, "Frost Death Knight", "", "", "DAMAGER" end
+                return nil
+            end
+            ns:UpdateStatPriority()
+
+            local onClick = ns.methodUrlBtn:GetScript("OnClick")
+            assert.is_not_nil(onClick)
+            onClick(ns.methodUrlBtn)
+
+            local url = ns.urlPopupEditBox:GetText()
+            assert.is_truthy(url:find("method.gg", 1, true))
+        end)
+    end)
+
+    -- =========================================================================
+    -- Bonus: Data table completeness (Phase 1 + Phase 2)
     -- =========================================================================
     describe("StatPriorityData", function()
         it("contains at least 39 spec entries", function()
@@ -282,6 +491,104 @@ describe("StatPriority", function()
                 assert.is_not_nil(entry._source,
                     "specID " .. specID .. " missing _source")
             end
+        end)
+
+        it("every entry has _source = 'wowhead,icyveins,method'", function()
+            for specID, entry in pairs(StatPriorityData) do
+                assert.equals("wowhead,icyveins,method", entry._source,
+                    "specID " .. specID .. " has unexpected _source: " .. tostring(entry._source))
+            end
+        end)
+
+        it("every entry has wowhead array with at least 4 stats", function()
+            for specID, entry in pairs(StatPriorityData) do
+                assert.is_not_nil(entry.wowhead,
+                    "specID " .. specID .. " missing wowhead array")
+                assert.is_true(#entry.wowhead >= 4,
+                    "specID " .. specID .. " wowhead has fewer than 4 stats")
+            end
+        end)
+
+        it("every entry has icyveins array with at least 4 stats", function()
+            for specID, entry in pairs(StatPriorityData) do
+                assert.is_not_nil(entry.icyveins,
+                    "specID " .. specID .. " missing icyveins array")
+                assert.is_true(#entry.icyveins >= 4,
+                    "specID " .. specID .. " icyveins has fewer than 4 stats")
+            end
+        end)
+
+        it("every entry has method array with at least 4 stats", function()
+            for specID, entry in pairs(StatPriorityData) do
+                assert.is_not_nil(entry.method,
+                    "specID " .. specID .. " missing method array")
+                assert.is_true(#entry.method >= 4,
+                    "specID " .. specID .. " method has fewer than 4 stats")
+            end
+        end)
+
+        it("every entry has urls table with all 3 source URLs", function()
+            for specID, entry in pairs(StatPriorityData) do
+                assert.is_not_nil(entry.urls,
+                    "specID " .. specID .. " missing urls table")
+                assert.is_not_nil(entry.urls.wowhead,
+                    "specID " .. specID .. " missing urls.wowhead")
+                assert.is_not_nil(entry.urls.icyveins,
+                    "specID " .. specID .. " missing urls.icyveins")
+                assert.is_not_nil(entry.urls.method,
+                    "specID " .. specID .. " missing urls.method")
+            end
+        end)
+
+        it("_differs is a boolean for every entry", function()
+            for specID, entry in pairs(StatPriorityData) do
+                assert.equals("boolean", type(entry._differs),
+                    "specID " .. specID .. " _differs is not a boolean")
+            end
+        end)
+
+        it("_differs is consistent with actual array comparison", function()
+            -- Helper to check if two arrays match
+            local function arrEq(a, b)
+                if #a ~= #b then return false end
+                for i = 1, #a do if a[i] ~= b[i] then return false end end
+                return true
+            end
+            for specID, entry in pairs(StatPriorityData) do
+                local allSame = arrEq(entry.wowhead, entry.icyveins)
+                                and arrEq(entry.wowhead, entry.method)
+                                and arrEq(entry.icyveins, entry.method)
+                if allSame then
+                    assert.is_false(entry._differs,
+                        "specID " .. specID .. " should have _differs = false but is true")
+                else
+                    assert.is_true(entry._differs,
+                        "specID " .. specID .. " should have _differs = true but is false")
+                end
+            end
+        end)
+
+        it("stats field matches wowhead (wowhead is canonical default)", function()
+            for specID, entry in pairs(StatPriorityData) do
+                assert.equals(#entry.wowhead, #entry.stats,
+                    "specID " .. specID .. " stats length does not match wowhead length")
+                for i = 1, #entry.wowhead do
+                    assert.equals(entry.wowhead[i], entry.stats[i],
+                        "specID " .. specID .. " stats[" .. i .. "] != wowhead[" .. i .. "]")
+                end
+            end
+        end)
+
+        it("Restoration Druid (105) has _differs = false", function()
+            local data = StatPriorityData[105]
+            assert.is_not_nil(data)
+            assert.is_false(data._differs)
+        end)
+
+        it("Frost Death Knight (251) has _differs = true", function()
+            local data = StatPriorityData[251]
+            assert.is_not_nil(data)
+            assert.is_true(data._differs)
         end)
     end)
 end)
