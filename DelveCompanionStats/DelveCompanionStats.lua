@@ -1244,32 +1244,64 @@ end
 -- Expose for unit testing
 ns.IsCombatCriteria = IsCombatCriteria
 
--- GetNemesisProgress: Returns "Nemesis Strongbox (current/max)" by summing
--- quantity and totalQuantity across all combat criteria, or "" when none qualify.
--- Non-combat objectives (Speak with, Find, Collect, etc.) are excluded so
--- only enemy-kill trackers contribute to the count.
+-- GetNemesisProgress: Returns "Enemy groups remaining: current/max" by summing
+-- quantity and totalQuantity across ALL non-completed criteria with totalQuantity > 0.
+-- IsCombatCriteria filter has been removed — it was too restrictive and caused
+-- nemesisText to always be empty.  All qualifying criteria are logged so we can
+-- see real data in the next log dump.
+-- Weighted-progress criteria (isWeightedProgress == true) use quantityString for
+-- display (e.g. "Devouring Host slain 0%") and contribute 0/1 to the numeric tally.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
     if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
     local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
     if not stepInfo or not stepInfo.numCriteria then return "" end
 
+    dcslog("Debug", ("GetNemesisProgress: scanning %d criteria"):format(stepInfo.numCriteria))
+
     local currentTotal, maxTotal = 0, 0
     for i = 1, stepInfo.numCriteria do
         local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and IsCombatCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
-            currentTotal = currentTotal + (c.quantity or 0)
-            maxTotal     = maxTotal + c.totalQuantity
+        if ok and c then
+            -- Log every criterion so we can see what the game actually returns
+            dcslog("Debug", ("  criteria[%d]: desc=%q qty=%s total=%s type=%s weighted=%s completed=%s quantityString=%q"):format(
+                i,
+                tostring(c.description),
+                tostring(c.quantity),
+                tostring(c.totalQuantity),
+                tostring(c.criteriaType),
+                tostring(c.isWeightedProgress),
+                tostring(c.completed),
+                tostring(c.quantityString)))
+
+            if not c.completed and c.totalQuantity and c.totalQuantity > 0 then
+                if c.isWeightedProgress then
+                    -- Weighted criteria: treat as 0/1 so they appear in the tally
+                    -- but don't skew integer counts; detail text uses quantityString.
+                    currentTotal = currentTotal + 0
+                    maxTotal     = maxTotal + 1
+                    dcslog("Debug", ("    -> accepted (weighted) quantityString=%q"):format(tostring(c.quantityString)))
+                else
+                    currentTotal = currentTotal + (c.quantity or 0)
+                    maxTotal     = maxTotal + c.totalQuantity
+                    dcslog("Debug", ("    -> accepted qty=%d total=%d"):format(c.quantity or 0, c.totalQuantity))
+                end
+            else
+                dcslog("Debug", "    -> skipped (completed or totalQuantity=0)")
+            end
         end
     end
+
+    dcslog("Debug", ("GetNemesisProgress: currentTotal=%d maxTotal=%d"):format(currentTotal, maxTotal))
     if maxTotal == 0 then return "" end
     return string.format("Enemy groups remaining: %d / %d", currentTotal, maxTotal)
 end
 
 -------------------------------------------------------------------------------
 -- GetNemesisDetailText: Returns newline-separated white body lines for each
--- qualifying combat criterion, formatted as "description: quantity/totalQuantity".
--- Returns "" when no criteria qualify (mirrors GetBoonsDisplayText pattern).
+-- non-completed criterion with totalQuantity > 0.
+-- IsCombatCriteria filter removed — was too restrictive.
+-- Weighted-progress criteria show quantityString (e.g. "0%") instead of qty/total.
 -------------------------------------------------------------------------------
 local function GetNemesisDetailText()
     if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
@@ -1279,8 +1311,12 @@ local function GetNemesisDetailText()
     local lines = {}
     for i = 1, stepInfo.numCriteria do
         local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and IsCombatCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
-            table.insert(lines, string.format("%s: %d/%d", c.description, c.quantity or 0, c.totalQuantity))
+        if ok and c and not c.completed and c.totalQuantity and c.totalQuantity > 0 then
+            if c.isWeightedProgress and c.quantityString and c.quantityString ~= "" then
+                table.insert(lines, string.format("%s: %s", tostring(c.description), c.quantityString))
+            else
+                table.insert(lines, string.format("%s: %d/%d", tostring(c.description), c.quantity or 0, c.totalQuantity))
+            end
         end
     end
     return table.concat(lines, "\n")
