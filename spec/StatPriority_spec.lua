@@ -17,7 +17,7 @@ describe("StatPriority", function()
         _G.StatPriorityFrame = nil
 
         -- Default spec mock: Restoration Druid (specID 105, specIndex 4)
-        -- Restoration Druid has _differs = false (all 3 sources agree)
+        -- Restoration Druid has _differs = false (single archon source)
         _G._MockPlayer = _G._MockPlayer or {}
         _G._MockPlayer.spec = 4
         _G.GetSpecialization = function() return 4 end
@@ -124,11 +124,11 @@ describe("StatPriority", function()
             ns:UpdateStatPriority()
             local data = StatPriorityData[105]
             assert.equals(5, #data.stats)
-            assert.equals("Intellect",      data.stats[1])
-            assert.equals("Haste",          data.stats[2])
-            assert.equals("Mastery",        data.stats[3])
-            assert.equals("Versatility",    data.stats[4])
-            assert.equals("Critical Strike",data.stats[5])
+            assert.equals("Intellect",       data.stats[1])
+            assert.equals("Haste",           data.stats[2])
+            assert.equals("Mastery",         data.stats[3])
+            assert.equals("Critical Strike", data.stats[4])
+            assert.equals("Versatility",     data.stats[5])
         end)
     end)
 
@@ -368,10 +368,10 @@ describe("StatPriority", function()
     end)
 
     -- =========================================================================
-    -- Test 9: Multi-source display when _differs is true
+    -- Test 9: Unified display for Frost DK (single archon source, _differs always false)
     -- =========================================================================
-    describe("multi-source display (_differs = true)", function()
-        -- Switch to Frost Death Knight (specID 251) which has _differs = true
+    describe("unified display for Frost DK (archon single source)", function()
+        -- Switch to Frost Death Knight (specID 251)
         before_each(function()
             _G.GetSpecialization = function() return 1 end
             _G.GetSpecializationInfo = function(specIndex)
@@ -382,88 +382,55 @@ describe("StatPriority", function()
             end
         end)
 
-        it("Frost Death Knight data has _differs = true", function()
+        it("Frost Death Knight data has _differs = false", function()
             local data = StatPriorityData[251]
             assert.is_not_nil(data)
-            assert.is_true(data._differs)
+            assert.is_false(data._differs)
         end)
 
-        it("statsLabel is hidden when _differs is true", function()
+        it("statsLabel is shown for Frost DK (unified display)", function()
             ns:UpdateStatPriority()
-            assert.is_false(ns.statsLabel:IsShown())
+            assert.is_true(ns.statsLabel:IsShown())
         end)
 
-        it("all three source labels are shown when _differs is true", function()
+        it("source labels are hidden for Frost DK (unified display)", function()
             ns:UpdateStatPriority()
-            assert.is_true(ns.wowheadLabel:IsShown())
-            assert.is_true(ns.icyveinsLabel:IsShown())
-            assert.is_true(ns.methodLabel:IsShown())
+            assert.is_false(ns.wowheadLabel:IsShown())
+            assert.is_false(ns.icyveinsLabel:IsShown())
+            assert.is_false(ns.methodLabel:IsShown())
         end)
 
-        it("wowhead label contains cyan color code and source name", function()
+        it("URL buttons are hidden for Frost DK (unified display)", function()
             ns:UpdateStatPriority()
-            local text = ns.wowheadLabel:GetText()
-            assert.is_truthy(text:find("|cff00ccffWowhead:|r", 1, true))
+            assert.is_false(ns.wowheadUrlBtn:IsShown())
+            assert.is_false(ns.icyveinsUrlBtn:IsShown())
+            assert.is_false(ns.methodUrlBtn:IsShown())
         end)
 
-        it("icyveins label contains green color code and source name", function()
+        it("statsLabel contains Frost DK stat priority", function()
             ns:UpdateStatPriority()
-            local text = ns.icyveinsLabel:GetText()
-            assert.is_truthy(text:find("|cff33cc33Icy Veins:|r", 1, true))
-        end)
-
-        it("method label contains orange color code and source name", function()
-            ns:UpdateStatPriority()
-            local text = ns.methodLabel:GetText()
-            assert.is_truthy(text:find("|cffff6600Method:|r", 1, true))
-        end)
-
-        it("wowhead label shows per-source stat priority for Frost DK", function()
-            ns:UpdateStatPriority()
-            local text = ns.wowheadLabel:GetText()
+            local text = ns.statsLabel:GetText()
             local data = StatPriorityData[251]
-            -- Should contain first wowhead stat
-            assert.is_truthy(text:find(data.wowhead[1], 1, true))
-        end)
-
-        it("icyveins label shows per-source stat priority for Frost DK", function()
-            ns:UpdateStatPriority()
-            local text = ns.icyveinsLabel:GetText()
-            local data = StatPriorityData[251]
-            assert.is_truthy(text:find(data.icyveins[1], 1, true))
-        end)
-
-        it("method label shows per-source stat priority for Frost DK", function()
-            ns:UpdateStatPriority()
-            local text = ns.methodLabel:GetText()
-            local data = StatPriorityData[251]
-            assert.is_truthy(text:find(data.method[1], 1, true))
-        end)
-
-        it("URL buttons are shown when _differs is true", function()
-            ns:UpdateStatPriority()
-            assert.is_true(ns.wowheadUrlBtn:IsShown())
-            assert.is_true(ns.icyveinsUrlBtn:IsShown())
-            assert.is_true(ns.methodUrlBtn:IsShown())
+            assert.is_truthy(text:find(data.stats[1], 1, true))
         end)
     end)
 
     -- =========================================================================
-    -- Test 9b: Equal-priority stats use "=" separator (Holy Paladin specID 65)
+    -- Test 9b: Equal-priority stats use "=" separator (Retribution Paladin specID 70)
     -- =========================================================================
     describe("equal-priority stat display", function()
         before_each(function()
             _G.GetSpecialization = function() return 2 end
             _G.GetSpecializationInfo = function(specIndex)
                 if specIndex == 2 then
-                    return 65, "Holy Paladin", "", "", "HEALER"
+                    return 70, "Retribution Paladin", "", "", "DAMAGER"
                 end
                 return nil
             end
         end)
 
-        it("Holy Paladin data has a sub-array for equal-priority stats", function()
-            local data = StatPriorityData[65]
+        it("Retribution Paladin data has a sub-array for equal-priority stats", function()
+            local data = StatPriorityData[70]
             assert.is_not_nil(data)
             local found = false
             for _, entry in ipairs(data.stats) do
@@ -472,38 +439,38 @@ describe("StatPriority", function()
             assert.is_true(found)
         end)
 
-        it("Holy Paladin stats label contains '=' separator for equal-priority stats", function()
+        it("Retribution Paladin stats label contains '=' separator for equal-priority stats", function()
             ns:UpdateStatPriority()
             local text = ns.statsLabel:GetText()
             assert.is_not_nil(text)
             assert.is_truthy(text:find("|cffFFD100=|r", 1, true))
         end)
 
-        it("Holy Paladin stats label contains '>' separator between priority tiers", function()
+        it("Retribution Paladin stats label contains '>' separator between priority tiers", function()
             ns:UpdateStatPriority()
             local text = ns.statsLabel:GetText()
             assert.is_truthy(text:find("|cffFFD100>|r", 1, true))
         end)
 
-        it("Holy Paladin stats label contains both Haste and Critical Strike", function()
+        it("Retribution Paladin stats label contains both Critical Strike and Haste", function()
             ns:UpdateStatPriority()
             local text = ns.statsLabel:GetText()
             assert.is_truthy(text:find("Haste", 1, true))
             assert.is_truthy(text:find("Critical Strike", 1, true))
         end)
 
-        it("Holy Paladin stats label contains Intellect before the = group", function()
+        it("Retribution Paladin stats label contains Strength before the = group", function()
             ns:UpdateStatPriority()
             local text = ns.statsLabel:GetText()
-            local intPos   = text:find("Intellect", 1, true)
+            local strPos   = text:find("Strength", 1, true)
             local eqPos    = text:find("|cffFFD100=|r", 1, true)
-            assert.is_truthy(intPos)
+            assert.is_truthy(strPos)
             assert.is_truthy(eqPos)
-            assert.is_true(intPos < eqPos)
+            assert.is_true(strPos < eqPos)
         end)
 
-        it("Holy Paladin _differs is false (all sources agree)", function()
-            local data = StatPriorityData[65]
+        it("Retribution Paladin _differs is false (single archon source)", function()
+            local data = StatPriorityData[70]
             assert.is_false(data._differs)
         end)
     end)
@@ -532,7 +499,7 @@ describe("StatPriority", function()
             assert.is_true(ns.urlPopupEditBox._highlighted)
         end)
 
-        it("URL button OnClick shows popup with correct wowhead URL for Frost DK", function()
+        it("URL button OnClick shows popup with archon URL for Frost DK", function()
             -- Switch to Frost DK
             _G.GetSpecialization = function() return 1 end
             _G.GetSpecializationInfo = function(specIndex)
@@ -541,47 +508,23 @@ describe("StatPriority", function()
             end
             ns:UpdateStatPriority()
 
-            -- Click the wowhead URL button
+            -- Click the wowhead URL button (alias for archon)
             local onClick = ns.wowheadUrlBtn:GetScript("OnClick")
             assert.is_not_nil(onClick)
             onClick(ns.wowheadUrlBtn)
 
             assert.is_true(ns.urlPopup:IsShown())
             local url = ns.urlPopupEditBox:GetText()
-            assert.is_truthy(url:find("wowhead.com", 1, true))
+            assert.is_truthy(url:find("archon.gg", 1, true))
             assert.is_truthy(url:find("death-knight", 1, true))
         end)
 
-        it("URL button OnClick shows popup with correct icyveins URL for Frost DK", function()
-            _G.GetSpecialization = function() return 1 end
-            _G.GetSpecializationInfo = function(specIndex)
-                if specIndex == 1 then return 251, "Frost Death Knight", "", "", "DAMAGER" end
-                return nil
-            end
-            ns:UpdateStatPriority()
-
-            local onClick = ns.icyveinsUrlBtn:GetScript("OnClick")
-            assert.is_not_nil(onClick)
-            onClick(ns.icyveinsUrlBtn)
-
-            local url = ns.urlPopupEditBox:GetText()
-            assert.is_truthy(url:find("icy-veins.com", 1, true))
-        end)
-
-        it("URL button OnClick shows popup with correct method URL for Frost DK", function()
-            _G.GetSpecialization = function() return 1 end
-            _G.GetSpecializationInfo = function(specIndex)
-                if specIndex == 1 then return 251, "Frost Death Knight", "", "", "DAMAGER" end
-                return nil
-            end
-            ns:UpdateStatPriority()
-
-            local onClick = ns.methodUrlBtn:GetScript("OnClick")
-            assert.is_not_nil(onClick)
-            onClick(ns.methodUrlBtn)
-
-            local url = ns.urlPopupEditBox:GetText()
-            assert.is_truthy(url:find("method.gg", 1, true))
+        it("all URL aliases point to archon.gg for Frost DK", function()
+            local data = StatPriorityData[251]
+            assert.is_truthy(data.urls.archon:find("archon.gg", 1, true))
+            assert.equals(data.urls.archon, data.urls.wowhead)
+            assert.equals(data.urls.archon, data.urls.icyveins)
+            assert.equals(data.urls.archon, data.urls.method)
         end)
     end)
 
@@ -916,14 +859,15 @@ describe("StatPriority", function()
             assert.equals("Blood Death Knight", ns.headerTitle:GetText())
         end)
 
-        it("override='loot' with loot specID=251 shows _differs content for Frost DK", function()
+        it("override='loot' with loot specID=251 shows unified content for Frost DK", function()
             _G.StatPriorityDB.specOverride = "loot"
             _G._mockLootSpec = 251
             ns:UpdateStatPriority()
-            -- Frost DK has _differs=true, should show per-source labels
-            assert.is_true(ns.wowheadLabel:IsShown())
-            assert.is_true(ns.icyveinsLabel:IsShown())
-            assert.is_true(ns.methodLabel:IsShown())
+            -- Frost DK has _differs=false (single archon source), should show unified label
+            assert.is_true(ns.statsLabel:IsShown())
+            assert.is_false(ns.wowheadLabel:IsShown())
+            assert.is_false(ns.icyveinsLabel:IsShown())
+            assert.is_false(ns.methodLabel:IsShown())
         end)
     end)
 
@@ -1033,9 +977,9 @@ describe("StatPriority", function()
             end
         end)
 
-        it("every entry has _source = 'wowhead,icyveins,method'", function()
+        it("every entry has _source = 'archon'", function()
             for specID, entry in pairs(StatPriorityData) do
-                assert.equals("wowhead,icyveins,method", entry._source,
+                assert.equals("archon", entry._source,
                     "specID " .. specID .. " has unexpected _source: " .. tostring(entry._source))
             end
         end)
@@ -1067,10 +1011,12 @@ describe("StatPriority", function()
             end
         end)
 
-        it("every entry has urls table with all 3 source URLs", function()
+        it("every entry has urls table with archon URL (plus backward-compat aliases)", function()
             for specID, entry in pairs(StatPriorityData) do
                 assert.is_not_nil(entry.urls,
                     "specID " .. specID .. " missing urls table")
+                assert.is_not_nil(entry.urls.archon,
+                    "specID " .. specID .. " missing urls.archon")
                 assert.is_not_nil(entry.urls.wowhead,
                     "specID " .. specID .. " missing urls.wowhead")
                 assert.is_not_nil(entry.urls.icyveins,
@@ -1116,13 +1062,13 @@ describe("StatPriority", function()
             end
         end)
 
-        it("stats field matches wowhead (wowhead is canonical default)", function()
+        it("stats field matches archon (archon is canonical default)", function()
             for specID, entry in pairs(StatPriorityData) do
-                assert.equals(#entry.wowhead, #entry.stats,
-                    "specID " .. specID .. " stats length does not match wowhead length")
-                for i = 1, #entry.wowhead do
-                    assert.equals(entry.wowhead[i], entry.stats[i],
-                        "specID " .. specID .. " stats[" .. i .. "] != wowhead[" .. i .. "]")
+                assert.equals(#entry.archon, #entry.stats,
+                    "specID " .. specID .. " stats length does not match archon length")
+                for i = 1, #entry.archon do
+                    assert.equals(entry.archon[i], entry.stats[i],
+                        "specID " .. specID .. " stats[" .. i .. "] != archon[" .. i .. "]")
                 end
             end
         end)
@@ -1133,10 +1079,10 @@ describe("StatPriority", function()
             assert.is_false(data._differs)
         end)
 
-        it("Frost Death Knight (251) has _differs = true", function()
+        it("Frost Death Knight (251) has _differs = false (single archon source)", function()
             local data = StatPriorityData[251]
             assert.is_not_nil(data)
-            assert.is_true(data._differs)
+            assert.is_false(data._differs)
         end)
     end)
 
