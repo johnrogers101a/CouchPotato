@@ -13,11 +13,23 @@
 --   _source   — "wowhead,icyveins,method"
 -- Interface: 120001 (Patch 12.0.1 Midnight)
 
--- Helper: returns true if two ordered stat arrays differ
+-- Helper: returns true if two ordered stat arrays differ.
+-- Entries may be strings or sub-arrays (tables) for equal-priority groups.
+local function entriesEqual(x, y)
+    if type(x) == "table" and type(y) == "table" then
+        if #x ~= #y then return false end
+        for i = 1, #x do
+            if x[i] ~= y[i] then return false end
+        end
+        return true
+    end
+    return x == y
+end
+
 local function arraysDiffer(a, b)
     if #a ~= #b then return true end
     for i = 1, #a do
-        if a[i] ~= b[i] then return true end
+        if not entriesEqual(a[i], b[i]) then return true end
     end
     return false
 end
@@ -502,10 +514,11 @@ StatPriorityData = {
     -- =========================================================================
 
     -- Holy Paladin (specID 65)
+    -- Haste and Critical Strike are equal priority per reference sources.
     [65] = (function()
-        local wh = { "Intellect", "Haste", "Critical Strike", "Mastery", "Versatility" }
-        local iv = { "Intellect", "Haste", "Critical Strike", "Mastery", "Versatility" }
-        local mt = { "Intellect", "Haste", "Critical Strike", "Mastery", "Versatility" }
+        local wh = { "Intellect", "Mastery", {"Haste", "Critical Strike"}, "Versatility" }
+        local iv = { "Intellect", "Mastery", {"Haste", "Critical Strike"}, "Versatility" }
+        local mt = { "Intellect", "Mastery", {"Haste", "Critical Strike"}, "Versatility" }
         return {
             specName = "Holy Paladin",
             stats    = wh,

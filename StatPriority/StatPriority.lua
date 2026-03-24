@@ -166,6 +166,25 @@ function ns:GetDisplaySpecID()
 end
 
 -------------------------------------------------------------------------------
+-- formatStatPriority: Formats a stat priority array into a display string.
+-- Top-level entries are joined with " > " (gold colour).
+-- Sub-array entries (tables) represent equal-priority stats joined with " = ".
+-------------------------------------------------------------------------------
+local function formatStatPriority(statsArray)
+    local gtSep = " |cffFFD100>|r "
+    local eqSep = " |cffFFD100=|r "
+    local parts = {}
+    for _, entry in ipairs(statsArray) do
+        if type(entry) == "table" then
+            parts[#parts + 1] = table.concat(entry, eqSep)
+        else
+            parts[#parts + 1] = entry
+        end
+    end
+    return table.concat(parts, gtSep)
+end
+
+-------------------------------------------------------------------------------
 -- UpdateStatPriority: Reads player spec, looks up data, updates UI.
 -------------------------------------------------------------------------------
 function ns:UpdateStatPriority()
@@ -219,9 +238,8 @@ function ns:UpdateStatPriority()
         if data then
             splog("Info", "StatPriorityData lookup: found data for specID=" .. tostring(specID) .. " specName=" .. tostring(data.specName))
             specName = data.specName or name or "Unknown Spec"
-            -- Join stats with gold ">" separator
-            local sep = " |cffFFD100>|r "
-            statsText = table.concat(data.stats, sep)
+            -- Join stats with gold ">" separator (equal-priority groups use "=")
+            statsText = formatStatPriority(data.stats)
         else
             splog("Warn", "StatPriorityData lookup: NO data for specID=" .. tostring(specID))
             specName = name or "Unknown Spec"
@@ -238,25 +256,23 @@ function ns:UpdateStatPriority()
         splog("Debug", "Header text set to: " .. tostring(specName))
     end
 
-    local sep = " |cffFFD100>|r "
-
     if data and data._differs then
         splog("Info", "Display mode: multi-source (sources differ), specID=" .. tostring(data and data.specName))
         -- Multi-source display
         if ns.statsLabel then ns.statsLabel:Hide() end
 
         if ns.wowheadLabel then
-            local text = "|cff00ccffWowhead:|r " .. table.concat(data.wowhead, sep)
+            local text = "|cff00ccffWowhead:|r " .. formatStatPriority(data.wowhead)
             ns.wowheadLabel:SetText(text)
             ns.wowheadLabel:Show()
         end
         if ns.icyveinsLabel then
-            local text = "|cff33cc33Icy Veins:|r " .. table.concat(data.icyveins, sep)
+            local text = "|cff33cc33Icy Veins:|r " .. formatStatPriority(data.icyveins)
             ns.icyveinsLabel:SetText(text)
             ns.icyveinsLabel:Show()
         end
         if ns.methodLabel then
-            local text = "|cffff6600Method:|r " .. table.concat(data.method, sep)
+            local text = "|cffff6600Method:|r " .. formatStatPriority(data.method)
             ns.methodLabel:SetText(text)
             ns.methodLabel:Show()
         end
