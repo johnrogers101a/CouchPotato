@@ -327,6 +327,55 @@ describe("CouchPotato minimap button", function()
         btn._scripts["OnClick"](btn, "LeftButton")
         assert.is_true(frame:IsShown())
     end)
+
+    -- Regression tests for the angle-math bug (2026-03-24).
+    -- Old formula: rad = math.rad(angle - 90)  → angle 0 mapped to BOTTOM (y<0).
+    -- Fixed formula: rad = math.rad(90 - angle) → angle 0 maps to TOP   (y>0).
+    it("angle=0 positions button at top of minimap (y > 0, x ≈ 0)", function()
+        cp.MinimapButton.SetAngle(0)
+        local btn = cp.MinimapButton.GetButton()
+        local pt = btn._points[#btn._points]
+        -- pt = { "CENTER", Minimap, "CENTER", x, y }
+        local x, y = pt[4], pt[5]
+        assert.is_true(y > 0,  "angle=0 should place button above minimap centre (y>0)")
+        assert.is_true(math.abs(x) < 1, "angle=0 should have x≈0, got " .. tostring(x))
+    end)
+
+    it("angle=180 positions button at bottom of minimap (y < 0, x ≈ 0)", function()
+        cp.MinimapButton.SetAngle(180)
+        local btn = cp.MinimapButton.GetButton()
+        local pt = btn._points[#btn._points]
+        local x, y = pt[4], pt[5]
+        assert.is_true(y < 0,  "angle=180 should place button below minimap centre (y<0)")
+        assert.is_true(math.abs(x) < 1, "angle=180 should have x≈0, got " .. tostring(x))
+    end)
+
+    it("angle=90 positions button at right of minimap (x > 0, y ≈ 0)", function()
+        cp.MinimapButton.SetAngle(90)
+        local btn = cp.MinimapButton.GetButton()
+        local pt = btn._points[#btn._points]
+        local x, y = pt[4], pt[5]
+        assert.is_true(x > 0,  "angle=90 should place button to the right (x>0)")
+        assert.is_true(math.abs(y) < 1, "angle=90 should have y≈0, got " .. tostring(y))
+    end)
+
+    it("angle=225 (default) positions button at lower-left (x<0 and y<0)", function()
+        cp.MinimapButton.SetAngle(225)
+        local btn = cp.MinimapButton.GetButton()
+        local pt = btn._points[#btn._points]
+        local x, y = pt[4], pt[5]
+        assert.is_true(x < 0, "angle=225 should place button left of centre (x<0), got x=" .. tostring(x))
+        assert.is_true(y < 0, "angle=225 should place button below centre (y<0), got y=" .. tostring(y))
+    end)
+
+    it("icon texture is a non-empty string (not the missing SpicedFishBite path)", function()
+        -- Verify the icon path was changed away from the broken INV_Misc_Food_Cooked_SpicedFishBite
+        local btn = cp.MinimapButton.GetButton()
+        local iconTex = btn._icon and btn._icon._texture
+        assert.is_string(iconTex, "icon texture should be a string")
+        assert.is_true(#iconTex > 0, "icon texture should not be empty")
+        assert.is_nil(iconTex:find("SpicedFishBite"), "broken SpicedFishBite texture path must not be used")
+    end)
 end)
 
 describe("CouchPotato config window", function()
