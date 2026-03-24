@@ -33,6 +33,13 @@ local function dcsprint(msg)
     end
 end
 
+-- dcslog: structured log via CouchPotatoLog (level = "Debug"/"Info"/"Warn"/"Error")
+local function dcslog(level, msg)
+    if _G.CouchPotatoLog and _G.CouchPotatoLog[level] then
+        _G.CouchPotatoLog[level](_G.CouchPotatoLog, "DCS", msg)
+    end
+end
+
 
 
 -------------------------------------------------------------------------------
@@ -511,6 +518,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
         -- Unregister immediately — we only need to initialize once
         self:UnregisterEvent("ADDON_LOADED")
+        dcslog("Info", "ADDON_LOADED fired for: " .. tostring(arg1))
 
         -- All initialization happens here, atomically, before any other events fire
         ns:OnLoad()
@@ -611,7 +619,12 @@ end
 -------------------------------------------------------------------------------
 function ns:OnLoad()
     -- Guard: idempotent — never initialize twice
-    if ns.frame then return end
+    if ns.frame then
+        dcslog("Warn", "OnLoad called but ns.frame already exists — skipping (idempotent guard)")
+        return
+    end
+
+    dcslog("Info", "OnLoad: starting initialization, version=" .. ns.version)
 
     -- 1. Initialize SavedVariables
     -- NOTE: Per WoW API docs, SavedVariables are guaranteed to be loaded
@@ -643,12 +656,14 @@ function ns:OnLoad()
         end
     end
     if not frameOk or not frameResult then
+        dcslog("Error", "Could not create display frame — addon disabled")
         print("|cffff4444DelveCompanionStats:|r Could not create display frame. Addon disabled.")
         ns.frame = nil
         return
     end
 
     ns.frame = frameResult
+    dcslog("Info", "Frame created successfully: DelveCompanionStatsFrame")
 
     -- Set frame strata and level to ensure visibility above other UI
     ns.frame:SetFrameStrata("DIALOG")
@@ -1268,6 +1283,8 @@ ns.GetNemesisDetailText = GetNemesisDetailText
 function ns:UpdateCompanionData(event)
     if not ns.frame then return end
 
+    dcslog("Debug", "UpdateCompanionData called, event=" .. tostring(event))
+
     -- Step 1: Get the active companion's faction ID directly (no args required)
     local factionID = nil
     if C_DelvesUI and C_DelvesUI.GetFactionForCompanion then
@@ -1314,6 +1331,8 @@ function ns:UpdateCompanionData(event)
     ns._lastFactionID = factionID
     ns._lastName      = name
     ns._lastLevel     = level
+    dcslog("Info", "UpdateCompanionData: factionID=" .. tostring(factionID) ..
+           " name=" .. tostring(name) .. " level=" .. tostring(level))
 
     -- Update header title to show companion name dynamically
     if ns.headerTitle then
