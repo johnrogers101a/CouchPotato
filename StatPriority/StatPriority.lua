@@ -375,20 +375,35 @@ local function createURLButton(parent, anchorLabel, getURL)
 end
 
 -------------------------------------------------------------------------------
--- GetTrackerAnchor: Returns the last visible content module of the Blizzard
--- objective tracker so StatPriority docks directly below the VISIBLE quest
--- content rather than the full (screen-tall) ObjectiveTrackerFrame container.
+-- GetTrackerAnchor: Returns the best anchor frame for StatPriority to dock
+-- below.  The anchor chain is:
 --
--- Strategy (most-specific → least-specific):
---   1. Walk ObjectiveTrackerFrame.MODULES from last to first; return the last
---      one that is shown — its BOTTOM is the real end of visible content.
---   2. Fall back to known named module globals in priority order (these are the
---      sub-trackers that appear in the tracker column in TWW/Midnight).
---   3. Last resort: ObjectiveTrackerFrame itself (old behaviour, keeps things
---      working if Blizzard restructures the tracker again).
---   4. Returns nil when no tracker is visible at all.
+--   ObjectiveTracker visible-content bottom
+--     → DelveCompanionStatsFrame (if shown, dock below it instead)
+--       → StatPriority (docks below DCS)
+--
+-- This prevents StatPriority and DelveCompanionStats from overlapping when
+-- both are visible at the bottom of the quest tracker.
+--
+-- Strategy:
+--   1. If DelveCompanionStatsFrame exists and is shown, anchor below it.
+--      This ensures SP always sits beneath DCS in the stack.
+--   2. Otherwise walk ObjectiveTrackerFrame.MODULES (last visible = bottom
+--      of actual quest content).
+--   3. Fall back to named module globals in bottom-of-column priority order.
+--   4. Last resort: ObjectiveTrackerFrame itself.
+--   5. Returns nil when no tracker is visible at all.
 -------------------------------------------------------------------------------
 local function GetTrackerAnchor()
+    -- 1. Chain anchor: if DelveCompanionStatsFrame is visible, dock below it.
+    --    This forms the proper chain: ObjectiveTracker → DCS → StatPriority.
+    local dcsFrame = _G.DelveCompanionStatsFrame
+    if dcsFrame and dcsFrame.IsShown and dcsFrame:IsShown() then
+        splog("Info", "GetTrackerAnchor: DelveCompanionStatsFrame is visible — anchoring SP below DCS (chain: OT→DCS→SP)")
+        return dcsFrame
+    end
+    splog("Debug", "GetTrackerAnchor: DelveCompanionStatsFrame not visible — using ObjectiveTracker directly")
+
     -- Guard: outer container must exist and be visible
     if not (ObjectiveTrackerFrame
             and ObjectiveTrackerFrame.IsShown
@@ -397,7 +412,7 @@ local function GetTrackerAnchor()
         return nil
     end
 
-    -- 1. Walk the MODULES list to find the last visible content module.
+    -- 2. Walk the MODULES list to find the last visible content module.
     --    ObjectiveTrackerFrame.MODULES is an ordered array in display order
     --    (top to bottom), so the last shown entry is the bottom of content.
     if ObjectiveTrackerFrame.MODULES and #ObjectiveTrackerFrame.MODULES > 0 then
@@ -414,7 +429,7 @@ local function GetTrackerAnchor()
         splog("Debug", "GetTrackerAnchor: MODULES present but no visible module — falling through")
     end
 
-    -- 2. Named module globals, checked in bottom-of-column priority order.
+    -- 3. Named module globals, checked in bottom-of-column priority order.
     --    In a typical TWW session the order from top to bottom is:
     --    BonusObjective → Scenario → Achievement → Quest
     --    We want the one that is visible and furthest down (last in order).
@@ -435,7 +450,7 @@ local function GetTrackerAnchor()
         return lastNamed
     end
 
-    -- 3. Last resort: the outer container (original behaviour).
+    -- 4. Last resort: the outer container (original behaviour).
     splog("Debug", "GetTrackerAnchor: no module found — falling back to ObjectiveTrackerFrame")
     return ObjectiveTrackerFrame
 end
@@ -513,8 +528,17 @@ function ns:OnLoad()
     ns.frame:SetMovable(true)
     splog("Info", "Frame created successfully: StatPriorityFrame")
 
-    local frameWidth  = 248
+    -- Match the ObjectiveTracker width dynamically (same logic as DelveCompanionStats).
+    -- Prefer ScenarioObjectiveTracker width; fall back to 248 px (tracker column width).
+    local frameWidth = 0
+    if ScenarioObjectiveTracker and ScenarioObjectiveTracker.GetWidth then
+        frameWidth = ScenarioObjectiveTracker:GetWidth()
+    end
+    if frameWidth < 100 or frameWidth > 300 then
+        frameWidth = 248
+    end
     local contentWidth = frameWidth - 12
+    splog("Info", "OnLoad: frameWidth=" .. tostring(frameWidth))
 
     ns.frame:SetSize(frameWidth, 60)
 
@@ -579,9 +603,10 @@ function ns:OnLoad()
     ns.headerLabel = headerTitle  -- alias
 
     -- Collapse button: gold en-dash, far right
+    -- Sized at 26x26 to match the lock button and be comfortably clickable
     local collapseBtn = CreateFrame("Button", nil, header)
-    collapseBtn:SetSize(20, 28)
-    collapseBtn:SetPoint("RIGHT", header, "RIGHT", -6, 0)
+    collapseBtn:SetSize(26, 26)
+    collapseBtn:SetPoint("RIGHT", header, "RIGHT", -4, 0)
     local collapseBtnText = collapseBtn:CreateFontString(nil, "OVERLAY")
     collapseBtnText:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
     collapseBtnText:SetAllPoints(collapseBtn)
@@ -612,15 +637,16 @@ function ns:OnLoad()
     -- Pin button: to the LEFT of the collapse button. Lock icon indicates whether
     -- the frame is docked below visible tracker content (locked/pinned) or freely
     -- draggable (unlocked/unpinned). Default: pinned (locked icon).
+    -- Sized at 26x26 (at least 10px larger than the old 16x16) for easy clicking.
     local pinBtn = CreateFrame("Button", nil, header)
-    pinBtn:SetSize(16, 16)
-    pinBtn:SetPoint("RIGHT", collapseBtn, "LEFT", -6, 0)
+    pinBtn:SetSize(26, 26)
+    pinBtn:SetPoint("RIGHT", collapseBtn, "LEFT", -4, 0)
     pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
     pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
     pinBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight", "ADD")
     pinBtn:EnableMouse(true)
     ns.pinBtn = pinBtn
-    splog("Debug", "Pin button created: 16x16, LEFT of collapseBtn")
+    splog("Debug", "Pin button created: 26x26, LEFT of collapseBtn")
 
     -- ApplyPinnedState: anchor frame below visible tracker content, disable dragging, lock icon.
     -- GetTrackerAnchor() returns the last visible tracker sub-module (not the full container)
