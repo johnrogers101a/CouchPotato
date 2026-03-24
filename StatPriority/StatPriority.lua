@@ -117,6 +117,55 @@ function ns:ShowURLPopup(url)
 end
 
 -------------------------------------------------------------------------------
+-- GetDisplaySpecID: Returns the specID to display based on StatPriorityDB.specOverride.
+--   "current" or nil  → GetSpecialization() + GetSpecializationInfo()
+--   "loot"            → GetLootSpecialization() (0 means fall back to current)
+--   integer specID    → use that specID directly
+-------------------------------------------------------------------------------
+function ns:GetDisplaySpecID()
+    local override = StatPriorityDB and StatPriorityDB.specOverride
+    splog("Debug", "GetDisplaySpecID: override=" .. tostring(override))
+
+    if type(override) == "number" then
+        -- Fixed spec override
+        splog("Info", "GetDisplaySpecID: fixed specID override=" .. tostring(override))
+        return override
+    elseif override == "loot" then
+        -- Loot spec mode
+        local lootSpecID = 0
+        if GetLootSpecialization then
+            lootSpecID = GetLootSpecialization() or 0
+            splog("Info", "GetDisplaySpecID: loot mode, GetLootSpecialization()=" .. tostring(lootSpecID))
+        else
+            splog("Warn", "GetDisplaySpecID: GetLootSpecialization API not available")
+        end
+        if lootSpecID and lootSpecID > 0 then
+            splog("Info", "GetDisplaySpecID: using loot specID=" .. tostring(lootSpecID))
+            return lootSpecID
+        else
+            -- Fall back to current spec when loot spec is "Current Specialization" (0)
+            splog("Info", "GetDisplaySpecID: loot spec is 0 (current) — falling back to active spec")
+            -- fall through to current spec logic below
+        end
+    end
+
+    -- Default: current spec
+    if not GetSpecialization then
+        splog("Warn", "GetDisplaySpecID: GetSpecialization API not available")
+        return nil
+    end
+    local specIndex = GetSpecialization()
+    splog("Debug", "GetDisplaySpecID: current mode, specIndex=" .. tostring(specIndex))
+    if not specIndex or specIndex <= 0 then
+        splog("Debug", "GetDisplaySpecID: no active spec (specIndex=" .. tostring(specIndex) .. ")")
+        return nil
+    end
+    local specID = select(1, GetSpecializationInfo(specIndex))
+    splog("Debug", "GetDisplaySpecID: resolved specID=" .. tostring(specID) .. " from specIndex=" .. tostring(specIndex))
+    return specID
+end
+
+-------------------------------------------------------------------------------
 -- UpdateStatPriority: Reads player spec, looks up data, updates UI.
 -------------------------------------------------------------------------------
 function ns:UpdateStatPriority()
@@ -132,36 +181,55 @@ function ns:UpdateStatPriority()
     local statsText  = ""
     local data       = nil
 
-    local specIndex = nil
-    if GetSpecialization then
-        specIndex = GetSpecialization()
-        splog("Debug", "GetSpecialization() returned: " .. tostring(specIndex))
-    else
-        splog("Warn", "GetSpecialization is nil — API not available")
+    local specID = ns:GetDisplaySpecID()
+    splog("Debug", "UpdateStatPriority: GetDisplaySpecID() returned specID=" .. tostring(specID))
+
+    -- Resolve a fallback display name for when StatPriorityData has no entry.
+    -- For the "current" spec path we use GetSpecializationInfo (has the freshest name);
+    -- for loot/fixed paths we use GetSpecializationInfoByID when available.
+    local function getAPISpecName(sid)
+        -- Try the active-spec API first (works for all modes in the common case)
+        if GetSpecialization and GetSpecializationInfo then
+            local idx = GetSpecialization()
+            if idx and idx > 0 then
+                local infoID, infoName = GetSpecializationInfo(idx)
+                if infoID == sid then
+                    return infoName
+                end
+            end
+        end
+        -- Fall back to by-ID lookup when available
+        if GetSpecializationInfoByID then
+            local _, n = GetSpecializationInfoByID(sid)
+            return n
+        end
+        return nil
     end
 
-    if specIndex and specIndex > 0 then
-        local specID, name = GetSpecializationInfo(specIndex)
-        splog("Debug", "GetSpecializationInfo(" .. tostring(specIndex) .. ") => specID=" .. tostring(specID) .. " name=" .. tostring(name))
-        if specID then
-            data = StatPriorityData and StatPriorityData[specID]
-            if data then
-                splog("Info", "StatPriorityData lookup: found data for specID=" .. tostring(specID) .. " specName=" .. tostring(data.specName))
-                specName = data.specName or name or "Unknown Spec"
-                -- Join stats with gold ">" separator
-                local sep = " |cffFFD100>|r "
-                statsText = table.concat(data.stats, sep)
-            else
-                splog("Warn", "StatPriorityData lookup: NO data for specID=" .. tostring(specID))
-                specName = name or "Unknown Spec"
-                statsText = ""
-                spprint("Warning: no data for specID", specID)
-            end
+    -- specID == 0 means the API returned a "not ready" value (early-load race):
+    -- treat as "has index but invalid specID" → show "Unknown Spec".
+    if specID == 0 then
+        specName = "Unknown Spec"
+        splog("Warn", "UpdateStatPriority: specID=0 (API not ready) — showing 'Unknown Spec'")
+    elseif specID and specID > 0 then
+        local name = getAPISpecName(specID)
+        splog("Debug", "UpdateStatPriority: specID=" .. tostring(specID) .. " apiName=" .. tostring(name))
+
+        data = StatPriorityData and StatPriorityData[specID]
+        if data then
+            splog("Info", "StatPriorityData lookup: found data for specID=" .. tostring(specID) .. " specName=" .. tostring(data.specName))
+            specName = data.specName or name or "Unknown Spec"
+            -- Join stats with gold ">" separator
+            local sep = " |cffFFD100>|r "
+            statsText = table.concat(data.stats, sep)
         else
-            splog("Warn", "GetSpecializationInfo returned nil specID for index=" .. tostring(specIndex))
+            splog("Warn", "StatPriorityData lookup: NO data for specID=" .. tostring(specID))
+            specName = name or "Unknown Spec"
+            statsText = ""
+            spprint("Warning: no data for specID", specID)
         end
     else
-        splog("Debug", "No active specialization (specIndex=" .. tostring(specIndex) .. ")")
+        splog("Debug", "No active specialization (specID=" .. tostring(specID) .. ")")
     end
 
     -- Update header title
@@ -338,7 +406,34 @@ function ns:OnLoad()
     -- 1. Initialize SavedVariables
     StatPriorityDB = StatPriorityDB or {}
     local db = StatPriorityDB
-    splog("Debug", "SavedVariables: StatPriorityDB initialized")
+    -- Initialize specOverride default
+    if db.specOverride == nil then
+        db.specOverride = "current"
+        splog("Info", "SavedVariables: specOverride initialized to 'current'")
+    end
+    -- Validate: if specOverride is a number, verify it's a valid spec for the current class.
+    -- If not (e.g., stale from race change), reset to "current".
+    if type(db.specOverride) == "number" then
+        local isValid = false
+        if GetNumSpecializations then
+            local numSpecs = GetNumSpecializations()
+            for i = 1, numSpecs do
+                local sid = select(1, GetSpecializationInfo(i))
+                if sid == db.specOverride then
+                    isValid = true
+                    break
+                end
+            end
+        end
+        if not isValid then
+            splog("Warn", "SavedVariables: specOverride=" .. tostring(db.specOverride) ..
+                  " not valid for current class — resetting to 'current'")
+            db.specOverride = "current"
+        else
+            splog("Info", "SavedVariables: specOverride=" .. tostring(db.specOverride) .. " validated OK")
+        end
+    end
+    splog("Debug", "SavedVariables: StatPriorityDB initialized, specOverride=" .. tostring(db.specOverride))
 
     -- 2. Create the main display frame
     local frameOk, frameResult = pcall(function()
@@ -637,12 +732,10 @@ function ns:OnLoad()
     -- -----------------------------------------------------------------------
     -- We need a deferred data lookup for buttons, so use a closure
     local function getCurrentData()
-        local specIndex = GetSpecialization and GetSpecialization() or nil
-        if specIndex and specIndex > 0 then
-            local specID = select(1, GetSpecializationInfo(specIndex))
-            if specID and StatPriorityData then
-                return StatPriorityData[specID]
-            end
+        local specID = ns:GetDisplaySpecID()
+        splog("Debug", "getCurrentData: GetDisplaySpecID()=" .. tostring(specID))
+        if specID and specID > 0 and StatPriorityData then
+            return StatPriorityData[specID]
         end
         return nil
     end
@@ -811,6 +904,7 @@ function ns:OnLoad()
     local specEventFrame = CreateFrame("Frame")
     specEventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     specEventFrame:RegisterEvent("PLAYER_LOGIN")
+    specEventFrame:RegisterEvent("PLAYER_LOOT_SPEC_UPDATED")
     specEventFrame:SetScript("OnEvent", function(self, event)
         if event == "PLAYER_SPECIALIZATION_CHANGED" then
             splog("Info", "PLAYER_SPECIALIZATION_CHANGED fired — calling UpdateStatPriority")
@@ -818,10 +912,20 @@ function ns:OnLoad()
         elseif event == "PLAYER_LOGIN" then
             splog("Info", "PLAYER_LOGIN fired — calling UpdateStatPriority")
             ns:UpdateStatPriority()
+        elseif event == "PLAYER_LOOT_SPEC_UPDATED" then
+            local override = StatPriorityDB and StatPriorityDB.specOverride
+            splog("Info", "PLAYER_LOOT_SPEC_UPDATED fired — override=" .. tostring(override))
+            if override == "loot" then
+                local lootID = GetLootSpecialization and GetLootSpecialization() or 0
+                splog("Info", "PLAYER_LOOT_SPEC_UPDATED: GetLootSpecialization()=" .. tostring(lootID) .. " — calling UpdateStatPriority")
+                ns:UpdateStatPriority()
+            else
+                splog("Debug", "PLAYER_LOOT_SPEC_UPDATED: override is not 'loot', skipping update")
+            end
         end
     end)
     ns.specEventFrame = specEventFrame
-    splog("Debug", "Registered for PLAYER_SPECIALIZATION_CHANGED and PLAYER_LOGIN")
+    splog("Debug", "Registered for PLAYER_SPECIALIZATION_CHANGED, PLAYER_LOGIN, PLAYER_LOOT_SPEC_UPDATED")
 
     -- Delayed width fix (matches DCS pattern)
     if C_Timer and C_Timer.After then
