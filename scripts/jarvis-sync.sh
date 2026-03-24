@@ -162,7 +162,19 @@ do_push() {
 do_pull() {
     log "=== PULL: Azure -> local ==="
 
+    # Fix read-only git objects that block overwrites.
+    # ~/.claude/plugins/ may contain git repos whose pack objects are mode 444;
+    # az storage blob download-batch cannot overwrite them under set -euo pipefail.
+    # Note: macOS find(1) does not support -writable; use -perm -u+w instead.
+    find "$CLAUDE_CONFIG_DIR" -path '*/.git/objects/*' -type f ! -perm -u+w \
+        -exec chmod u+w {} + 2>/dev/null || true
+
     # claude-config -> ~/.claude/
+    # Note: az storage blob download-batch has no --exclude-path flag.
+    # Syncing .git/ internals across machines is risky (pack objects are
+    # machine-specific and break cross-machine checkouts), but there is no
+    # supported way to exclude a path prefix with download-batch --pattern.
+    # The chmod guard above ensures read-only objects don't abort the sync.
     download_container "$CONTAINER_CONFIG" "$CLAUDE_CONFIG_DIR"
 
     # claude-learnings -> .agent-work/ (learnings.md at root, research/ subdir)
