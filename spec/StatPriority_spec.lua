@@ -628,6 +628,141 @@ describe("StatPriority", function()
     end)
 
     -- =========================================================================
+    -- Test 12a: tracker anchor resolution — docks to visible content bottom
+    -- =========================================================================
+    describe("tracker anchor resolution (GetTrackerAnchor via ApplyPinnedState)", function()
+        -- Helper: make a minimal visible tracker-module stub
+        local function makeVisibleModule(name)
+            return {
+                _name    = name,
+                _shown   = true,
+                _points  = {},
+                IsShown       = function(self) return self._shown end,
+                GetName       = function(self) return self._name end,
+                SetPoint      = function(self, ...) self._points[#self._points + 1] = { ... } end,
+                ClearAllPoints = function(self) self._points = {} end,
+            }
+        end
+
+        after_each(function()
+            -- Clean up globals injected during tests
+            _G.ObjectiveTrackerFrame     = nil
+            _G.QuestObjectiveTracker     = nil
+            _G.AchievementObjectiveTracker = nil
+            _G.ScenarioObjectiveTracker  = nil
+            _G.BonusObjectiveTracker     = nil
+        end)
+
+        it("ApplyPinnedState falls back to UIParent CENTER when no tracker is present", function()
+            _G.ObjectiveTrackerFrame = nil
+            ns.ApplyPinnedState()
+            -- Should have a CENTER anchor on UIParent
+            local found = false
+            for _, p in ipairs(ns.frame._points) do
+                if p[1] == "CENTER" then found = true; break end
+            end
+            assert.is_true(found)
+        end)
+
+        it("ApplyPinnedState anchors to last visible MODULES entry, not the container", function()
+            local questMod   = makeVisibleModule("QuestObjectiveTracker")
+            local achievMod  = makeVisibleModule("AchievementObjectiveTracker")
+            achievMod._shown = false  -- achievement module hidden — quest is last visible
+
+            _G.ObjectiveTrackerFrame = {
+                _shown  = true,
+                _points = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return "ObjectiveTrackerFrame" end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
+                ClearAllPoints = function(self) self._points = {} end,
+                MODULES = { achievMod, questMod },  -- quest is last
+            }
+
+            ns.ApplyPinnedState()
+
+            -- Frame should anchor to questMod (last visible MODULES entry), not ObjectiveTrackerFrame
+            local foundAnchor = false
+            for _, p in ipairs(ns.frame._points) do
+                -- p is {point, relativeFrame, relativePoint, x, y}
+                if p[2] == questMod then foundAnchor = true; break end
+            end
+            assert.is_true(foundAnchor, "expected anchor to last visible MODULES entry (questMod)")
+        end)
+
+        it("ApplyPinnedState skips hidden MODULES entries", function()
+            local mod1 = makeVisibleModule("ModOne")
+            local mod2 = makeVisibleModule("ModTwo")
+            mod2._shown = false  -- mod2 hidden, mod1 is last visible
+
+            _G.ObjectiveTrackerFrame = {
+                _shown  = true,
+                _points = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return "ObjectiveTrackerFrame" end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
+                ClearAllPoints = function(self) self._points = {} end,
+                MODULES = { mod1, mod2 },
+            }
+
+            ns.ApplyPinnedState()
+
+            local anchoredTo = nil
+            for _, p in ipairs(ns.frame._points) do
+                if p[2] == mod1 or p[2] == mod2 then anchoredTo = p[2]; break end
+            end
+            assert.equals(mod1, anchoredTo, "expected anchor to mod1 (last visible), not hidden mod2")
+        end)
+
+        it("ApplyPinnedState falls back to named module globals when MODULES is absent", function()
+            local questMod = makeVisibleModule("QuestObjectiveTracker")
+            _G.QuestObjectiveTracker = questMod
+
+            _G.ObjectiveTrackerFrame = {
+                _shown  = true,
+                _points = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return "ObjectiveTrackerFrame" end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
+                ClearAllPoints = function(self) self._points = {} end,
+                -- MODULES deliberately absent
+            }
+
+            ns.ApplyPinnedState()
+
+            local foundAnchor = false
+            for _, p in ipairs(ns.frame._points) do
+                if p[2] == questMod then foundAnchor = true; break end
+            end
+            assert.is_true(foundAnchor, "expected anchor to QuestObjectiveTracker named global")
+        end)
+
+        it("ApplyPinnedState falls back to ObjectiveTrackerFrame when no module is visible", function()
+            local hiddenMod = makeVisibleModule("HiddenMod")
+            hiddenMod._shown = false
+
+            local outerFrame = {
+                _shown  = true,
+                _points = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return "ObjectiveTrackerFrame" end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
+                ClearAllPoints = function(self) self._points = {} end,
+                MODULES = { hiddenMod },
+            }
+            _G.ObjectiveTrackerFrame = outerFrame
+
+            ns.ApplyPinnedState()
+
+            local foundAnchor = false
+            for _, p in ipairs(ns.frame._points) do
+                if p[2] == outerFrame then foundAnchor = true; break end
+            end
+            assert.is_true(foundAnchor, "expected fallback anchor to ObjectiveTrackerFrame itself")
+        end)
+    end)
+
+    -- =========================================================================
     -- Test 12: GetDisplaySpecID — spec override logic
     -- =========================================================================
     describe("GetDisplaySpecID", function()

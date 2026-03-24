@@ -375,18 +375,69 @@ local function createURLButton(parent, anchorLabel, getURL)
 end
 
 -------------------------------------------------------------------------------
--- GetTrackerAnchor: Returns ObjectiveTrackerFrame if it exists and is shown.
--- Returns nil otherwise. Used by pinned-state anchor logic.
+-- GetTrackerAnchor: Returns the last visible content module of the Blizzard
+-- objective tracker so StatPriority docks directly below the VISIBLE quest
+-- content rather than the full (screen-tall) ObjectiveTrackerFrame container.
+--
+-- Strategy (most-specific → least-specific):
+--   1. Walk ObjectiveTrackerFrame.MODULES from last to first; return the last
+--      one that is shown — its BOTTOM is the real end of visible content.
+--   2. Fall back to known named module globals in priority order (these are the
+--      sub-trackers that appear in the tracker column in TWW/Midnight).
+--   3. Last resort: ObjectiveTrackerFrame itself (old behaviour, keeps things
+--      working if Blizzard restructures the tracker again).
+--   4. Returns nil when no tracker is visible at all.
 -------------------------------------------------------------------------------
 local function GetTrackerAnchor()
-    if ObjectiveTrackerFrame
-        and ObjectiveTrackerFrame.IsShown
-        and ObjectiveTrackerFrame:IsShown() then
-        splog("Debug", "GetTrackerAnchor: ObjectiveTrackerFrame is visible — returning it")
-        return ObjectiveTrackerFrame
+    -- Guard: outer container must exist and be visible
+    if not (ObjectiveTrackerFrame
+            and ObjectiveTrackerFrame.IsShown
+            and ObjectiveTrackerFrame:IsShown()) then
+        splog("Debug", "GetTrackerAnchor: ObjectiveTrackerFrame not available/visible — returning nil")
+        return nil
     end
-    splog("Debug", "GetTrackerAnchor: ObjectiveTrackerFrame not available/visible — returning nil")
-    return nil
+
+    -- 1. Walk the MODULES list to find the last visible content module.
+    --    ObjectiveTrackerFrame.MODULES is an ordered array in display order
+    --    (top to bottom), so the last shown entry is the bottom of content.
+    if ObjectiveTrackerFrame.MODULES and #ObjectiveTrackerFrame.MODULES > 0 then
+        local lastVisible = nil
+        for _, mod in ipairs(ObjectiveTrackerFrame.MODULES) do
+            if mod and mod.IsShown and mod:IsShown() then
+                lastVisible = mod
+            end
+        end
+        if lastVisible then
+            splog("Debug", "GetTrackerAnchor: found last visible MODULES entry — using it as anchor")
+            return lastVisible
+        end
+        splog("Debug", "GetTrackerAnchor: MODULES present but no visible module — falling through")
+    end
+
+    -- 2. Named module globals, checked in bottom-of-column priority order.
+    --    In a typical TWW session the order from top to bottom is:
+    --    BonusObjective → Scenario → Achievement → Quest
+    --    We want the one that is visible and furthest down (last in order).
+    local namedModules = {
+        _G.QuestObjectiveTracker,
+        _G.AchievementObjectiveTracker,
+        _G.ScenarioObjectiveTracker,
+        _G.BonusObjectiveTracker,
+    }
+    local lastNamed = nil
+    for _, mod in ipairs(namedModules) do
+        if mod and mod.IsShown and mod:IsShown() then
+            lastNamed = mod
+        end
+    end
+    if lastNamed then
+        splog("Debug", "GetTrackerAnchor: using named module global as anchor")
+        return lastNamed
+    end
+
+    -- 3. Last resort: the outer container (original behaviour).
+    splog("Debug", "GetTrackerAnchor: no module found — falling back to ObjectiveTrackerFrame")
+    return ObjectiveTrackerFrame
 end
 
 -------------------------------------------------------------------------------
@@ -559,7 +610,7 @@ function ns:OnLoad()
     end)
 
     -- Pin button: to the LEFT of the collapse button. Lock icon indicates whether
-    -- the frame is anchored to ObjectiveTrackerFrame (locked/pinned) or freely
+    -- the frame is docked below visible tracker content (locked/pinned) or freely
     -- draggable (unlocked/unpinned). Default: pinned (locked icon).
     local pinBtn = CreateFrame("Button", nil, header)
     pinBtn:SetSize(16, 16)
@@ -571,14 +622,17 @@ function ns:OnLoad()
     ns.pinBtn = pinBtn
     splog("Debug", "Pin button created: 16x16, LEFT of collapseBtn")
 
-    -- ApplyPinnedState: anchor frame to ObjectiveTrackerFrame, disable dragging, lock icon.
+    -- ApplyPinnedState: anchor frame below visible tracker content, disable dragging, lock icon.
+    -- GetTrackerAnchor() returns the last visible tracker sub-module (not the full container)
+    -- so we dock to the bottom of actual visible quest/scenario content, not the frame boundary.
     local function ApplyPinnedState()
         ns.frame:SetMovable(false)
         local anchor = GetTrackerAnchor()
         ns.frame:ClearAllPoints()
         if anchor then
             ns.frame:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
-            splog("Info", "ApplyPinnedState: anchored to ObjectiveTrackerFrame BOTTOM with -4px gap")
+            local anchorName = (anchor.GetName and anchor:GetName()) or tostring(anchor)
+            splog("Info", "ApplyPinnedState: anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ") with -4px gap")
         else
             ns.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
             splog("Info", "ApplyPinnedState: no tracker visible — anchored to UIParent CENTER fallback")
@@ -614,7 +668,8 @@ function ns:OnLoad()
             local anchor = GetTrackerAnchor()
             if anchor then
                 ns.frame:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
-                splog("Info", "PinButton OnClick: anchored to ObjectiveTrackerFrame")
+                local anchorName = (anchor.GetName and anchor:GetName()) or tostring(anchor)
+                splog("Info", "PinButton OnClick: anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ")")
             else
                 ns.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
                 splog("Info", "PinButton OnClick: no tracker — anchored to UIParent CENTER")
@@ -874,7 +929,8 @@ function ns:OnLoad()
         ns.frame:ClearAllPoints()
         if anchor then
             ns.frame:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
-            splog("Info", "Pin restore: pinned — anchored to ObjectiveTrackerFrame")
+            local anchorName = (anchor.GetName and anchor:GetName()) or tostring(anchor)
+            splog("Info", "Pin restore: pinned — anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ")")
         else
             -- Default fallback: above ChatFrame1 or UIParent (same as old default)
             if ChatFrame1 then
@@ -926,6 +982,34 @@ function ns:OnLoad()
     end)
     ns.specEventFrame = specEventFrame
     splog("Debug", "Registered for PLAYER_SPECIALIZATION_CHANGED, PLAYER_LOGIN, PLAYER_LOOT_SPEC_UPDATED")
+
+    -- -----------------------------------------------------------------------
+    -- 9b. Re-anchor when tracker content changes.
+    --     QUEST_WATCH_LIST_CHANGED fires when quests are added/removed from the
+    --     tracker, which can change which module is last-visible.  We do a short
+    --     delayed re-anchor so the tracker has time to finish its own layout.
+    --     PLAYER_ENTERING_WORLD covers zone transitions (tracker resets).
+    -- -----------------------------------------------------------------------
+    local function ReAnchorIfPinned()
+        if StatPriorityDB and StatPriorityDB.pinned ~= false then
+            splog("Debug", "ReAnchorIfPinned: pinned=true — re-applying anchor")
+            ns.ApplyPinnedState()
+        end
+    end
+
+    local anchorEventFrame = CreateFrame("Frame")
+    anchorEventFrame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
+    anchorEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    anchorEventFrame:SetScript("OnEvent", function(self, event)
+        splog("Debug", "ReAnchor event: " .. event .. " — scheduling delayed re-anchor")
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0.15, ReAnchorIfPinned)
+        else
+            ReAnchorIfPinned()
+        end
+    end)
+    ns.anchorEventFrame = anchorEventFrame
+    splog("Debug", "Registered for QUEST_WATCH_LIST_CHANGED, PLAYER_ENTERING_WORLD (re-anchor)")
 
     -- Delayed width fix (matches DCS pattern)
     if C_Timer and C_Timer.After then
