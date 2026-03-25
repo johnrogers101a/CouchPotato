@@ -1244,82 +1244,21 @@ end
 -- Expose for unit testing
 ns.IsCombatCriteria = IsCombatCriteria
 
--- GetNemesisProgress: Returns "Enemy groups remaining: current/max" by summing
--- quantity and totalQuantity across ALL non-completed criteria with totalQuantity > 0.
--- IsCombatCriteria filter has been removed — it was too restrictive and caused
--- nemesisText to always be empty.  All qualifying criteria are logged so we can
--- see real data in the next log dump.
--- Weighted-progress criteria (isWeightedProgress == true) use quantityString for
--- display (e.g. "Devouring Host slain 0%") and contribute 0/1 to the numeric tally.
+-- GetNemesisProgress: Disabled — scenario criteria do NOT contain nemesis data.
+-- C_ScenarioInfo.GetCriteriaInfo only returns quest objectives (criteriaType=92),
+-- not "Enemy groups remaining" counts.  The Nemesis Strongbox tooltip is a
+-- Blizzard tooltip on an in-world object; the correct API has not been identified
+-- yet.  See CouchPotatoDiag Section 8 for the ongoing API hunt.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
-    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
-    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
-    if not stepInfo or not stepInfo.numCriteria then return "" end
-
-    dcslog("Debug", ("GetNemesisProgress: scanning %d criteria"):format(stepInfo.numCriteria))
-
-    local currentTotal, maxTotal = 0, 0
-    for i = 1, stepInfo.numCriteria do
-        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c then
-            -- Log every criterion so we can see what the game actually returns
-            dcslog("Debug", ("  criteria[%d]: desc=%q qty=%s total=%s type=%s weighted=%s completed=%s quantityString=%q"):format(
-                i,
-                tostring(c.description),
-                tostring(c.quantity),
-                tostring(c.totalQuantity),
-                tostring(c.criteriaType),
-                tostring(c.isWeightedProgress),
-                tostring(c.completed),
-                tostring(c.quantityString)))
-
-            if not c.completed and c.totalQuantity and c.totalQuantity > 0 then
-                if c.isWeightedProgress then
-                    -- Weighted criteria: treat as 0/1 so they appear in the tally
-                    -- but don't skew integer counts; detail text uses quantityString.
-                    currentTotal = currentTotal + 0
-                    maxTotal     = maxTotal + 1
-                    dcslog("Debug", ("    -> accepted (weighted) quantityString=%q"):format(tostring(c.quantityString)))
-                else
-                    currentTotal = currentTotal + (c.quantity or 0)
-                    maxTotal     = maxTotal + c.totalQuantity
-                    dcslog("Debug", ("    -> accepted qty=%d total=%d"):format(c.quantity or 0, c.totalQuantity))
-                end
-            else
-                dcslog("Debug", "    -> skipped (completed or totalQuantity=0)")
-            end
-        end
-    end
-
-    dcslog("Debug", ("GetNemesisProgress: currentTotal=%d maxTotal=%d"):format(currentTotal, maxTotal))
-    if maxTotal == 0 then return "" end
-    return string.format("Enemy groups remaining: %d / %d", currentTotal, maxTotal)
+    return ""
 end
 
 -------------------------------------------------------------------------------
--- GetNemesisDetailText: Returns newline-separated white body lines for each
--- non-completed criterion with totalQuantity > 0.
--- IsCombatCriteria filter removed — was too restrictive.
--- Weighted-progress criteria show quantityString (e.g. "0%") instead of qty/total.
+-- GetNemesisDetailText: Disabled — see GetNemesisProgress comment above.
 -------------------------------------------------------------------------------
 local function GetNemesisDetailText()
-    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
-    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
-    if not stepInfo or not stepInfo.numCriteria then return "" end
-
-    local lines = {}
-    for i = 1, stepInfo.numCriteria do
-        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and not c.completed and c.totalQuantity and c.totalQuantity > 0 then
-            if c.isWeightedProgress and c.quantityString and c.quantityString ~= "" then
-                table.insert(lines, string.format("%s: %s", tostring(c.description), c.quantityString))
-            else
-                table.insert(lines, string.format("%s: %d/%d", tostring(c.description), c.quantity or 0, c.totalQuantity))
-            end
-        end
-    end
-    return table.concat(lines, "\n")
+    return ""
 end
 ns.GetNemesisDetailText = GetNemesisDetailText
 
@@ -1435,43 +1374,16 @@ function ns:UpdateCompanionData(event)
         end
     end
 
-    -- Nemesis progress display — "Enemy groups remaining (n/n)" sub-header (gold) + white detail lines
-    -- Re-anchor nemesisLabel each update so it always sits below the last visible element
-    -- in the boon/companion chain rather than collapsing onto a hidden boonLabel.
+    -- Nemesis progress display: disabled — scenario criteria do not contain nemesis
+    -- data (see GetNemesisProgress comment).  Labels are kept in the frame but always
+    -- hidden until a reliable API source is identified via CouchPotatoDiag Section 8.
     if ns.nemesisLabel then
-        -- Re-anchor: below boonLabel when boons are shown, otherwise below nameLabel
-        ns.nemesisLabel:ClearAllPoints()
-        if boonsShown and ns.boonLabel then
-            ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -4)
-            dcslog("Debug", "UpdateCompanionData: nemesisLabel re-anchored below boonLabel")
-        else
-            ns.nemesisLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -4)
-            dcslog("Debug", "UpdateCompanionData: nemesisLabel re-anchored below nameLabel (no boons)")
-        end
-
-        local nemesisText = GetNemesisProgress()
-        dcslog("Debug", "UpdateCompanionData: nemesisText=" .. (nemesisText == "" and "(empty)" or nemesisText))
-        ns.nemesisLabel:SetText(nemesisText)
-        if nemesisText == "" then
-            ns.nemesisLabel:Hide()
-            if ns.nemesisDetailLabel then
-                ns.nemesisDetailLabel:SetText("")
-                ns.nemesisDetailLabel:Hide()
-            end
-        else
-            ns.nemesisLabel:Show()
-            dcslog("Info", "UpdateCompanionData: showing nemesisLabel with text=" .. nemesisText)
-            if ns.nemesisDetailLabel then
-                local detailText = GetNemesisDetailText()
-                dcslog("Debug", "UpdateCompanionData: nemesisDetailText=" .. (detailText == "" and "(empty)" or detailText))
-                ns.nemesisDetailLabel:SetText(detailText)
-                if detailText == "" then
-                    ns.nemesisDetailLabel:Hide()
-                else
-                    ns.nemesisDetailLabel:Show()
-                end
-            end
-        end
+        ns.nemesisLabel:SetText("")
+        ns.nemesisLabel:Hide()
+    end
+    if ns.nemesisDetailLabel then
+        ns.nemesisDetailLabel:SetText("")
+        ns.nemesisDetailLabel:Hide()
     end
 
     -- Dynamic frame height based on visible content
