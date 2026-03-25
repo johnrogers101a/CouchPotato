@@ -752,12 +752,11 @@ function ns:OnLoad()
     end
 
     -- 4a. Header frame — matches Blizzard ObjectiveTracker section header precisely.
-    -- Transparent/minimal background, gold text, single thin gold underline below the title,
-    -- collapse button far right. No full box border — text floats like native tracker headers.
+    -- Dark semi-transparent background bar, larger gold text, full-width gold underline.
     local header = CreateFrame("Button", nil, ns.frame)
     ns.header = header
     ns.headerFrame = header
-    header:SetHeight(28)
+    header:SetHeight(26)
     header:SetPoint("TOPLEFT",  ns.frame, "TOPLEFT",  0, 0)
     header:SetPoint("TOPRIGHT", ns.frame, "TOPRIGHT", 0, 0)
     header:EnableMouse(true)
@@ -775,12 +774,14 @@ function ns:OnLoad()
         end
     end)
 
-    -- Header is fully transparent — matches Blizzard ObjectiveTracker section headers
-    -- (no background tint, no border box).
+    -- Dark semi-transparent background bar — matches Blizzard ObjectiveTracker section headers.
+    local headerBg = header:CreateTexture(nil, "BACKGROUND")
+    headerBg:SetAllPoints(header)
+    headerBg:SetColorTexture(0, 0, 0, 0.5)
 
-    -- Title: GameFontNormal base, try ObjectiveTitleFont (exact Blizzard tracker header font),
-    -- gold colour matching "Delves"/"Quests" section headers.
-    local headerTitle = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    -- Title: GameFontNormalLarge (14pt) matching Blizzard tracker header size.
+    -- Try ObjectiveTitleFont first (exact Blizzard font); fall back to GameFontNormalLarge.
+    local headerTitle = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     -- Try the exact Blizzard tracker header font first; fall back silently.
     pcall(function() headerTitle:SetFontObject(ObjectiveTitleFont) end)
     headerTitle:SetPoint("LEFT", header, "LEFT", 8, 0)
@@ -789,21 +790,19 @@ function ns:OnLoad()
     -- Gold matching Blizzard section headers: R=1 G=0.82 B=0 (same as tracker "Delves" text)
     headerTitle:SetTextColor(1, 0.82, 0.0, 1)
 
-    -- Underline: thin 1px gold line from RIGHT of title text to RIGHT of header frame.
-    -- Collapse button: gold en-dash, far right, vertically centred
-    -- Sized at 26x26 (at least 10px larger than old 16px variants) for easy clicking.
-    -- Created BEFORE the gold line so the line can anchor its RIGHT to the button's LEFT.
+    -- Collapse button: gold en-dash, far right, vertically centred.
+    -- Sized at 26x26 for easy clicking.
+    -- Created BEFORE the gold line so the line can anchor to the header bottom edges.
     local collapseBtn = CreateFrame("Button", nil, header)
     collapseBtn:SetSize(26, 26)
     collapseBtn:SetPoint("RIGHT", header, "RIGHT", -4, 0)
 
-    -- Gold line: starts right of the title text, ends at the LEFT edge of the collapse
-    -- button. This makes the button sit at the right terminus of the line with no gap.
-    -- Blizzard's tracker headers have NO line to the left of the text.
+    -- Gold line: full width across the BOTTOM of the header bar — from left edge to right edge.
+    -- Matches Blizzard's ObjectiveTracker section headers exactly.
     local headerBottomLine = header:CreateTexture(nil, "ARTWORK")
     headerBottomLine:SetHeight(1)
-    headerBottomLine:SetPoint("LEFT",  headerTitle, "RIGHT", 4, 0)
-    headerBottomLine:SetPoint("RIGHT", collapseBtn,  "LEFT",  0, 0)
+    headerBottomLine:SetPoint("BOTTOMLEFT",  header, "BOTTOMLEFT",  0, 0)
+    headerBottomLine:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
     headerBottomLine:SetColorTexture(0.9, 0.75, 0.1, 0.8)
     -- Font set explicitly (not as 3rd arg) so text renders even before font objects load
     local collapseBtnText = collapseBtn:CreateFontString(nil, "OVERLAY")
