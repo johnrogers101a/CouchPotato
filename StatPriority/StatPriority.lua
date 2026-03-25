@@ -466,14 +466,14 @@ function ns:UpdateFrameHeight()
             if ns.methodLabel   and ns.methodLabel:IsShown()   then visibleLines = visibleLines + 1 end
             if visibleLines == 0 then visibleLines = 1 end
             contentH = visibleLines * 20 + 16
-        -- Unified circle display: fixed height for circles (~44px diameter + 6px padding each side)
+        -- Unified circle display: fixed height for circles (52px visual diameter + padding)
         elseif ns.statCircles then
-            contentH = 56
+            contentH = 62
         -- Legacy text label (fallback)
         elseif ns.statsLabel and ns.statsLabel:IsShown() then
             contentH = 36
         else
-            contentH = 56  -- default circle height
+            contentH = 62  -- default circle height
         end
         ns.contentFrame:SetHeight(contentH)
         ns.frame:SetHeight(headerH + contentH + 8)
@@ -869,13 +869,20 @@ function ns:OnLoad()
 
     -- -----------------------------------------------------------------------
     -- 5a-ii. Circle pool for unified stat display (7 circles + 6 connectors)
-    -- Circles are 44px diameter; connectors are FontStrings between them.
-    -- Layout: left-to-right, starting 4px from content frame left edge.
+    -- Circles are 44px container frames.  Two layered Indicator textures produce
+    -- a filled circle with a gold ring border:
+    --   • ring  (BACKGROUND sublayer 0): Indicator-Yellow at 52px — bleeds 4px
+    --     outside the container on each side, giving the gold border effect.
+    --   • fill  (BACKGROUND sublayer 1): Indicator-Gray at 42px — sits 1px inside
+    --     the ring, dark fill covering its center.
+    -- Both textures are true filled circles so they composite cleanly.
+    -- MiniMap-TrackingBorder is intentionally avoided: it has an arrow pointer
+    -- and non-standard UV mapping that renders incorrectly at badge sizes.
     -- -----------------------------------------------------------------------
     local circleSize    = 44
-    local connectorW    = 14
-    local circleSpacing = circleSize + connectorW  -- 58px per slot
-    local circleOffsetY = -6  -- top padding inside content frame
+    local connectorW    = 10
+    local circleSpacing = circleSize + connectorW  -- 54px per slot
+    local circleOffsetY = -7  -- top padding inside content frame
 
     local statCircles    = {}
     local statConnectors = {}
@@ -888,20 +895,24 @@ function ns:OnLoad()
         circ:SetSize(circleSize, circleSize)
         circ:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", x, circleOffsetY)
 
-        -- Filled circle background: use Indicator-Gray (a true circular mask texture)
-        -- tinted very dark so it reads as a dark badge.
-        local bg = circ:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints(circ)
+        -- Gold ring: oversized Indicator-Yellow behind the dark fill.
+        -- 52px into a 44px frame means it bleeds 4px on each side — the
+        -- exposed rim is the visible gold ring border.
+        local ring = circ:CreateTexture(nil, "BACKGROUND", nil, 0)
+        ring:SetSize(52, 52)
+        ring:SetPoint("CENTER", circ, "CENTER", 0, 0)
+        ring:SetTexture("Interface\\COMMON\\Indicator-Yellow")
+        ring:SetVertexColor(0.9, 0.72, 0.05, 0.9)
+
+        -- Dark fill: Indicator-Gray slightly smaller than the ring so the
+        -- gold rim is visible around the edge.
+        local bg = circ:CreateTexture(nil, "BACKGROUND", nil, 1)
+        bg:SetSize(42, 42)
+        bg:SetPoint("CENTER", circ, "CENTER", 0, 0)
         bg:SetTexture("Interface\\COMMON\\Indicator-Gray")
-        bg:SetVertexColor(0.08, 0.08, 0.08, 0.85)
+        bg:SetVertexColor(0.07, 0.06, 0.02, 0.92)
 
-        -- Gold ring border: MiniMap-TrackingBorder is a circular ring at this scale.
-        local ring = circ:CreateTexture(nil, "BORDER")
-        ring:SetAllPoints(circ)
-        ring:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-        ring:SetVertexColor(1, 0.82, 0, 0.9)
-
-        -- Stat abbreviation: upper half of circle, anchored to CENTER with +8px offset
+        -- Stat abbreviation: upper half of circle, anchored to CENTER +8px
         local nameFS = circ:CreateFontString(nil, "OVERLAY")
         nameFS:SetFont("Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
         nameFS:SetPoint("CENTER", circ, "CENTER", 0, 8)
@@ -910,10 +921,10 @@ function ns:OnLoad()
         nameFS:SetTextColor(1, 0.82, 0, 1)
         nameFS:SetText("")
 
-        -- Stat value: lower half of circle, anchored to CENTER with -8px offset
+        -- Stat value: lower half of circle, anchored to CENTER -7px
         local valueFS = circ:CreateFontString(nil, "OVERLAY")
         valueFS:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE")
-        valueFS:SetPoint("CENTER", circ, "CENTER", 0, -8)
+        valueFS:SetPoint("CENTER", circ, "CENTER", 0, -7)
         valueFS:SetJustifyH("CENTER")
         valueFS:SetJustifyV("MIDDLE")
         valueFS:SetTextColor(1, 1, 1, 1)
