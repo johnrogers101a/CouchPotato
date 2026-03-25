@@ -1073,6 +1073,39 @@ _G._ClearMockBoonSpell = function()
     _G.C_Spell._descriptions[1280098] = nil
 end
 
+-- =========================================================================
+-- Stat value APIs (used by StatPriority circle display)
+-- =========================================================================
+
+-- UnitStat: returns the base stat value for a player.
+-- stat index: 1=Str, 2=Agil, 3=Stam, 4=Int, 5=Spi
+_G._mockUnitStats = { [1] = 1200, [2] = 800, [3] = 50000, [4] = 12450, [5] = 0 }
+_G.UnitStat = function(unit, statIndex)
+    if unit == "player" then
+        return _G._mockUnitStats[statIndex] or 0
+    end
+    return 0
+end
+
+-- Secondary stat percentage APIs
+_G._mockHaste  = 28.5
+_G._mockCrit   = 15.2
+_G._mockMastery = 42.3
+_G._mockVers   = 8.7
+
+_G.GetHaste = function() return _G._mockHaste end
+_G.GetCritChance = function() return _G._mockCrit end
+_G.GetMasteryEffect = function() return _G._mockMastery end
+
+-- CR_VERSATILITY_DAMAGE_DONE constant (matches WoW's CR_ enum)
+_G.CR_VERSATILITY_DAMAGE_DONE = 40
+_G.GetCombatRatingBonus = function(ratingID)
+    if ratingID == _G.CR_VERSATILITY_DAMAGE_DONE then
+        return _G._mockVers
+    end
+    return 0
+end
+
 -- Test helper: set boon spell description using the "period after %" format observed
 -- in live Blizzard tooltips (e.g. "Strength: 2%." — last stat gets a trailing period).
 -- Accepts the same {statName, pct} pairs as _SetMockBoonSpell.

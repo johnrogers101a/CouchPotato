@@ -185,6 +185,52 @@ local function formatStatPriority(statsArray)
 end
 
 -------------------------------------------------------------------------------
+-- GetStatValue: Returns a formatted string for the given stat abbreviation.
+-- Primary stats (Str, Agil, Int) return comma-formatted integers.
+-- Secondary stats (Haste, Crit, Mast, Vers) return "%.1f%%" percentages.
+-- Returns "?" if the API is unavailable.
+-------------------------------------------------------------------------------
+local function commaFormat(n)
+    local s = tostring(math.floor(n + 0.5))
+    -- Insert commas every 3 digits from right
+    local result = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+    -- Remove leading comma if number is exactly 3 digits (rare edge case)
+    return result:gsub("^,", "")
+end
+
+local function GetStatValue(statAbbrev)
+    local ok, val
+    if statAbbrev == "Str" then
+        ok, val = pcall(function() return UnitStat("player", 1) end)
+        if ok and val then return commaFormat(val) end
+    elseif statAbbrev == "Agil" then
+        ok, val = pcall(function() return UnitStat("player", 2) end)
+        if ok and val then return commaFormat(val) end
+    elseif statAbbrev == "Int" then
+        ok, val = pcall(function() return UnitStat("player", 4) end)
+        if ok and val then return commaFormat(val) end
+    elseif statAbbrev == "Haste" then
+        ok, val = pcall(function() return GetHaste() end)
+        if ok and val then return string.format("%.1f%%", val) end
+    elseif statAbbrev == "Crit" then
+        ok, val = pcall(function() return GetCritChance() end)
+        if ok and val then return string.format("%.1f%%", val) end
+    elseif statAbbrev == "Mast" then
+        ok, val = pcall(function() return GetMasteryEffect() end)
+        if ok and val then return string.format("%.1f%%", val) end
+    elseif statAbbrev == "Vers" then
+        ok, val = pcall(function()
+            return GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_DONE)
+        end)
+        if ok and val then return string.format("%.1f%%", val) end
+    end
+    return "?"
+end
+
+-- Expose for tests
+_G.StatPriorityGetStatValue = GetStatValue
+
+-------------------------------------------------------------------------------
 -- UpdateStatPriority: Reads player spec, looks up data, updates UI.
 -------------------------------------------------------------------------------
 function ns:UpdateStatPriority()
@@ -303,13 +349,10 @@ function ns:UpdateStatPriority()
             end
         end
     else
-        splog("Info", "Display mode: unified (single source or no data)")
-        -- Unified display (Phase 1 behavior)
-        if ns.statsLabel then
-            ns.statsLabel:SetText(statsText)
-            ns.statsLabel:Show()
-            splog("Debug", "Stats text set to: " .. tostring(statsText):sub(1, 80))
-        end
+        splog("Info", "Display mode: unified (single source or no data) — circle display")
+
+        -- Hide legacy text label; circles are used instead
+        if ns.statsLabel then ns.statsLabel:Hide() end
 
         if ns.wowheadLabel  then ns.wowheadLabel:Hide()  end
         if ns.icyveinsLabel then ns.icyveinsLabel:Hide() end
@@ -318,6 +361,87 @@ function ns:UpdateStatPriority()
         if ns.wowheadUrlBtn  then ns.wowheadUrlBtn:Hide()  end
         if ns.icyveinsUrlBtn then ns.icyveinsUrlBtn:Hide() end
         if ns.methodUrlBtn   then ns.methodUrlBtn:Hide()   end
+
+        -- Build flattened list of { statName, connector } pairs for circle layout.
+        -- connector is ">" (different priority) or "=" (equal priority, sub-array).
+        local circleStats = {}   -- list of stat name strings
+        local connectors  = {}   -- connectors[i] = symbol between circle i and i+1
+        if data and data.stats then
+            for _, entry in ipairs(data.stats) do
+                if type(entry) == "table" then
+                    -- Sub-array: equal-priority group
+                    for j, subStat in ipairs(entry) do
+                        circleStats[#circleStats + 1] = subStat
+                        if j < #entry then
+                            connectors[#circleStats] = "="
+                        end
+                    end
+                else
+                    circleStats[#circleStats + 1] = entry
+                end
+                -- ">" connector between top-level entries (filled after the group)
+                if #circleStats > 0 and connectors[#circleStats] == nil and
+                   #circleStats < #circleStats + 1 then
+                    -- will be set for previous block's last stat below
+                end
+            end
+            -- Fill ">" connectors between top-level priority groups
+            -- Re-derive: iterate again to mark group boundaries with ">"
+            do
+                local ci = 0
+                circleStats  = {}
+                connectors   = {}
+                local numEntries = #data.stats
+                for ei, entry in ipairs(data.stats) do
+                    if type(entry) == "table" then
+                        for j, subStat in ipairs(entry) do
+                            ci = ci + 1
+                            circleStats[ci] = subStat
+                            if j < #entry then
+                                connectors[ci] = "="   -- "=" within the group
+                            elseif ei < numEntries then
+                                connectors[ci] = ">"   -- ">" after last in group
+                            end
+                        end
+                    else
+                        ci = ci + 1
+                        circleStats[ci] = entry
+                        if ei < numEntries then
+                            connectors[ci] = ">"
+                        end
+                    end
+                end
+            end
+        end
+
+        local numCircles = #circleStats
+        splog("Debug", "Circle display: " .. tostring(numCircles) .. " circles")
+
+        -- Show/hide circles and connectors
+        if ns.statCircles then
+            for i = 1, #ns.statCircles do
+                local circ = ns.statCircles[i]
+                if i <= numCircles then
+                    local sName = circleStats[i]
+                    circ.nameFS:SetText(sName)
+                    circ.valueFS:SetText(GetStatValue(sName))
+                    circ.frame:Show()
+                else
+                    circ.frame:Hide()
+                end
+            end
+        end
+        if ns.statConnectors then
+            for i = 1, #ns.statConnectors do
+                local conn = ns.statConnectors[i]
+                if connectors[i] then
+                    conn:SetText(connectors[i])
+                    conn:Show()
+                else
+                    conn:Hide()
+                end
+            end
+        end
     end
 
     -- Resize content frame to fit label
@@ -331,17 +455,26 @@ end
 function ns:UpdateFrameHeight()
     local headerH = ns.headerFrame and ns.headerFrame:GetHeight() or 28
     if ns.contentFrame and ns.contentFrame:IsShown() then
-        -- Count visible source lines
-        local visibleLines = 0
-        if ns.statsLabel and ns.statsLabel:IsShown() then
-            visibleLines = 1
-        else
+        local contentH
+        -- Multi-source mode: count visible source lines
+        if ns.wowheadLabel and ns.wowheadLabel:IsShown() or
+           ns.icyveinsLabel and ns.icyveinsLabel:IsShown() or
+           ns.methodLabel   and ns.methodLabel:IsShown() then
+            local visibleLines = 0
             if ns.wowheadLabel  and ns.wowheadLabel:IsShown()  then visibleLines = visibleLines + 1 end
             if ns.icyveinsLabel and ns.icyveinsLabel:IsShown() then visibleLines = visibleLines + 1 end
             if ns.methodLabel   and ns.methodLabel:IsShown()   then visibleLines = visibleLines + 1 end
+            if visibleLines == 0 then visibleLines = 1 end
+            contentH = visibleLines * 20 + 16
+        -- Unified circle display: fixed height for circles (~44px diameter + 6px padding each side)
+        elseif ns.statCircles then
+            contentH = 56
+        -- Legacy text label (fallback)
+        elseif ns.statsLabel and ns.statsLabel:IsShown() then
+            contentH = 36
+        else
+            contentH = 56  -- default circle height
         end
-        if visibleLines == 0 then visibleLines = 1 end
-        local contentH = visibleLines * 20 + 16
         ns.contentFrame:SetHeight(contentH)
         ns.frame:SetHeight(headerH + contentH + 8)
     else
@@ -732,6 +865,81 @@ function ns:OnLoad()
     ns.statsLabel = statsLabel
 
     -- -----------------------------------------------------------------------
+    -- 5a-ii. Circle pool for unified stat display (7 circles + 6 connectors)
+    -- Circles are 44px diameter; connectors are FontStrings between them.
+    -- Layout: left-to-right, starting 4px from content frame left edge.
+    -- -----------------------------------------------------------------------
+    local circleSize    = 44
+    local connectorW    = 14
+    local circleSpacing = circleSize + connectorW  -- 58px per slot
+    local circleOffsetY = -6  -- top padding inside content frame
+
+    local statCircles    = {}
+    local statConnectors = {}
+
+    for i = 1, 7 do
+        local x = 4 + (i - 1) * circleSpacing
+
+        -- Container frame for this circle badge
+        local circ = CreateFrame("Frame", nil, contentFrame)
+        circ:SetSize(circleSize, circleSize)
+        circ:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", x, circleOffsetY)
+
+        -- Dark background (filled circle look via color texture)
+        local bg = circ:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(circ)
+        bg:SetColorTexture(0, 0, 0, 0.6)
+
+        -- Gold border ring (thin overlay)
+        local ring = circ:CreateTexture(nil, "BORDER")
+        ring:SetAllPoints(circ)
+        pcall(function()
+            ring:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+            ring:SetVertexColor(1, 0.82, 0, 0.9)
+        end)
+
+        -- Stat abbreviation (top line, centered)
+        local nameFS = circ:CreateFontString(nil, "OVERLAY")
+        nameFS:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+        nameFS:SetPoint("TOP", circ, "TOP", 0, -5)
+        nameFS:SetJustifyH("CENTER")
+        nameFS:SetJustifyV("TOP")
+        nameFS:SetTextColor(1, 0.82, 0, 1)
+        nameFS:SetText("")
+
+        -- Stat value (bottom line, centered)
+        local valueFS = circ:CreateFontString(nil, "OVERLAY")
+        valueFS:SetFont("Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
+        valueFS:SetPoint("BOTTOM", circ, "BOTTOM", 0, 5)
+        valueFS:SetJustifyH("CENTER")
+        valueFS:SetJustifyV("BOTTOM")
+        valueFS:SetTextColor(1, 1, 1, 1)
+        valueFS:SetText("")
+
+        circ:Hide()  -- hidden until UpdateStatPriority populates it
+
+        statCircles[i] = { frame = circ, nameFS = nameFS, valueFS = valueFS }
+    end
+    ns.statCircles = statCircles
+
+    -- Connector FontStrings: one between each pair of circles
+    for i = 1, 6 do
+        local x = 4 + (i - 1) * circleSpacing + circleSize + 1
+        local conn = contentFrame:CreateFontString(nil, "OVERLAY")
+        conn:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+        conn:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", x, circleOffsetY - (circleSize / 2 - 7))
+        conn:SetWidth(connectorW)
+        conn:SetJustifyH("CENTER")
+        conn:SetJustifyV("MIDDLE")
+        conn:SetTextColor(1, 0.82, 0, 1)
+        conn:SetText(">")
+        conn:Hide()
+        statConnectors[i] = conn
+    end
+    ns.statConnectors = statConnectors
+    splog("Debug", "Circle pool created: 7 circles + 6 connectors")
+
+    -- -----------------------------------------------------------------------
     -- 5b. Per-source labels (shown when _differs is true)
     -- -----------------------------------------------------------------------
     local labelWidth = contentWidth - 24  -- leave room for URL button
@@ -980,6 +1188,34 @@ function ns:OnLoad()
     end)
     ns.specEventFrame = specEventFrame
     splog("Debug", "Registered for PLAYER_SPECIALIZATION_CHANGED, PLAYER_LOGIN, PLAYER_LOOT_SPEC_UPDATED")
+
+    -- -----------------------------------------------------------------------
+    -- 9c. Register for stat value change events to refresh circle values.
+    --     UNIT_STATS fires when primary stats change (gear swap, buffs).
+    --     COMBAT_RATING_UPDATE fires when secondary stats change.
+    -- -----------------------------------------------------------------------
+    local statEventFrame = CreateFrame("Frame")
+    statEventFrame:RegisterEvent("UNIT_STATS")
+    statEventFrame:RegisterEvent("COMBAT_RATING_UPDATE")
+    statEventFrame:SetScript("OnEvent", function(self, event, unit)
+        if ns._cpDisabled then return end
+        -- UNIT_STATS passes the unit; only refresh for the player
+        if event == "UNIT_STATS" and unit ~= "player" then return end
+        splog("Debug", "Stat event: " .. event .. " — refreshing circle values")
+        -- Only refresh values in the circles; no need to rebuild the full layout
+        if ns.statCircles then
+            for _, circ in ipairs(ns.statCircles) do
+                if circ.frame:IsShown() then
+                    local sName = circ.nameFS:GetText()
+                    if sName and sName ~= "" then
+                        circ.valueFS:SetText(GetStatValue(sName))
+                    end
+                end
+            end
+        end
+    end)
+    ns.statEventFrame = statEventFrame
+    splog("Debug", "Registered for UNIT_STATS, COMBAT_RATING_UPDATE (circle value refresh)")
 
     -- -----------------------------------------------------------------------
     -- 9b. Re-anchor when tracker content changes.
