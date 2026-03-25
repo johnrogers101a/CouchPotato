@@ -807,7 +807,7 @@ function ns:OnLoad()
     headerBottomLine:SetColorTexture(0.9, 0.75, 0.1, 0.8)
     -- Font set explicitly (not as 3rd arg) so text renders even before font objects load
     local collapseBtnText = collapseBtn:CreateFontString(nil, "OVERLAY")
-    collapseBtnText:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+    collapseBtnText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
     collapseBtnText:SetAllPoints(collapseBtn)
     collapseBtnText:SetJustifyH("CENTER")
     collapseBtnText:SetJustifyV("MIDDLE")
