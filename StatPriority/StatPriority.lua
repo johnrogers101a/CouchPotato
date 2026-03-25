@@ -869,20 +869,20 @@ function ns:OnLoad()
 
     -- -----------------------------------------------------------------------
     -- 5a-ii. Circle pool for unified stat display (7 circles + 6 connectors)
-    -- Circles are 49px container frames.  Two layered Indicator textures produce
+    -- Circles are 46px container frames.  Two layered Indicator textures produce
     -- a filled circle with a gold ring border:
-    --   • ring  (BACKGROUND sublayer 0): Indicator-Yellow at 57px — bleeds 4px
+    --   • ring  (BACKGROUND sublayer 0): Indicator-Yellow at 54px — bleeds 4px
     --     outside the container on each side, giving the gold border effect.
-    --   • fill  (BACKGROUND sublayer 1): Indicator-Gray at 45px — sits 2px inside
+    --   • fill  (BACKGROUND sublayer 1): Indicator-Gray at 42px — sits 2px inside
     --     the ring edge, creating visible gold rim and inner dark padding for text.
     -- Both textures are true filled circles so they composite cleanly.
     -- MiniMap-TrackingBorder is intentionally avoided: it has an arrow pointer
     -- and non-standard UV mapping that renders incorrectly at badge sizes.
-    -- Layout: 5×49 + 4×4 = 261px fits in ~260px usable content width.
+    -- Layout: 5×46 + 4×8 = 262px fits in ~260px usable content width.
     -- -----------------------------------------------------------------------
-    local circleSize    = 49
-    local connectorW    = 4
-    local circleSpacing = circleSize + connectorW  -- 53px per slot
+    local circleSize    = 46
+    local connectorW    = 8
+    local circleSpacing = circleSize + connectorW  -- 54px per slot
     local circleOffsetY = -7  -- top padding inside content frame
 
     local statCircles    = {}
@@ -900,7 +900,7 @@ function ns:OnLoad()
         -- 57px into a 49px frame means it bleeds 4px on each side — the
         -- exposed rim is the visible gold ring border.
         local ring = circ:CreateTexture(nil, "BACKGROUND", nil, 0)
-        ring:SetSize(57, 57)
+        ring:SetSize(54, 54)
         ring:SetPoint("CENTER", circ, "CENTER", 0, 0)
         ring:SetTexture("Interface\\COMMON\\Indicator-Yellow")
         ring:SetVertexColor(0.9, 0.72, 0.05, 0.9)
@@ -908,7 +908,7 @@ function ns:OnLoad()
         -- Dark fill: Indicator-Gray smaller than the ring so the gold rim
         -- is visible, and smaller than the frame to add inner text padding.
         local bg = circ:CreateTexture(nil, "BACKGROUND", nil, 1)
-        bg:SetSize(45, 45)
+        bg:SetSize(42, 42)
         bg:SetPoint("CENTER", circ, "CENTER", 0, 0)
         bg:SetTexture("Interface\\COMMON\\Indicator-Gray")
         bg:SetVertexColor(0.07, 0.06, 0.02, 0.92)
@@ -941,7 +941,7 @@ function ns:OnLoad()
     for i = 1, 6 do
         local x = 4 + (i - 1) * circleSpacing + circleSize + 1
         local conn = contentFrame:CreateFontString(nil, "OVERLAY")
-        conn:SetFont("Fonts\\FRIZQT__.TTF", 7, "OUTLINE")
+        conn:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
         conn:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", x, circleOffsetY - (circleSize / 2 - 7))
         conn:SetWidth(connectorW)
         conn:SetJustifyH("CENTER")
