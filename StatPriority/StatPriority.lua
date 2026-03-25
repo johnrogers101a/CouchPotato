@@ -507,8 +507,9 @@ function ns:OnLoad()
     end
 
     ns.frame = frameResult
-    ns.frame:SetFrameStrata("DIALOG")
-    ns.frame:SetFrameLevel(100)
+    -- Use LOW strata so bags/panels (MEDIUM) and dialogs always render in front.
+    ns.frame:SetFrameStrata("LOW")
+    ns.frame:SetFrameLevel(2)
     ns.frame:SetMovable(true)
     splog("Info", "Frame created successfully: StatPriorityFrame")
 
