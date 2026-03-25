@@ -16,6 +16,13 @@ _G.IsInInstance = function()
     return nil, _G._isInInstanceType
 end
 
+-- C_PartyInfo stub (used by IsInDelve tertiary fallback)
+_G.C_PartyInfo = {
+    IsDelveInProgress = function() return C_PartyInfo._isDelveInProgress or false end,
+    _isDelveInProgress = false,
+    _SetIsDelveInProgress = function(val) C_PartyInfo._isDelveInProgress = val end,
+}
+
 -- C_DelvesUI stub (used by DelveCompanionStats to fetch active companion)
 _G.C_DelvesUI = {
     GetActiveCompanion = function() return nil end,
