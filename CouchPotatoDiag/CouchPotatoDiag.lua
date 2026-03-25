@@ -261,20 +261,28 @@ local function buildDiagText()
     end
 
     -- 8c: Player buff scan for spell 472952 (Nemesis Strongbox aura)
+    -- NOTE: aura.spellId is a "secret" tainted value in WoW; direct == comparison raises a
+    -- taint error. Use pcall to guard the comparison, and tostring() to safely read the value.
     lines[#lines + 1] = "--- 8c: Player buff scan for spellID 472952 ---"
     local foundBuff = false
     if C_UnitAuras then
         for i = 1, 40 do
             local aura = safe(C_UnitAuras.GetBuffDataByIndex, "player", i)
             if not aura then break end
-            if aura.spellId == 472952 then
-                lines[#lines + 1] = ("  FOUND buff index=%d name=%q spellId=%d"):format(
-                    i, tostring(aura.name), tostring(aura.spellId))
+            -- Safely read the tainted spellId as a string for display.
+            local spellIdStr = tostring(aura.spellId)
+            -- Use pcall to guard the == comparison against taint errors.
+            local ok, match = pcall(function() return aura.spellId == 472952 end)
+            -- Dump every buff so the log is complete even if comparison is blocked.
+            lines[#lines + 1] = ("  buff index=%d name=%q spellId=%s%s"):format(
+                i, tostring(aura.name), spellIdStr,
+                (ok and match) and " <<< TARGET" or "")
+            if ok and match then
                 foundBuff = true
             end
         end
         if not foundBuff then
-            lines[#lines + 1] = "  Not found in player buffs (checked up to 40)"
+            lines[#lines + 1] = "  spellID 472952 not found in player buffs (checked up to 40)"
         end
     else
         lines[#lines + 1] = "  C_UnitAuras not available"
