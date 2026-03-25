@@ -1374,13 +1374,13 @@ describe("DelveCompanionStats", function()
             assert.is_true(DelveCompanionStatsDB.pinned)
         end)
 
-        it("unpinned drag stop saves position with relPoint key", function()
+        it("unpinned drag stop saves position with relativePoint key", function()
             ns.pinBtn._scripts["OnClick"]()   -- unpin → does NOT register drag scripts now (drag is on header)
             -- Simulate a drag stop on the header (which now handles drag)
             ns.header._scripts["OnDragStop"]()
             assert.is_not_nil(DelveCompanionStatsDB.position)
-            -- relPoint key (not relativePoint) is what the new handler saves
-            assert.is_not_nil(DelveCompanionStatsDB.position.relPoint)
+            -- relativePoint is the canonical key saved by OnDragStop
+            assert.is_not_nil(DelveCompanionStatsDB.position.relativePoint)
         end)
 
     end)
