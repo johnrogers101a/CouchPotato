@@ -640,9 +640,12 @@ function ns:OnLoad()
     end
 
     ns.frame = frameResult
-    -- Use LOW strata so bags/panels (MEDIUM) and dialogs always render in front.
-    ns.frame:SetFrameStrata("LOW")
-    ns.frame:SetFrameLevel(2)
+    -- Use MEDIUM strata at a low frame level so the frame sits at the same rendering
+    -- layer as the objective tracker content (also MEDIUM) but below Blizzard's own
+    -- tracker text which uses higher frame levels within MEDIUM.  LOW strata caused
+    -- the frames to render behind quest text while still overlapping it positionally.
+    ns.frame:SetFrameStrata("MEDIUM")
+    ns.frame:SetFrameLevel(1)
     ns.frame:SetMovable(true)
     splog("Info", "Frame created successfully: StatPriorityFrame")
 
@@ -885,18 +888,18 @@ function ns:OnLoad()
         circ:SetSize(circleSize, circleSize)
         circ:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", x, circleOffsetY)
 
-        -- Dark background (filled circle look via color texture)
+        -- Filled circle background: use Indicator-Gray (a true circular mask texture)
+        -- tinted very dark so it reads as a dark badge.
         local bg = circ:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints(circ)
-        bg:SetColorTexture(0, 0, 0, 0.6)
+        bg:SetTexture("Interface\\COMMON\\Indicator-Gray")
+        bg:SetVertexColor(0.08, 0.08, 0.08, 0.85)
 
-        -- Gold border ring (thin overlay)
+        -- Gold ring border: MiniMap-TrackingBorder is a circular ring at this scale.
         local ring = circ:CreateTexture(nil, "BORDER")
         ring:SetAllPoints(circ)
-        pcall(function()
-            ring:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
-            ring:SetVertexColor(1, 0.82, 0, 0.9)
-        end)
+        ring:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+        ring:SetVertexColor(1, 0.82, 0, 0.9)
 
         -- Stat abbreviation (top line, centered)
         local nameFS = circ:CreateFontString(nil, "OVERLAY")
