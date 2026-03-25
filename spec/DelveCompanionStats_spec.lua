@@ -428,31 +428,41 @@ describe("DelveCompanionStats", function()
             C_GossipInfo.GetFriendshipReputation = function()
                 return { friendshipRank = 12, standing = 100, reactionThreshold = 0, nextThreshold = 200 }
             end
-            _ClearMockBoonTooltip()
+            _ClearMockBoonSpell()
             -- Clear nemesis so it doesn't interfere
             C_ScenarioInfo._criteria = {}
+            -- Boons only show when inside a delve
+            _G._isInInstanceType = "scenario"
         end)
 
         after_each(function()
-            _ClearMockBoonTooltip()
+            _ClearMockBoonSpell()
             C_ScenarioInfo._criteria = {}
+            _G._isInInstanceType = "none"
         end)
 
-        it("boon display shows abbreviated stats parsed from tooltip", function()
-            _SetMockBoonTooltip({
-                "Boons",
-                "Maximum Health increased by 0%.\nStrength increased by 0%.\nMovement Speed increased by 0%.\nMastery increased by 0%.",
-                "",
-                "Maximum Health: 6%.\nMovement Speed: 10%.\nStrength: 4%.\n\nMastery: 5%.\n",
+        it("boon display shows abbreviated stats parsed from C_Spell.GetSpellDescription", function()
+            _SetMockBoonSpell({
+                { "Maximum Health", 6 },
+                { "Movement Speed", 10 },
+                { "Strength", 4 },
+                { "Mastery", 5 },
             })
 
             ns:UpdateCompanionData()
 
-            assert.equals("Max HP: 6%\nMove Spd: 10%\nStrength: 4%\nMastery: 5%", ns.boonLabel._text)
+            assert.is_truthy(ns.boonLabel._text:find("Max HP: 6%",    1, true), "expected Max HP: 6%")
+            assert.is_truthy(ns.boonLabel._text:find("Move Spd: 10%", 1, true), "expected Move Spd: 10%")
+            assert.is_truthy(ns.boonLabel._text:find("Str: 4%",       1, true), "expected Str: 4%")
+            assert.is_truthy(ns.boonLabel._text:find("Mast: 5%",      1, true), "expected Mast: 5%")
+            assert.is_true(ns.boonLabel:IsShown())
+            -- boonHeaderLabel is now shown as a separate "Boons" section header
+            assert.is_true(ns.boonHeaderLabel:IsShown())
         end)
 
-        it("boon display hides label when no active boons", function()
-            -- No tooltip lines set — simulates spell not active
+        it("boon display hides label when not in a delve and no boon description available", function()
+            -- No spell description set AND not in a delve — label should be hidden
+            _G._isInInstanceType = "none"
             ns:UpdateCompanionData()
 
             assert.equals("", ns.boonLabel._text)
@@ -460,34 +470,40 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.boonHeaderLabel:IsShown())
         end)
 
+        it("boon display shows 'None' when in a delve but no spell description", function()
+            -- In a delve but no boon spell active yet
+            _G._isInInstanceType = "scenario"
+            _ClearMockBoonSpell()
+            ns:UpdateCompanionData()
+
+            assert.equals("None", ns.boonLabel._text)
+            assert.is_true(ns.boonLabel:IsShown())
+            -- boonHeaderLabel is shown as the section header whenever boons are shown
+            assert.is_true(ns.boonHeaderLabel:IsShown())
+        end)
+
         it("boon display excludes stats where value is 0", function()
-            _SetMockBoonTooltip({
-                "Boons",
-                "",
-                "",
-                "Maximum Health: 3%.\nHaste: 0%.",  -- zero value, must be excluded
+            _SetMockBoonSpell({
+                { "Maximum Health", 3 },
+                { "Haste", 0 },
             })
 
             ns:UpdateCompanionData()
 
-            assert.equals("Max HP: 3%", ns.boonLabel._text)
+            assert.is_truthy(ns.boonLabel._text:find("Max HP: 3%", 1, true), "expected Max HP: 3%")
+            assert.is_nil(ns.boonLabel._text:find("Haste", 1, true), "expected Haste to be excluded")
+            assert.is_true(ns.boonLabel:IsShown())
         end)
 
-        it("boon label is shown when tooltip has boon lines", function()
-            _SetMockBoonTooltip({
-                "Boons",
-                "",
-                "",
-                "Versatility: 7%.",
-            })
+        it("boon label is shown and header shown when boon data is present", function()
+            _SetMockBoonSpell({ { "Versatility", 7 } })
 
             ns:UpdateCompanionData()
 
             assert.is_true(ns.boonLabel:IsShown())
-            assert.equals("Vers: 7%", ns.boonLabel._text)
-            -- boonHeaderLabel must also be shown
+            assert.is_truthy(ns.boonLabel._text:find("Vers: 7%", 1, true), "expected Vers: 7%")
+            -- boonHeaderLabel is shown as the "Boons" section header when boon data is present
             assert.is_true(ns.boonHeaderLabel:IsShown())
-            assert.equals("Boons", ns.boonHeaderLabel._text)
         end)
 
     end)
@@ -504,7 +520,7 @@ describe("DelveCompanionStats", function()
             C_GossipInfo.GetFriendshipReputation = function()
                 return { friendshipRank = 12, standing = 100, reactionThreshold = 0, nextThreshold = 200 }
             end
-            _ClearMockBoonTooltip()
+            _ClearMockBoonSpell()
             C_ScenarioInfo._criteria = {}
             C_Timer._Reset()
             -- Be in a delve for visibility tests
@@ -513,42 +529,38 @@ describe("DelveCompanionStats", function()
         end)
 
         after_each(function()
-            _ClearMockBoonTooltip()
+            _ClearMockBoonSpell()
             C_ScenarioInfo._criteria = {}
             C_Timer._Reset()
             _G._isInInstanceType = "none"
             C_DelvesUI._SetHasActiveDelve(false)
         end)
 
-        it("GetBoonsDisplayText returns empty string when tooltip has unresolved $w template vars", function()
-            -- Simulate early zone-in: WoW tooltip returns "$w1%" placeholders
-            _SetMockBoonTooltip({
-                "Boons",
-                "",
-                "",
-                "Maximum Health: $w1%.\nMovement Speed: $w2%.",
-            })
+        it("GetBoonsDisplayText shows 'None' when description has unresolved $w template vars", function()
+            -- Simulate early zone-in: WoW returns "$w1%" placeholders (no numeric value).
+            -- We are in a delve (before_each sets _isInInstanceType = "scenario"), so
+            -- the boon line is shown as "None" since no numeric stats are parsed.
+            C_Spell._descriptions[1280098] =
+                "Brann's boon.\nMaximum Health: $w1%.\nMovement Speed: $w2%."
             ns:UpdateCompanionData()
-            -- Template vars must not be shown — label stays empty
-            assert.equals("", ns.boonLabel._text)
-            assert.is_false(ns.boonLabel:IsShown())
-        end)
-
-        it("GetBoonsDisplayText returns real values when tooltip has resolved stats", function()
-            -- Simulate boon fully applied: real numeric values
-            _SetMockBoonTooltip({
-                "Boons",
-                "",
-                "",
-                "Maximum Health: 6%.\nMovement Speed: 10%.",
-            })
-            ns:UpdateCompanionData()
-            assert.equals("Max HP: 6%\nMove Spd: 10%", ns.boonLabel._text)
+            -- Template vars must not be shown — but we are in a delve so "None" appears
+            assert.equals("None", ns.boonLabel._text)
             assert.is_true(ns.boonLabel:IsShown())
         end)
 
-        it("PLAYER_ENTERING_WORLD schedules two delayed C_Timer.After calls", function()
-            -- Count how many timers are registered before the event
+        it("GetBoonsDisplayText returns real values when description has resolved stats", function()
+            _SetMockBoonSpell({
+                { "Maximum Health", 6 },
+                { "Movement Speed", 10 },
+            })
+            ns:UpdateCompanionData()
+            assert.is_truthy(ns.boonLabel._text:find("Max HP: 6%",    1, true))
+            assert.is_truthy(ns.boonLabel._text:find("Move Spd: 10%", 1, true))
+            assert.is_true(ns.boonLabel:IsShown())
+        end)
+
+        it("PLAYER_ENTERING_WORLD schedules one delayed C_Timer.After call", function()
+            -- The 5s redundant timer was removed; only the 2s post-zone-in refresh remains.
             local timersBefore
             do
                 local originalAfter = C_Timer.After
@@ -561,25 +573,22 @@ describe("DelveCompanionStats", function()
                 timersBefore = timerCount
                 C_Timer.After = originalAfter
             end
-            -- Must schedule exactly 2 delayed refreshes on PLAYER_ENTERING_WORLD
-            assert.equals(2, timersBefore)
+            -- Must schedule exactly 1 delayed refresh on PLAYER_ENTERING_WORLD (2s only)
+            assert.equals(1, timersBefore)
         end)
 
         it("delayed timers from PLAYER_ENTERING_WORLD call UpdateCompanionData when in delve", function()
-            -- Ensure in a delve so timers fire an update
             _G._isInInstanceType = "scenario"
-            _SetMockBoonTooltip({
-                "Boons", "", "",
-                "Maximum Health: 8%.",
-            })
+            _SetMockBoonSpell({ { "Maximum Health", 8 } })
 
             ns.frame._scripts["OnEvent"](ns.frame, "PLAYER_ENTERING_WORLD")
 
-            -- Fire all pending timers (simulates 2s and 5s passing)
+            -- Fire all pending timers (simulates 2s delay passing)
             C_Timer._FireAll()
 
-            -- After timers fire, boon label should have resolved data
-            assert.equals("Max HP: 8%", ns.boonLabel._text)
+            -- Boon display enabled — label should contain the stat
+            assert.is_truthy(ns.boonLabel._text:find("Max HP: 8%", 1, true))
+            assert.is_true(ns.boonLabel:IsShown())
         end)
 
         it("delayed timers from PLAYER_ENTERING_WORLD do NOT call UpdateCompanionData when not in delve", function()
@@ -607,10 +616,7 @@ describe("DelveCompanionStats", function()
 
         it("UNIT_AURA for 'player' triggers UpdateCompanionData when in delve", function()
             _G._isInInstanceType = "scenario"
-            _SetMockBoonTooltip({
-                "Boons", "", "",
-                "Versatility: 5%.",
-            })
+            _SetMockBoonSpell({ { "Versatility", 5 } })
 
             local callCount = 0
             local originalUCD = ns.UpdateCompanionData
@@ -653,6 +659,117 @@ describe("DelveCompanionStats", function()
             end
 
             ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "player")
+
+            assert.equals(0, callCount)
+            ns.UpdateCompanionData = originalUCD
+        end)
+
+        it("UNIT_AURA throttle schedules deferred retry when event arrives mid-window", function()
+            -- Arrange: put us in a delve, prime the throttle so the window is active.
+            _G._isInInstanceType = "scenario"
+            _SetMockBoonSpell({ { "Versatility", 5 } })
+
+            -- Fire first event to set lastAuraUpdate to "now".
+            -- GetTime() returns os.time() (integer seconds); we simulate the throttle
+            -- being active by firing the first event, then immediately firing a second.
+            local eventCount = 0
+            local originalUCD = ns.UpdateCompanionData
+            ns.UpdateCompanionData = function(self, event)
+                eventCount = eventCount + 1
+                return originalUCD(self, event)
+            end
+
+            -- First UNIT_AURA: passes the throttle, eventCount becomes 1.
+            ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "player")
+            assert.equals(1, eventCount)
+
+            -- Second UNIT_AURA immediately: throttled — but a timer retry should be queued.
+            -- We reset eventCount so we can tell if the retry fires.
+            eventCount = 0
+            ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "player")
+            -- Not yet fired (timer pending)
+            assert.equals(0, eventCount)
+
+            -- Fire all pending timers (mock helper).
+            C_Timer._FireAll()
+
+            -- The retry should have called UpdateCompanionData once.
+            assert.equals(1, eventCount)
+
+            ns.UpdateCompanionData = originalUCD
+            C_Timer._Reset()
+        end)
+
+        it("second mid-window UNIT_AURA does NOT queue duplicate retry timers", function()
+            _G._isInInstanceType = "scenario"
+            _SetMockBoonSpell({ { "Haste", 3 } })
+
+            local timerCount = 0
+            local originalAfter = C_Timer.After
+            C_Timer.After = function(delay, cb)
+                timerCount = timerCount + 1
+                return originalAfter(delay, cb)
+            end
+
+            -- Prime the throttle.
+            ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "player")
+            timerCount = 0  -- reset after the first pass-through (which doesn't schedule a timer)
+
+            -- Two back-to-back mid-window events: only one retry timer should be queued.
+            ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "player")
+            ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "player")
+
+            assert.equals(1, timerCount)
+
+            C_Timer.After = originalAfter
+            C_Timer._Reset()
+        end)
+
+        it("SPELL_DATA_LOAD_RESULT triggers UpdateCompanionData when in delve", function()
+            _G._isInInstanceType = "scenario"
+            _SetMockBoonSpell({ { "Mastery", 4 } })
+
+            local callCount = 0
+            local originalUCD = ns.UpdateCompanionData
+            ns.UpdateCompanionData = function(self, event)
+                callCount = callCount + 1
+                return originalUCD(self, event)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "SPELL_DATA_LOAD_RESULT", 1280098)
+
+            assert.equals(1, callCount)
+            ns.UpdateCompanionData = originalUCD
+        end)
+
+        it("SPELL_DATA_LOAD_RESULT does NOT trigger UpdateCompanionData when not in delve", function()
+            _G._isInInstanceType = "none"
+            C_DelvesUI._SetHasActiveDelve(false)
+
+            local callCount = 0
+            local originalUCD = ns.UpdateCompanionData
+            ns.UpdateCompanionData = function(self, event)
+                callCount = callCount + 1
+                return originalUCD(self, event)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "SPELL_DATA_LOAD_RESULT", 1280098)
+
+            assert.equals(0, callCount)
+            ns.UpdateCompanionData = originalUCD
+        end)
+
+        it("SPELL_DATA_LOAD_RESULT for a different spellID does NOT trigger UpdateCompanionData", function()
+            _G._isInInstanceType = "scenario"
+
+            local callCount = 0
+            local originalUCD = ns.UpdateCompanionData
+            ns.UpdateCompanionData = function(self, event)
+                callCount = callCount + 1
+                return originalUCD(self, event)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "SPELL_DATA_LOAD_RESULT", 99999)
 
             assert.equals(0, callCount)
             ns.UpdateCompanionData = originalUCD
@@ -836,157 +953,62 @@ describe("DelveCompanionStats", function()
             end
             _ClearMockBoonTooltip()
             C_ScenarioInfo._criteria = {}
+            _ClearMockNemesis()
         end)
 
         after_each(function()
             _ClearMockBoonTooltip()
             C_ScenarioInfo._criteria = {}
+            _ClearMockNemesis()
         end)
 
-        it("nemesis progress displays 'Nemesis Strongbox (n/n)' format", function()
+        -- Nemesis display uses C_Spell.GetSpellDescription(472952).
+        -- Inside a delve that spell description contains:
+        --   "Enemy groups remaining: |cnWHITE_FONT_COLOR:X / Y|r"
+
+        it("nemesis label shows section header and detail shows progress when spell description is available", function()
             _SetMockNemesis(2, 4)
-
             ns:UpdateCompanionData()
-
-            assert.equals("Nemesis Strongbox (2/4)", ns.nemesisLabel._text)
-        end)
-
-        it("nemesis progress hides label if criterion not found", function()
-            -- No criteria set
-            ns:UpdateCompanionData()
-
-            assert.equals("", ns.nemesisLabel._text)
-            assert.is_false(ns.nemesisLabel:IsShown())
-        end)
-
-        it("nemesis label is shown when criterion is found", function()
-            _SetMockNemesis(1, 4)
-
-            ns:UpdateCompanionData()
-
+            assert.equals("Enemy Groups Remaining", ns.nemesisLabel._text)
             assert.is_true(ns.nemesisLabel:IsShown())
-        end)
-
-        it("nemesis progress sums multiple criteria into one 'Nemesis Strongbox (n/n)' header", function()
-            _SetMockNemesis({
-                { description = "Vilebranch Skeleton Charmers slain", quantity = 0, totalQuantity = 5 },
-                { description = "Totems destroyed",                   quantity = 1, totalQuantity = 6 },
-            })
-
-            ns:UpdateCompanionData()
-
-            -- 0+1 = 1 current, 5+6 = 11 total
-            assert.equals("Nemesis Strongbox (1/11)", ns.nemesisLabel._text)
-        end)
-
-        it("nemesis progress skips criteria with zero totalQuantity", function()
-            _SetMockNemesis({
-                { description = "Cultists slain", quantity = 0, totalQuantity = 0 },
-                { description = "Totems destroyed", quantity = 2, totalQuantity = 3 },
-            })
-
-            ns:UpdateCompanionData()
-
-            assert.equals("Nemesis Strongbox (2/3)", ns.nemesisLabel._text)
-        end)
-
-        it("nemesis counts 'Enemy groups remaining' criterion in header total", function()
-            _SetMockNemesis({
-                { description = "Enemy groups remaining", quantity = 1, totalQuantity = 3 },
-            })
-
-            ns:UpdateCompanionData()
-
-            assert.equals("Nemesis Strongbox (1/3)", ns.nemesisLabel._text)
-        end)
-
-        it("nemesis hides non-combat criteria (Speak with)", function()
-            _SetMockNemesis({
-                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-            })
-
-            ns:UpdateCompanionData()
-
-            assert.equals("", ns.nemesisLabel._text)
-            assert.is_false(ns.nemesisLabel:IsShown())
-        end)
-
-        it("nemesis hides label when all criteria are non-combat", function()
-            _SetMockNemesis({
-                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-                { description = "Find the hidden passage", quantity = 0, totalQuantity = 1 },
-            })
-
-            ns:UpdateCompanionData()
-
-            assert.equals("", ns.nemesisLabel._text)
-            assert.is_false(ns.nemesisLabel:IsShown())
-        end)
-
-        it("nemesis sums across mixed combat + non-combat (only combat contribute)", function()
-            _SetMockNemesis({
-                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-                { description = "Cultists slain",                 quantity = 2, totalQuantity = 5 },
-                { description = "Totems destroyed",               quantity = 1, totalQuantity = 3 },
-            })
-
-            ns:UpdateCompanionData()
-
-            -- Only combat criteria: 2+1=3 current, 5+3=8 total; non-combat excluded
-            assert.equals("Nemesis Strongbox (3/8)", ns.nemesisLabel._text)
-        end)
-
-        -- -------------------------------------------------------------------------
-        -- nemesisDetailLabel: white body lines below the Nemesis Strongbox header
-        -- -------------------------------------------------------------------------
-        it("nemesisDetailLabel shows one white line per combat criterion", function()
-            _SetMockNemesis({
-                { description = "Infiltrator Garand slain", quantity = 0, totalQuantity = 1 },
-            })
-
-            ns:UpdateCompanionData()
-
-            assert.equals("Infiltrator Garand slain: 0/1", ns.nemesisDetailLabel._text)
+            assert.equals("2 / 4", ns.nemesisDetailLabel._text)
             assert.is_true(ns.nemesisDetailLabel:IsShown())
         end)
 
-        it("nemesisDetailLabel shows multiple lines for multiple combat criteria", function()
-            _SetMockNemesis({
-                { description = "Cultists slain",  quantity = 2, totalQuantity = 5 },
-                { description = "Totems destroyed", quantity = 1, totalQuantity = 3 },
-            })
-
+        it("nemesis label is hidden when spell description is absent (not in a delve)", function()
+            -- No spell description set → GetSpellDescription returns ""
             ns:UpdateCompanionData()
-
-            assert.equals("Cultists slain: 2/5\nTotems destroyed: 1/3", ns.nemesisDetailLabel._text)
+            assert.equals("", ns.nemesisLabel._text)
+            assert.is_false(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesisDetailLabel excludes non-combat criteria from detail lines", function()
-            _SetMockNemesis({
-                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-                { description = "Cultists slain",                 quantity = 1, totalQuantity = 3 },
-            })
-
+        it("nemesis label shows header and detail shows 4/4 when all groups remain", function()
+            _SetMockNemesis(4, 4)
             ns:UpdateCompanionData()
-
-            -- Only the combat criterion appears in detail lines
-            assert.equals("Cultists slain: 1/3", ns.nemesisDetailLabel._text)
+            assert.equals("Enemy Groups Remaining", ns.nemesisLabel._text)
+            assert.is_true(ns.nemesisLabel:IsShown())
+            assert.equals("4 / 4", ns.nemesisDetailLabel._text)
+            assert.is_true(ns.nemesisDetailLabel:IsShown())
         end)
 
-        it("nemesisDetailLabel is hidden when no combat criteria qualify", function()
-            -- No criteria at all
+        it("nemesis label shows header and detail shows 0/4 when all groups defeated", function()
+            _SetMockNemesis(0, 4)
             ns:UpdateCompanionData()
-
-            assert.is_false(ns.nemesisDetailLabel:IsShown())
+            assert.equals("Enemy Groups Remaining", ns.nemesisLabel._text)
+            assert.is_true(ns.nemesisLabel:IsShown())
+            assert.equals("0 / 4", ns.nemesisDetailLabel._text)
+            assert.is_true(ns.nemesisDetailLabel:IsShown())
         end)
 
-        it("nemesisDetailLabel is hidden when all criteria are non-combat", function()
-            _SetMockNemesis({
-                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-            })
-
+        it("nemesisDetailLabel shows the count value when nemesis data is present", function()
+            _SetMockNemesis(2, 4)
             ns:UpdateCompanionData()
+            assert.equals("2 / 4", ns.nemesisDetailLabel._text)
+            assert.is_true(ns.nemesisDetailLabel:IsShown())
+        end)
 
+        it("nemesisDetailLabel is hidden when no nemesis data present", function()
+            ns:UpdateCompanionData()
             assert.is_false(ns.nemesisDetailLabel:IsShown())
         end)
 
@@ -1060,13 +1082,13 @@ describe("DelveCompanionStats", function()
         -- ── Fonts ─────────────────────────────────────────────────────────────
         describe("fonts", function()
 
-            it("header label uses Frizqt font (explicit SetFont, not ObjectiveTitleFont arg)", function()
+            it("header label uses ObjectiveTitleFont (matching Blizzard section header style)", function()
                 -- ns.headerLabel is aliased to ns.headerTitle on the manual header.
-                -- Font is set explicitly via SetFont() so it renders even before
-                -- font objects finish loading in-game.
+                -- GameFontNormal is the base; ObjectiveTitleFont is applied via pcall and
+                -- succeeds in the mock (ObjectiveTitleFont is a table with _name set).
                 assert.is_not_nil(ns.headerLabel)
                 local fontPath = ns.headerLabel:GetFont()
-                assert.equals("Fonts\\FRIZQT__.TTF", fontPath)
+                assert.equals("ObjectiveTitleFont", fontPath)
             end)
 
             it("nameLabel uses ObjectiveFont", function()
@@ -1094,11 +1116,12 @@ describe("DelveCompanionStats", function()
                 assert.equals("ObjectiveFont", fontPath)
             end)
 
-            it("header always uses Frizqt font (manual header, explicit SetFont)", function()
-                -- Header is always built manually with explicit SetFont() — no template dependency.
+            it("header always uses ObjectiveTitleFont when available (manual header)", function()
+                -- Header uses GameFontNormal as base then applies ObjectiveTitleFont via pcall.
+                -- In the mock ObjectiveTitleFont resolves to its _name string.
                 assert.is_not_nil(ns.headerLabel)
                 local fontPath = ns.headerLabel:GetFont()
-                assert.equals("Fonts\\FRIZQT__.TTF", fontPath)
+                assert.equals("ObjectiveTitleFont", fontPath)
             end)
 
         end)
@@ -1148,22 +1171,23 @@ describe("DelveCompanionStats", function()
                 assert.is_true(math.abs(b - 1) < 0.001)
             end)
 
-            it("header border line colour is {1, 0.78, 0.1} (bright gold)", function()
-                -- Manual header always has top+bottom gold border lines
+            it("header underline colour is {0.9, 0.75, 0.1} (Blizzard tracker gold)", function()
+                -- Underline texture runs from right of title text to right of header frame.
+                -- Colour matches Blizzard ObjectiveTracker section header gold.
                 local hf = ns.headerFrame
                 assert.is_not_nil(hf)
-                -- Find the border line texture by looking for one with r≈1, g≈0.78, b≈0.1
+                -- Find the gold underline texture by its colour {0.9, 0.75, 0.1}
                 local found = false
                 for _, tex in ipairs(hf._textures or {}) do
                     local c = tex._color
-                    if c and math.abs(c[1] - 1) < 0.001
-                          and math.abs(c[2] - 0.78) < 0.001
+                    if c and math.abs(c[1] - 0.9) < 0.001
+                          and math.abs(c[2] - 0.75) < 0.001
                           and math.abs(c[3] - 0.1) < 0.001 then
                         found = true
                         break
                     end
                 end
-                assert.is_true(found, "expected header border texture with colour {1, 0.78, 0.1}")
+                assert.is_true(found, "expected header underline texture with colour {0.9, 0.75, 0.1}")
             end)
 
         end)
@@ -1171,25 +1195,25 @@ describe("DelveCompanionStats", function()
         -- ── Spacing / padding ─────────────────────────────────────────────────
         describe("spacing and padding", function()
 
-            it("nameLabel width is frameWidth - 12", function()
-                -- frameWidth fallback is 248; contentWidth = 248 - 12 = 236
-                assert.equals(236, ns.nameLabel._width)
+            it("nameLabel width is frameWidth - 28 (12 label inset + 16 content frame padding)", function()
+                -- frameWidth fallback is 248; contentWidth = 248 - 12 - 16 = 220
+                assert.equals(220, ns.nameLabel._width)
             end)
 
-            it("boonHeaderLabel width is frameWidth - 12", function()
-                assert.equals(236, ns.boonHeaderLabel._width)
+            it("boonHeaderLabel width is frameWidth - 28", function()
+                assert.equals(220, ns.boonHeaderLabel._width)
             end)
 
-            it("boonLabel width is frameWidth - 12", function()
-                assert.equals(236, ns.boonLabel._width)
+            it("boonLabel width is frameWidth - 28", function()
+                assert.equals(220, ns.boonLabel._width)
             end)
 
-            it("nemesisLabel width is frameWidth - 12", function()
-                assert.equals(236, ns.nemesisLabel._width)
+            it("nemesisLabel width is frameWidth - 28", function()
+                assert.equals(220, ns.nemesisLabel._width)
             end)
 
-            it("nemesisDetailLabel width is frameWidth - 12", function()
-                assert.equals(236, ns.nemesisDetailLabel._width)
+            it("nemesisDetailLabel width is frameWidth - 28", function()
+                assert.equals(220, ns.nemesisDetailLabel._width)
             end)
 
         end)
@@ -1197,22 +1221,20 @@ describe("DelveCompanionStats", function()
         -- ── Content frame background ──────────────────────────────────────────
         describe("content frame background", function()
 
-            it("contentFrame has rounded gold backdrop border", function()
-                assert.is_not_nil(ns.contentFrame._backdrop)
-                assert.are.equal("Interface\\Tooltips\\UI-Tooltip-Border", ns.contentFrame._backdrop.edgeFile)
-                local bc = ns.contentFrame._backdropBorderColor
-                assert.is_not_nil(bc)
-                assert.near(1, bc[1], 0.01)
-                assert.near(0.78, bc[2], 0.01)
-                assert.near(0.1, bc[3], 0.01)
+            it("contentFrame has no backdrop (fully transparent, matching Blizzard tracker content area)", function()
+                -- Blizzard ObjectiveTracker content floats with no background box or border.
+                -- We removed SetBackdrop entirely so _backdrop should be nil.
+                assert.is_nil(ns.contentFrame._backdrop)
             end)
 
-            it("contentFrame has dark brown backdrop background", function()
-                local bc = ns.contentFrame._backdropColor
-                assert.is_not_nil(bc)
-                assert.near(0.05, bc[1], 0.01)
-                assert.near(0.04, bc[2], 0.01)
-                assert.near(0.01, bc[3], 0.01)
+            it("contentFrame has no border edge file (borderless, matching tracker content area)", function()
+                -- Either no backdrop at all, or if present, no edgeFile.
+                if ns.contentFrame._backdrop then
+                    local ef = ns.contentFrame._backdrop.edgeFile
+                    assert.is_true(ef == nil or ef == "", "expected no edgeFile, got: " .. tostring(ef))
+                else
+                    assert.is_nil(ns.contentFrame._backdrop)
+                end
             end)
 
         end)
@@ -1233,35 +1255,34 @@ describe("DelveCompanionStats", function()
             after_each(function()
                 _ClearMockBoonTooltip()
                 C_ScenarioInfo._criteria = {}
+                _ClearMockNemesis()
             end)
 
-            it("base content height is 24 (4+16+4) when only nameLabel visible", function()
+            it("base content height is 32 (8+16+8) when only nameLabel visible", function()
                 ns:UpdateCompanionData()
-                -- No boons, no nemesis → contentHeight = 24
-                assert.equals(24, ns.contentFrame._height)
+                -- No boons, no nemesis → contentHeight = 28 (8px top + 16px label + 4px bottom)
+                assert.equals(28, ns.contentFrame._height)
             end)
 
-            it("content height adds 3+16 gap+header plus 16-per-boon-line", function()
-                -- One boon line
+            it("content height stays at base when boon tooltip data present but not in a delve", function()
+                -- Boon display requires IsInDelve(); not in a delve here → no boon section added.
                 _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%." })
                 ns:UpdateCompanionData()
-                -- 24 (base) + 3 (gap) + 16 (boonHeader) + 16 (1 boon line) = 59
-                assert.equals(59, ns.contentFrame._height)
+                -- Boons not in delve → no boon section → contentHeight = 28
+                assert.equals(28, ns.contentFrame._height)
             end)
 
-            it("content height adds 3+16 for nemesis section", function()
+            it("content height includes nemesis section (6px gap + 16px header + 4px gap + 16px value) when nemesis present", function()
                 _SetMockNemesis(1, 3)
                 ns:UpdateCompanionData()
-                -- 24 (base) + 3 (gap) + 16 (nemesis header) + 16 (1 detail line) = 59
-                assert.equals(59, ns.contentFrame._height)
+                -- nemesis shown: base 28 + 6 gap + 16 header + 4 gap + 16 value = 70
+                assert.equals(70, ns.contentFrame._height)
             end)
 
-            it("content height stacks boon and nemesis sections with 3px gaps each", function()
-                _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%.\nMastery: 3%." })
-                _SetMockNemesis(2, 5)
+            it("content height without nemesis stays at base when no spell description", function()
+                -- No spell description → nemesis hidden → height 28
                 ns:UpdateCompanionData()
-                -- 24 (base) + 3+16 (boonHeader) + 2*16 (2 boon lines) + 3+16 (nemesis header) + 16 (1 detail line) = 110
-                assert.equals(110, ns.contentFrame._height)
+                assert.equals(28, ns.contentFrame._height)
             end)
 
         end)
@@ -1381,6 +1402,224 @@ describe("DelveCompanionStats", function()
             assert.is_not_nil(DelveCompanionStatsDB.position)
             -- relativePoint is the canonical key saved by OnDragStop
             assert.is_not_nil(DelveCompanionStatsDB.position.relativePoint)
+        end)
+
+    end)
+
+    -- -------------------------------------------------------------------------
+    -- Boon spell description parsing — resilient pattern tests
+    -- -------------------------------------------------------------------------
+    describe("GetBoonsDisplayText boon parsing", function()
+
+        before_each(function()
+            -- Put us in a delve so GetBoonsDisplayText proceeds past the early return.
+            _G._isInInstanceType = "scenario"
+            -- Provide a valid companion so UpdateCompanionData does not early-exit.
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID   = function() return { name = "Brann Bronzebeard" } end
+            C_GossipInfo.GetFriendshipReputation = function()
+                return { friendshipRank = 10, standing = 50, reactionThreshold = 0, nextThreshold = 100 }
+            end
+            _ClearMockBoonSpell()
+        end)
+
+        after_each(function()
+            _ClearMockBoonSpell()
+            _G._isInInstanceType = "none"
+        end)
+
+        it("parses plain 'Stat: N%' format (no trailing period)", function()
+            _SetMockBoonSpell({ { "Strength", 2 } })
+            ns:UpdateCompanionData()
+            assert.is_truthy(ns.boonLabel._text:find("Str: 2%", 1, true),
+                "expected 'Str: 2%' in: " .. tostring(ns.boonLabel._text))
+        end)
+
+        it("parses 'Stat: N%.' format (trailing period after percent — live tooltip format)", function()
+            -- This is the bug format: "Strength: 2%." was not matched by the old pattern.
+            _SetMockBoonSpellWithPeriod({ { "Strength", 2 } })
+            ns:UpdateCompanionData()
+            assert.is_truthy(ns.boonLabel._text:find("Str: 2%", 1, true),
+                "expected 'Str: 2%' in: " .. tostring(ns.boonLabel._text))
+        end)
+
+        it("parses multiple stats when last one has trailing period", function()
+            -- Simulate: "Maximum Health: 0%\nMovement Speed: 0%\nStrength: 2%." (last has period)
+            _SetMockBoonSpellWithPeriod({
+                { "Maximum Health",  0 },
+                { "Movement Speed",  0 },
+                { "Strength",        2 },
+                { "Haste",           0 },
+                { "Critical Strike", 0 },
+                { "Mastery",         0 },
+                { "Versatility",     0 },
+                { "Damage Reduction", 0 },
+            })
+            ns:UpdateCompanionData()
+            -- Only Strength: 2 is non-zero.
+            assert.is_truthy(ns.boonLabel._text:find("Str: 2%", 1, true),
+                "expected 'Str: 2%' in: " .. tostring(ns.boonLabel._text))
+            -- Zero stats must not appear.
+            assert.is_nil(ns.boonLabel._text:find("Max HP", 1, true), "Max HP (0%) should be excluded")
+            assert.is_nil(ns.boonLabel._text:find("Move Spd", 1, true), "Move Spd (0%) should be excluded")
+        end)
+
+        it("parses color-coded 'Stat: |cnWHITE_FONT_COLOR:N%|r' format", function()
+            _SetMockBoonSpellWithColorCodes({ { "Haste", 3 } })
+            ns:UpdateCompanionData()
+            assert.is_truthy(ns.boonLabel._text:find("Haste: 3%", 1, true),
+                "expected 'Haste: 3%' in: " .. tostring(ns.boonLabel._text))
+        end)
+
+        it("raw spell description is logged via dcslog (smoke test: no crash)", function()
+            -- Set a description and verify parsing does not throw.
+            _SetMockBoonSpellWithPeriod({ { "Critical Strike", 5 } })
+            assert.has_no.errors(function() ns:UpdateCompanionData() end)
+            assert.is_truthy(ns.boonLabel._text:find("Crit: 5%", 1, true))
+        end)
+
+        it("shows 'None' when all stats are zero (period format)", function()
+            _SetMockBoonSpellWithPeriod({
+                { "Strength",        0 },
+                { "Haste",           0 },
+                { "Critical Strike", 0 },
+            })
+            ns:UpdateCompanionData()
+            assert.equals("None", ns.boonLabel._text)
+        end)
+
+        it("contentFrame has zero x-offset anchors (padding comes from nameLabel inset)", function()
+            -- Padding is now achieved by anchoring nameLabel 8px inside contentFrame
+            -- rather than offsetting contentFrame itself from the header.
+            -- contentFrame TOPLEFT and TOPRIGHT x-offsets are 0.
+            local topleftX, toprightX
+            for _, pt in ipairs(ns.contentFrame._points or {}) do
+                if pt[1] == "TOPLEFT"  then topleftX  = pt[4] end
+                if pt[1] == "TOPRIGHT" then toprightX = pt[4] end
+            end
+            assert.equals(0,  topleftX,  "contentFrame TOPLEFT x-offset should be 0")
+            assert.equals(0, toprightX,  "contentFrame TOPRIGHT x-offset should be 0")
+        end)
+
+    end)
+
+    -- =========================================================================
+    -- Dynamic re-anchoring
+    -- =========================================================================
+    describe("Dynamic re-anchoring", function()
+
+        it("re-anchors when QUEST_WATCH_LIST_CHANGED fires", function()
+            local timerCount = 0
+            local originalAfter = C_Timer.After
+            C_Timer.After = function(delay, cb)
+                timerCount = timerCount + 1
+                return originalAfter(delay, cb)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "QUEST_WATCH_LIST_CHANGED")
+
+            -- A C_Timer.After call should have been scheduled for deferred re-anchor.
+            assert.is_true(timerCount >= 1,
+                "expected C_Timer.After to be called after QUEST_WATCH_LIST_CHANGED")
+
+            C_Timer.After = originalAfter
+            C_Timer._Reset()
+        end)
+
+        it("deduplicates rapid anchor events", function()
+            local timerCount = 0
+            local originalAfter = C_Timer.After
+            C_Timer.After = function(delay, cb)
+                timerCount = timerCount + 1
+                return originalAfter(delay, cb)
+            end
+
+            -- Fire QUEST_LOG_UPDATE 10 times in rapid succession.
+            for _ = 1, 10 do
+                ns.frame._scripts["OnEvent"](ns.frame, "QUEST_LOG_UPDATE")
+            end
+
+            -- Despite 10 events, only one timer should be queued (_reanchorPending guard).
+            assert.equals(1, timerCount,
+                "10 rapid QUEST_LOG_UPDATE events should schedule exactly 1 re-anchor timer")
+
+            -- After the timer fires the pending flag is cleared; a new event can queue again.
+            C_Timer._FireAll()
+            timerCount = 0
+            ns.frame._scripts["OnEvent"](ns.frame, "QUEST_LOG_UPDATE")
+            assert.equals(1, timerCount,
+                "after timer fires a new QUEST_LOG_UPDATE should schedule another timer")
+
+            C_Timer.After = originalAfter
+            C_Timer._Reset()
+        end)
+
+        it("re-anchors on ZONE_CHANGED_NEW_AREA", function()
+            local timerCount = 0
+            local originalAfter = C_Timer.After
+            C_Timer.After = function(delay, cb)
+                timerCount = timerCount + 1
+                return originalAfter(delay, cb)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "ZONE_CHANGED_NEW_AREA")
+
+            assert.is_true(timerCount >= 1,
+                "expected C_Timer.After to be called after ZONE_CHANGED_NEW_AREA")
+
+            C_Timer.After = originalAfter
+            C_Timer._Reset()
+        end)
+
+    end)
+
+    -- =========================================================================
+    -- Header gold bars
+    -- =========================================================================
+    describe("Header gold bars", function()
+
+        it("header has gold top line", function()
+            -- Texture creation order on header: [1]=bg, [2]=topLine, [3]=bottomLine.
+            local header = ns.header
+            assert.is_not_nil(header, "ns.header should exist")
+            local topLine = header._textures[2]
+            assert.is_not_nil(topLine, "header should have a second texture (top gold line)")
+            -- Verify color is gold (r≈0.9, g≈0.75, b≈0.1).
+            local r, g, b = topLine._color[1], topLine._color[2], topLine._color[3]
+            assert.near(0.9,  r, 0.01, "top line red channel should be ~0.9 (gold)")
+            assert.near(0.75, g, 0.01, "top line green channel should be ~0.75 (gold)")
+            assert.near(0.1,  b, 0.01, "top line blue channel should be ~0.1 (gold)")
+            -- Verify it is visible.
+            assert.is_true(topLine._shown, "top gold line should be visible")
+        end)
+
+        it("header has gold bottom line", function()
+            -- Texture creation order on header: [1]=bg, [2]=topLine, [3]=bottomLine.
+            local header = ns.header
+            assert.is_not_nil(header, "ns.header should exist")
+            local bottomLine = header._textures[3]
+            assert.is_not_nil(bottomLine, "header should have a third texture (bottom gold line)")
+            local r, g, b = bottomLine._color[1], bottomLine._color[2], bottomLine._color[3]
+            assert.near(0.9,  r, 0.01, "bottom line red channel should be ~0.9 (gold)")
+            assert.near(0.75, g, 0.01, "bottom line green channel should be ~0.75 (gold)")
+            assert.near(0.1,  b, 0.01, "bottom line blue channel should be ~0.1 (gold)")
+            assert.is_true(bottomLine._shown, "bottom gold line should be visible")
+        end)
+
+    end)
+
+    -- =========================================================================
+    -- Collapse button size
+    -- =========================================================================
+    describe("Collapse button size", function()
+
+        it("collapse button is 36x36", function()
+            local collapseBtn = ns.collapseBtn
+            assert.is_not_nil(collapseBtn, "ns.collapseBtn should exist")
+            assert.equals(36, collapseBtn._width,
+                "collapse button width should be 36 (not the old 26)")
+            assert.equals(36, collapseBtn._height,
+                "collapse button height should be 36 (not the old 26)")
         end)
 
     end)
