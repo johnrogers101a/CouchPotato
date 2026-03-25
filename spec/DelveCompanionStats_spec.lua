@@ -550,8 +550,8 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.boonLabel:IsShown())
         end)
 
-        it("PLAYER_ENTERING_WORLD schedules two delayed C_Timer.After calls", function()
-            -- Count how many timers are registered before the event
+        it("PLAYER_ENTERING_WORLD schedules one delayed C_Timer.After call", function()
+            -- The 5s redundant timer was removed; only the 2s post-zone-in refresh remains.
             local timersBefore
             do
                 local originalAfter = C_Timer.After
@@ -564,8 +564,8 @@ describe("DelveCompanionStats", function()
                 timersBefore = timerCount
                 C_Timer.After = originalAfter
             end
-            -- Must schedule exactly 2 delayed refreshes on PLAYER_ENTERING_WORLD
-            assert.equals(2, timersBefore)
+            -- Must schedule exactly 1 delayed refresh on PLAYER_ENTERING_WORLD (2s only)
+            assert.equals(1, timersBefore)
         end)
 
         it("delayed timers from PLAYER_ENTERING_WORLD call UpdateCompanionData when in delve", function()
