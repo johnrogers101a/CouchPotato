@@ -23,6 +23,10 @@ ns.version = "1.0.0"
 local lastAuraUpdate    = 0
 local lastFactionUpdate = 0
 local THROTTLE_INTERVAL = 2  -- minimum seconds between processing
+-- Pending deferred-retry timer handle for UNIT_AURA throttle.
+-- When a UNIT_AURA fires during the cooldown window we schedule one retry so
+-- boons collected mid-window are never silently dropped.
+local pendingAuraTimer  = false
 
 -------------------------------------------------------------------------------
 -- dcsprint: Write a coloured message to the chat frame (or print fallback).
@@ -1067,6 +1071,10 @@ function ns:OnLoad()
         -- UNIT_AURA fires when buffs/debuffs change on a unit; used to detect
         -- when the boon aura (spell 1280098) becomes active after zone-in.
         ns.frame:RegisterEvent("UNIT_AURA")
+        -- SPELL_DATA_LOAD_RESULT fires when an asynchronous spell description
+        -- finishes loading.  Boon spell 1280098 may not be cached on first query;
+        -- re-running UpdateCompanionData when it arrives guarantees fresh values.
+        pcall(function() ns.frame:RegisterEvent("SPELL_DATA_LOAD_RESULT") end)
         ns.frame:SetScript("OnEvent", function(self, event, ...)
             -- Suppress all event handling if functionally disabled via /cp disable
             if ns._cpDisabled then return end
@@ -1079,8 +1087,32 @@ function ns:OnLoad()
                     local now = GetTime()
                     if now - lastAuraUpdate >= THROTTLE_INTERVAL then
                         lastAuraUpdate = now
+                        pendingAuraTimer = false
                         ns:UpdateCompanionData(event)
+                    elseif not pendingAuraTimer and C_Timer and C_Timer.After then
+                        -- A boon was collected during the throttle window.
+                        -- Schedule exactly one deferred retry so it is never dropped.
+                        pendingAuraTimer = true
+                        local retryDelay = THROTTLE_INTERVAL - (now - lastAuraUpdate) + 0.1
+                        C_Timer.After(retryDelay, function()
+                            pendingAuraTimer = false
+                            if IsInDelve() then
+                                lastAuraUpdate = GetTime()
+                                ns:UpdateCompanionData("UNIT_AURA_RETRY")
+                            end
+                        end)
                     end
+                end
+                return
+            end
+
+            -- SPELL_DATA_LOAD_RESULT: fires when an async spell description finishes
+            -- loading.  Re-run boon data if we are in a delve and the loaded spell is
+            -- the boon spell (1280098), or if no spellID arg is available (fire anyway).
+            if event == "SPELL_DATA_LOAD_RESULT" then
+                local spellID = ...
+                if IsInDelve() and (spellID == nil or spellID == 1280098) then
+                    ns:UpdateCompanionData(event)
                 end
                 return
             end
@@ -1433,7 +1465,17 @@ function ns:UpdateCompanionData(event)
     -- boonLabel shows the value line returned by GetBoonsDisplayText().
     local boonsShown = false
     local boonText = GetBoonsDisplayText()
-    dcslog("Debug", "UpdateCompanionData: boonText=" .. (boonText == "" and "(empty)" or boonText))
+    -- Log whether boon text actually changed since the last update.  This makes
+    -- it easy to diagnose stale-display bugs: if "boon CHANGED" never appears
+    -- after collecting a boon the event/throttle path is the culprit; if it does
+    -- appear but the UI looks wrong the rendering path needs attention.
+    local prevBoonText = ns._lastBoonText
+    if boonText ~= prevBoonText then
+        dcslog("Debug", "UpdateCompanionData: boon CHANGED [" .. tostring(prevBoonText) .. "] -> [" .. tostring(boonText) .. "]")
+        ns._lastBoonText = boonText
+    else
+        dcslog("Debug", "UpdateCompanionData: boon unchanged [" .. tostring(boonText) .. "]")
+    end
     if ns.boonHeaderLabel then
         if boonText ~= "" then
             ns.boonHeaderLabel:Show()
