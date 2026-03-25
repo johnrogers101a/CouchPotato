@@ -41,31 +41,74 @@ end
 
 -- GetBaseTrackerAnchor: find the lowest visible tracker module for docking.
 -- Returns the frame whose BOTTOM edge is the lowest visible point of the
--- Blizzard objective tracker, or nil when no tracker is visible.
+-- Blizzard objective tracker, or nil when no tracker frame exists at all.
+--
+-- Design: ObjectiveTrackerFrame itself is ALWAYS the final fallback whenever
+-- the frame exists, even when IsShown() returns false (which WoW does when no
+-- quests are tracked).  The "smart find lowest module" logic is an enhancement
+-- layered on top — it only kicks in when modules are actually visible.  This
+-- prevents the frames from drifting to the minimap or off-screen when the
+-- tracker is empty.
 function CP.GetBaseTrackerAnchor()
-    if not ObjectiveTrackerFrame
-        or not ObjectiveTrackerFrame.IsShown
-        or not ObjectiveTrackerFrame:IsShown() then
+    -- If the frame doesn't exist at all there is nothing to anchor to.
+    if not ObjectiveTrackerFrame then
         return nil
     end
 
-    -- 1. Iterate modules table when available.
-    if type(ObjectiveTrackerFrame.modules) == "table" then
+    -- Smart enhancement: when the tracker (or its modules) is actually
+    -- rendering content, find the lowest visible module so we dock flush
+    -- to the bottom of that content rather than the outer container edge.
+    -- This is skipped (falls through to the ObjectiveTrackerFrame fallback)
+    -- when no modules are visible — e.g. no quests tracked outside a delve.
+    local trackerShown = ObjectiveTrackerFrame.IsShown
+                         and ObjectiveTrackerFrame:IsShown()
+
+    if trackerShown then
+        -- 1. Iterate modules table when available.
+        if type(ObjectiveTrackerFrame.modules) == "table" then
+            local bestFrame  = nil
+            local bestBottom = math.huge
+            for _, module in pairs(ObjectiveTrackerFrame.modules) do
+                if module and module.IsShown and module:IsShown() then
+                    local f = (module.ContentsFrame and module.ContentsFrame.IsShown
+                               and module.ContentsFrame:IsShown() and module.ContentsFrame)
+                              or (module.Header and module.Header.IsShown
+                                  and module.Header:IsShown() and module.Header)
+                              or module
+                    if f and f.GetBottom then
+                        local bottom = f:GetBottom()
+                        if bottom and bottom < bestBottom then
+                            bestBottom = bottom
+                            bestFrame  = f
+                        end
+                    end
+                end
+            end
+            if bestFrame then
+                return bestFrame
+            end
+        end
+
+        -- 2. Named module fallback list.
+        local knownModules = {
+            "ScenarioObjectiveTracker",
+            "QuestObjectiveTracker",
+            "BonusObjectiveTracker",
+            "WorldQuestObjectiveTracker",
+            "CampaignQuestObjectiveTracker",
+            "ProfessionsObjectiveTracker",
+            "AdventureObjectiveTracker",
+            "AchievementObjectiveTracker",
+        }
         local bestFrame  = nil
         local bestBottom = math.huge
-        for _, module in pairs(ObjectiveTrackerFrame.modules) do
-            if module and module.IsShown and module:IsShown() then
-                local f = (module.ContentsFrame and module.ContentsFrame.IsShown
-                           and module.ContentsFrame:IsShown() and module.ContentsFrame)
-                          or (module.Header and module.Header.IsShown
-                              and module.Header:IsShown() and module.Header)
-                          or module
-                if f and f.GetBottom then
-                    local bottom = f:GetBottom()
-                    if bottom and bottom < bestBottom then
-                        bestBottom = bottom
-                        bestFrame  = f
-                    end
+        for _, name in ipairs(knownModules) do
+            local f = _G[name]
+            if f and f.IsShown and f:IsShown() and f.GetBottom then
+                local bottom = f:GetBottom()
+                if bottom and bottom < bestBottom then
+                    bestBottom = bottom
+                    bestFrame  = f
                 end
             end
         end
@@ -74,34 +117,9 @@ function CP.GetBaseTrackerAnchor()
         end
     end
 
-    -- 2. Named module fallback list.
-    local knownModules = {
-        "ScenarioObjectiveTracker",
-        "QuestObjectiveTracker",
-        "BonusObjectiveTracker",
-        "WorldQuestObjectiveTracker",
-        "CampaignQuestObjectiveTracker",
-        "ProfessionsObjectiveTracker",
-        "AdventureObjectiveTracker",
-        "AchievementObjectiveTracker",
-    }
-    local bestFrame  = nil
-    local bestBottom = math.huge
-    for _, name in ipairs(knownModules) do
-        local f = _G[name]
-        if f and f.IsShown and f:IsShown() and f.GetBottom then
-            local bottom = f:GetBottom()
-            if bottom and bottom < bestBottom then
-                bestBottom = bottom
-                bestFrame  = f
-            end
-        end
-    end
-    if bestFrame then
-        return bestFrame
-    end
-
-    -- 3. Outer container fallback.
+    -- 3. Outer container — always use this when the frame exists, even when
+    --    empty (no quests tracked).  The tracker frame stays positioned at
+    --    the correct screen location even when it has no visible children.
     return ObjectiveTrackerFrame
 end
 

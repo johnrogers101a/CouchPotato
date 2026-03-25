@@ -618,49 +618,53 @@ local function GetTrackerAnchor()
     end
 
     -- Inline fallback (identical logic, kept for resilience if CouchPotato core not loaded)
-    if not ObjectiveTrackerFrame
-        or not ObjectiveTrackerFrame.IsShown
-        or not ObjectiveTrackerFrame:IsShown() then
+    -- ObjectiveTrackerFrame is ALWAYS the final fallback when the frame exists —
+    -- even when IsShown() returns false (e.g. no quests tracked outside a delve).
+    if not ObjectiveTrackerFrame then
         return nil
     end
-    if type(ObjectiveTrackerFrame.modules) == "table" then
-        local bestFrame, bestBottom = nil, math.huge
-        for _, module in pairs(ObjectiveTrackerFrame.modules) do
-            if module and module.IsShown and module:IsShown() then
-                local f = (module.ContentsFrame and module.ContentsFrame.IsShown
-                           and module.ContentsFrame:IsShown() and module.ContentsFrame)
-                          or (module.Header and module.Header.IsShown
-                              and module.Header:IsShown() and module.Header)
-                          or module
-                if f and f.GetBottom then
-                    local bottom = f:GetBottom()
-                    if bottom and bottom < bestBottom then
-                        bestBottom = bottom
-                        bestFrame  = f
+    local trackerShown = ObjectiveTrackerFrame.IsShown
+                         and ObjectiveTrackerFrame:IsShown()
+    if trackerShown then
+        if type(ObjectiveTrackerFrame.modules) == "table" then
+            local bestFrame, bestBottom = nil, math.huge
+            for _, module in pairs(ObjectiveTrackerFrame.modules) do
+                if module and module.IsShown and module:IsShown() then
+                    local f = (module.ContentsFrame and module.ContentsFrame.IsShown
+                               and module.ContentsFrame:IsShown() and module.ContentsFrame)
+                              or (module.Header and module.Header.IsShown
+                                  and module.Header:IsShown() and module.Header)
+                              or module
+                    if f and f.GetBottom then
+                        local bottom = f:GetBottom()
+                        if bottom and bottom < bestBottom then
+                            bestBottom = bottom
+                            bestFrame  = f
+                        end
                     end
+                end
+            end
+            if bestFrame then return bestFrame end
+        end
+        local knownModules = {
+            "ScenarioObjectiveTracker", "QuestObjectiveTracker",
+            "BonusObjectiveTracker", "WorldQuestObjectiveTracker",
+            "CampaignQuestObjectiveTracker", "ProfessionsObjectiveTracker",
+            "AdventureObjectiveTracker", "AchievementObjectiveTracker",
+        }
+        local bestFrame, bestBottom = nil, math.huge
+        for _, name in ipairs(knownModules) do
+            local f = _G[name]
+            if f and f.IsShown and f:IsShown() and f.GetBottom then
+                local bottom = f:GetBottom()
+                if bottom and bottom < bestBottom then
+                    bestBottom = bottom
+                    bestFrame  = f
                 end
             end
         end
         if bestFrame then return bestFrame end
     end
-    local knownModules = {
-        "ScenarioObjectiveTracker", "QuestObjectiveTracker",
-        "BonusObjectiveTracker", "WorldQuestObjectiveTracker",
-        "CampaignQuestObjectiveTracker", "ProfessionsObjectiveTracker",
-        "AdventureObjectiveTracker", "AchievementObjectiveTracker",
-    }
-    local bestFrame, bestBottom = nil, math.huge
-    for _, name in ipairs(knownModules) do
-        local f = _G[name]
-        if f and f.IsShown and f:IsShown() and f.GetBottom then
-            local bottom = f:GetBottom()
-            if bottom and bottom < bestBottom then
-                bestBottom = bottom
-                bestFrame  = f
-            end
-        end
-    end
-    if bestFrame then return bestFrame end
     return ObjectiveTrackerFrame
 end
 
@@ -676,7 +680,7 @@ local function AnchorFrame()
     local anchor = GetTrackerAnchor()
     if anchor then
         ns.frame:ClearAllPoints()
-        ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -4)
+        ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -14)
         if ObjectiveTrackerFrame and ObjectiveTrackerFrame.GetWidth then
             local tw = ObjectiveTrackerFrame:GetWidth()
             if tw and tw >= 100 and tw <= 400 then
@@ -808,7 +812,7 @@ function ns:OnLoad()
     -- Set size and default anchor (below ObjectiveTrackerFrame on the right side)
     ns.frame:SetSize(frameWidth, 160)
     if ObjectiveTrackerFrame then
-        ns.frame:SetPoint("TOPRIGHT", ObjectiveTrackerFrame, "BOTTOMRIGHT", 0, -4)
+        ns.frame:SetPoint("TOPRIGHT", ObjectiveTrackerFrame, "BOTTOMRIGHT", 0, -14)
     else
         ns.frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -200)
     end
@@ -932,7 +936,7 @@ function ns:OnLoad()
         ns.frame:ClearAllPoints()
         local trackerAnchor = GetTrackerAnchor()
         if trackerAnchor then
-            ns.frame:SetPoint("TOPRIGHT", trackerAnchor, "BOTTOMRIGHT", 0, -4)
+            ns.frame:SetPoint("TOPRIGHT", trackerAnchor, "BOTTOMRIGHT", 0, -14)
             if ObjectiveTrackerFrame and ObjectiveTrackerFrame.GetWidth then
                 local tw = ObjectiveTrackerFrame:GetWidth()
                 if tw and tw >= 100 and tw <= 400 then

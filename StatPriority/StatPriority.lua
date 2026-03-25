@@ -18,7 +18,7 @@ _G.StatPriorityNS = ns
 
 ns.version = "2.0.0"
 
-local FONT_PATH = FONT_PATH
+local FONT_PATH = "Fonts\\FRIZQT__.TTF"
 
 -------------------------------------------------------------------------------
 -- splog: Structured logging via CouchPotatoLog. Falls back gracefully.
@@ -552,55 +552,59 @@ local function GetTrackerAnchor()
     end
 
     -- Inline fallback (kept for resilience if CouchPotato core not loaded)
-    if not ObjectiveTrackerFrame
-        or not ObjectiveTrackerFrame.IsShown
-        or not ObjectiveTrackerFrame:IsShown() then
-        splog("Debug", "GetTrackerAnchor: ObjectiveTrackerFrame not available/visible — returning nil")
+    -- ObjectiveTrackerFrame is ALWAYS the final fallback when the frame exists —
+    -- even when IsShown() returns false (e.g. no quests tracked outside a delve).
+    if not ObjectiveTrackerFrame then
+        splog("Debug", "GetTrackerAnchor: ObjectiveTrackerFrame not available — returning nil")
         return nil
     end
-    if ObjectiveTrackerFrame.modules then
-        local bestFrame, bestBottom = nil, math.huge
-        for _, module in ipairs(ObjectiveTrackerFrame.modules) do
-            if module and module.IsShown and module:IsShown() then
-                local f = (module.ContentsFrame and module.ContentsFrame.IsShown
-                           and module.ContentsFrame:IsShown() and module.ContentsFrame)
-                          or (module.Header and module.Header.IsShown
-                              and module.Header:IsShown() and module.Header)
-                          or module
-                if f and f.GetBottom then
-                    local bottom = f:GetBottom()
-                    if bottom and bottom < bestBottom then
-                        bestBottom = bottom
-                        bestFrame  = f
+    local trackerShown = ObjectiveTrackerFrame.IsShown
+                         and ObjectiveTrackerFrame:IsShown()
+    if trackerShown then
+        if ObjectiveTrackerFrame.modules then
+            local bestFrame, bestBottom = nil, math.huge
+            for _, module in ipairs(ObjectiveTrackerFrame.modules) do
+                if module and module.IsShown and module:IsShown() then
+                    local f = (module.ContentsFrame and module.ContentsFrame.IsShown
+                               and module.ContentsFrame:IsShown() and module.ContentsFrame)
+                              or (module.Header and module.Header.IsShown
+                                  and module.Header:IsShown() and module.Header)
+                              or module
+                    if f and f.GetBottom then
+                        local bottom = f:GetBottom()
+                        if bottom and bottom < bestBottom then
+                            bestBottom = bottom
+                            bestFrame  = f
+                        end
                     end
+                end
+            end
+            if bestFrame then
+                splog("Info", "GetTrackerAnchor: found lowest module via .modules table")
+                return bestFrame
+            end
+        end
+        local knownModules = {
+            "ScenarioObjectiveTracker", "QuestObjectiveTracker",
+            "BonusObjectiveTracker", "WorldQuestObjectiveTracker",
+            "CampaignQuestObjectiveTracker", "ProfessionsObjectiveTracker",
+            "AdventureObjectiveTracker", "AchievementObjectiveTracker",
+        }
+        local bestFrame, bestBottom = nil, math.huge
+        for _, name in ipairs(knownModules) do
+            local f = _G[name]
+            if f and f.IsShown and f:IsShown() and f.GetBottom then
+                local bottom = f:GetBottom()
+                if bottom and bottom < bestBottom then
+                    bestBottom = bottom
+                    bestFrame  = f
                 end
             end
         end
         if bestFrame then
-            splog("Info", "GetTrackerAnchor: found lowest module via .modules table")
+            splog("Info", "GetTrackerAnchor: found lowest module via named globals")
             return bestFrame
         end
-    end
-    local knownModules = {
-        "ScenarioObjectiveTracker", "QuestObjectiveTracker",
-        "BonusObjectiveTracker", "WorldQuestObjectiveTracker",
-        "CampaignQuestObjectiveTracker", "ProfessionsObjectiveTracker",
-        "AdventureObjectiveTracker", "AchievementObjectiveTracker",
-    }
-    local bestFrame, bestBottom = nil, math.huge
-    for _, name in ipairs(knownModules) do
-        local f = _G[name]
-        if f and f.IsShown and f:IsShown() and f.GetBottom then
-            local bottom = f:GetBottom()
-            if bottom and bottom < bestBottom then
-                bestBottom = bottom
-                bestFrame  = f
-            end
-        end
-    end
-    if bestFrame then
-        splog("Info", "GetTrackerAnchor: found lowest module via named globals")
-        return bestFrame
     end
     splog("Info", "GetTrackerAnchor: using ObjectiveTrackerFrame as anchor")
     return ObjectiveTrackerFrame
@@ -820,7 +824,7 @@ function ns:OnLoad()
         local anchor = GetTrackerAnchor()
         ns.frame:ClearAllPoints()
         if anchor then
-            ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -8)
+            ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -2)
             -- Match width to the anchor: DCS width, or ObjectiveTrackerFrame width
             local widthSource = (anchor == _G.DelveCompanionStatsFrame) and _G.DelveCompanionStatsFrame or ObjectiveTrackerFrame
             if widthSource and widthSource.GetWidth then
@@ -1189,7 +1193,7 @@ function ns:OnLoad()
         local anchor = GetTrackerAnchor()
         ns.frame:ClearAllPoints()
         if anchor then
-            ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -8)
+            ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -2)
             local anchorName = (anchor.GetName and anchor:GetName()) or tostring(anchor)
             splog("Info", "Pin restore: pinned — anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ")")
         else
