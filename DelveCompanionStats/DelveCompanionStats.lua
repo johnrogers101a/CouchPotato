@@ -19,16 +19,40 @@ _G.DelveCompanionStatsNS = ns
 
 ns.version = "1.0.0"
 
+-- Throttle timestamps for high-frequency events (seconds)
+local lastAuraUpdate    = 0
+local lastFactionUpdate = 0
+local THROTTLE_INTERVAL = 2  -- minimum seconds between processing
+-- Pending deferred-retry timer handle for UNIT_AURA throttle.
+-- When a UNIT_AURA fires during the cooldown window we schedule one retry so
+-- boons collected mid-window are never silently dropped.
+local pendingAuraTimer  = false
+-- Deduplication flag for high-frequency re-anchor events (H8)
+local _reanchorPending  = false
+
 -------------------------------------------------------------------------------
--- dcsprint: Write a coloured message to the chat frame (or print fallback)
+-- dcsprint: Write a coloured message to the chat frame (or print fallback).
+-- Delegates to CouchPotatoLog when available; bare fallback otherwise.
 -------------------------------------------------------------------------------
 local function dcsprint(msg)
-    if DEFAULT_CHAT_FRAME then
+    if _G.CouchPotatoLog then
+        _G.CouchPotatoLog:Print("DCS", msg)
+    elseif DEFAULT_CHAT_FRAME then
         DEFAULT_CHAT_FRAME:AddMessage("|cff00ccffDCS:|r " .. tostring(msg))
     else
         print("|cff00ccffDCS:|r " .. tostring(msg))
     end
 end
+
+-- dcslog: structured log via CouchPotatoLog (level = "Debug"/"Info"/"Warn"/"Error")
+-- Delegates to shared CreateLogger when available; inline fallback otherwise.
+local dcslog = (_G.CouchPotatoShared and _G.CouchPotatoShared.CreateLogger)
+    and _G.CouchPotatoShared.CreateLogger("DCS")
+    or function(level, msg)
+        if _G.CouchPotatoLog and _G.CouchPotatoLog[level] then
+            _G.CouchPotatoLog[level](_G.CouchPotatoLog, "DCS", msg)
+        end
+    end
 
 
 
@@ -42,12 +66,15 @@ SlashCmdList["DCS"] = function(msg)
     if cmd == "debug" then
         ns:PrintDebugInfo()
     elseif cmd == "show" then
+        if not ns.frame then dcsprint("Not initialized yet"); return end
         ns.frame:Show()
         dcsprint("Frame shown manually")
     elseif cmd == "hide" then
+        if not ns.frame then dcsprint("Not initialized yet"); return end
         ns.frame:Hide()
         dcsprint("Frame hidden manually")
     elseif cmd == "toggle" then
+        if not ns.frame then dcsprint("Not initialized yet"); return end
         if ns.frame:IsShown() then
             ns.frame:Hide()
             dcsprint("Frame hidden (toggle)")
@@ -57,6 +84,7 @@ SlashCmdList["DCS"] = function(msg)
             ns:UpdateCompanionData("MANUAL")
         end
     elseif cmd == "reset" then
+        if not DelveCompanionStatsDB then dcsprint("Not initialized yet"); return end
         DelveCompanionStatsDB.position = nil
         if ns.frame then
             ns.frame:ClearAllPoints()
@@ -92,13 +120,17 @@ function ns:CreateDebugPopup()
     popup:SetFrameLevel(100)
 
     -- Dark semi-transparent backdrop (same style as the main display frame)
-    popup:SetBackdrop({
-        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 },
-    })
-    popup:SetBackdropColor(0, 0, 0, 0.85)
+    if popup.SetBackdrop then
+        popup:SetBackdrop({
+            bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true, tileSize = 32, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 },
+        })
+    end
+    if popup.SetBackdropColor then
+        popup:SetBackdropColor(0, 0, 0, 0.85)
+    end
 
     -- Title
     local title = popup:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -119,7 +151,7 @@ function ns:CreateDebugPopup()
     if not fontOk then
         editBox:SetFont(STANDARD_TEXT_FONT, 12, "")
     end
-    editBox:SetSize(scrollFrame:GetWidth(), 2000)
+    editBox:SetSize(popup:GetWidth() - 36, 2000)
     scrollFrame:SetScrollChild(editBox)
 
     -- Store editBox reference for external access and testing
@@ -135,7 +167,8 @@ function ns:CreateDebugPopup()
     -- Dismiss on ESC
     popup:EnableKeyboard(true)
     popup:SetScript("OnKeyDown", function(self, key)
-        if key == "ESCAPE" then self:Hide() end
+        self:SetPropagateKeyboardInput(key ~= "ESCAPE")
+        if key == "ESCAPE" then popup:Hide() end
     end)
 
     popup:Hide()
@@ -146,8 +179,8 @@ end
 -------------------------------------------------------------------------------
 -- IsInDelve: Returns true when the player is inside a delve instance.
 -- Uses IsInInstance() returning "scenario" as the primary signal (reliable
--- across all phases of a delve run in TWW), with HasActiveDelve() as a
--- secondary fallback.
+-- across all phases of a delve run in TWW), with HasActiveDelve() and
+-- C_PartyInfo.IsDelveInProgress() as secondary/tertiary fallbacks.
 -------------------------------------------------------------------------------
 local function IsInDelve()
     local _, instanceType = IsInInstance()
@@ -158,6 +191,11 @@ local function IsInDelve()
         return C_DelvesUI.HasActiveDelve and C_DelvesUI.HasActiveDelve()
     end)
     if ok and hasDelve then return true end
+    -- Tertiary fallback: C_PartyInfo.IsDelveInProgress() (confirmed reliable in cpdiag data)
+    local ok2, inProgress = pcall(function()
+        return C_PartyInfo and C_PartyInfo.IsDelveInProgress and C_PartyInfo.IsDelveInProgress()
+    end)
+    if ok2 and inProgress then return true end
     return false
 end
 
@@ -229,7 +267,20 @@ function ns:PrintDebugInfo()
             local hadOk, hadVal = pcall(function() return C_DelvesUI.HasActiveDelve() end)
             if hadOk then
                 table.insert(lines, ("  C_DelvesUI.HasActiveDelve() => %s"):format(tostring(hadVal)))
-                table.insert(lines, ("  -> IsInDelve will return %s"):format(tostring(hadVal == true)))
+                if hadVal then
+                    table.insert(lines, "  -> IsInDelve will return TRUE (HasActiveDelve)")
+                else
+                    table.insert(lines, "  -> HasActiveDelve() false; checking C_PartyInfo.IsDelveInProgress()...")
+                    local pipOk, pipVal = pcall(function()
+                        return C_PartyInfo and C_PartyInfo.IsDelveInProgress and C_PartyInfo.IsDelveInProgress()
+                    end)
+                    if pipOk then
+                        table.insert(lines, ("  C_PartyInfo.IsDelveInProgress() => %s"):format(tostring(pipVal)))
+                        table.insert(lines, ("  -> IsInDelve will return %s"):format(tostring(pipVal == true)))
+                    else
+                        table.insert(lines, "  C_PartyInfo.IsDelveInProgress() => <API error or unavailable>")
+                    end
+                end
             else
                 table.insert(lines, "  C_DelvesUI.HasActiveDelve() => <API error: " .. tostring(hadVal) .. ">")
             end
@@ -367,25 +418,36 @@ function ns:PrintDebugInfo()
     table.insert(lines, "")
     table.insert(lines, "=== BOON STATE ===")
     -- =========================================================================
-    -- Dump tooltip lines for spell 1280098 (source of boon stat values)
-    table.insert(lines, "--- Tooltip for 1280098 ---")
+    -- Dump C_Spell.GetSpellDescription(1280098) (source of boon stat values)
+    table.insert(lines, "--- C_Spell.GetSpellDescription(1280098) ---")
     pcall(function()
-        GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
-        GameTooltip:SetSpellByID(1280098)
-        for i = 1, GameTooltip:NumLines() do
-            local left = _G["GameTooltipTextLeft" .. i]
-            if left and left:GetText() then
-                local rawText = left:GetText()
-                table.insert(lines, ("  L%d: %s"):format(i, rawText))
-                -- Debug: show raw captured stat name and its resolved abbreviation
-                local rawStat, rawNum = rawText:match("^(.+): (%d+)%%.?%s*$")
-                if rawStat then
-                    table.insert(lines, ("    [boon] raw stat=%q  abbrev=%q"):format(
-                        rawStat, GetBoonAbbrev(rawStat)))
+        if C_Spell and C_Spell.GetSpellDescription then
+            local descOk, spellDesc = pcall(C_Spell.GetSpellDescription, 1280098)
+            if descOk and spellDesc and spellDesc ~= "" then
+                -- Strip color codes for display
+                local cleanDesc = spellDesc
+                    :gsub("|cn[^:]+:", ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+                -- Also dump the raw (pre-strip) description for format diagnosis.
+                table.insert(lines, "  [raw, pre-strip]: " .. spellDesc)
+                local lineNum = 0
+                for ln in (cleanDesc .. "\n"):gmatch("([^\n]*)\n") do
+                    lineNum = lineNum + 1
+                    table.insert(lines, ("  L%d: %s"):format(lineNum, ln))
+                    -- Use the same resilient patterns as GetBoonsDisplayText.
+                    local rawStat, rawNum = ln:match("^(.+):%s*(%d+)%%%D*$")
+                    if not rawStat then rawStat, rawNum = ln:match("^(.+):%s*(%d+)%D*$") end
+                    if rawStat then
+                        rawStat = rawStat:match("^%s*(.-)%s*$")
+                        table.insert(lines, ("    [boon] raw stat=%q  abbrev=%q"):format(
+                            rawStat, GetBoonAbbrev(rawStat)))
+                    end
                 end
+            else
+                table.insert(lines, "  (no description returned)")
             end
+        else
+            table.insert(lines, "  C_Spell.GetSpellDescription not available")
         end
-        GameTooltip:Hide()
     end)
 
     local boonText = ""
@@ -508,6 +570,15 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
         -- Unregister immediately — we only need to initialize once
         self:UnregisterEvent("ADDON_LOADED")
+        dcslog("Info", "ADDON_LOADED fired for: " .. tostring(arg1))
+
+        -- Check if this addon is functionally disabled via CouchPotato suite
+        if _G.CouchPotatoDB and _G.CouchPotatoDB.addonStates and
+           _G.CouchPotatoDB.addonStates.DelveCompanionStats == false then
+            dcslog("Info", "DelveCompanionStats is disabled via /cp disable — skipping init")
+            ns._cpDisabled = true
+            return
+        end
 
         -- All initialization happens here, atomically, before any other events fire
         ns:OnLoad()
@@ -529,20 +600,68 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
 end)
 
 -------------------------------------------------------------------------------
--- GetTrackerAnchor: Returns the first visible Blizzard objective tracker frame
--- (ScenarioObjectiveTracker preferred, ObjectiveTrackerFrame as fallback).
--- Returns nil when neither is available/visible.
+-- GetTrackerAnchor: Returns the frame whose BOTTOM edge is the lowest visible
+-- point of the Blizzard objective tracker, so we dock immediately below all
+-- rendered tracker content without leaving a gap or overlapping text.
+--
+-- Strategy (WoW 12.x):
+--   1. If ObjectiveTrackerFrame exposes a .modules table, iterate it and find
+--      the visible module with the lowest screen position (smallest GetBottom).
+--   2. Fall back to a known list of named module globals.
+--   3. Final fallback: ObjectiveTrackerFrame itself (previous behaviour).
+-- Returns nil when no tracker frame is visible at all.
 -------------------------------------------------------------------------------
 local function GetTrackerAnchor()
-    -- Always anchor to the full ObjectiveTrackerFrame so we stay below ALL
-    -- tracker content (quests, scenarios, achievements, etc.), not just
-    -- the Delves/Scenario section.
-    if ObjectiveTrackerFrame
-        and ObjectiveTrackerFrame.IsShown
-        and ObjectiveTrackerFrame:IsShown() then
-        return ObjectiveTrackerFrame
+    -- Delegate to shared utility when available; inline fallback for standalone loading.
+    if _G.CouchPotatoShared and _G.CouchPotatoShared.GetBaseTrackerAnchor then
+        return _G.CouchPotatoShared.GetBaseTrackerAnchor()
     end
-    return nil
+
+    -- Inline fallback (identical logic, kept for resilience if CouchPotato core not loaded)
+    if not ObjectiveTrackerFrame
+        or not ObjectiveTrackerFrame.IsShown
+        or not ObjectiveTrackerFrame:IsShown() then
+        return nil
+    end
+    if type(ObjectiveTrackerFrame.modules) == "table" then
+        local bestFrame, bestBottom = nil, math.huge
+        for _, module in pairs(ObjectiveTrackerFrame.modules) do
+            if module and module.IsShown and module:IsShown() then
+                local f = (module.ContentsFrame and module.ContentsFrame.IsShown
+                           and module.ContentsFrame:IsShown() and module.ContentsFrame)
+                          or (module.Header and module.Header.IsShown
+                              and module.Header:IsShown() and module.Header)
+                          or module
+                if f and f.GetBottom then
+                    local bottom = f:GetBottom()
+                    if bottom and bottom < bestBottom then
+                        bestBottom = bottom
+                        bestFrame  = f
+                    end
+                end
+            end
+        end
+        if bestFrame then return bestFrame end
+    end
+    local knownModules = {
+        "ScenarioObjectiveTracker", "QuestObjectiveTracker",
+        "BonusObjectiveTracker", "WorldQuestObjectiveTracker",
+        "CampaignQuestObjectiveTracker", "ProfessionsObjectiveTracker",
+        "AdventureObjectiveTracker", "AchievementObjectiveTracker",
+    }
+    local bestFrame, bestBottom = nil, math.huge
+    for _, name in ipairs(knownModules) do
+        local f = _G[name]
+        if f and f.IsShown and f:IsShown() and f.GetBottom then
+            local bottom = f:GetBottom()
+            if bottom and bottom < bestBottom then
+                bestBottom = bottom
+                bestFrame  = f
+            end
+        end
+    end
+    if bestFrame then return bestFrame end
+    return ObjectiveTrackerFrame
 end
 
 -------------------------------------------------------------------------------
@@ -557,7 +676,13 @@ local function AnchorFrame()
     local anchor = GetTrackerAnchor()
     if anchor then
         ns.frame:ClearAllPoints()
-        ns.frame:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
+        ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -4)
+        if ObjectiveTrackerFrame and ObjectiveTrackerFrame.GetWidth then
+            local tw = ObjectiveTrackerFrame:GetWidth()
+            if tw and tw >= 100 and tw <= 400 then
+                ns.frame:SetWidth(tw)
+            end
+        end
         ns.isDraggable = false
     else
         -- Fall back to saved position; allow dragging when unanchored
@@ -608,7 +733,12 @@ end
 -------------------------------------------------------------------------------
 function ns:OnLoad()
     -- Guard: idempotent — never initialize twice
-    if ns.frame then return end
+    if ns.frame then
+        dcslog("Warn", "OnLoad called but ns.frame already exists — skipping (idempotent guard)")
+        return
+    end
+
+    dcslog("Info", "OnLoad: starting initialization, version=" .. ns.version)
 
     -- 1. Initialize SavedVariables
     -- NOTE: Per WoW API docs, SavedVariables are guaranteed to be loaded
@@ -640,44 +770,55 @@ function ns:OnLoad()
         end
     end
     if not frameOk or not frameResult then
+        dcslog("Error", "Could not create display frame — addon disabled")
         print("|cffff4444DelveCompanionStats:|r Could not create display frame. Addon disabled.")
         ns.frame = nil
         return
     end
 
     ns.frame = frameResult
+    dcslog("Info", "Frame created successfully: DelveCompanionStatsFrame")
 
-    -- Use LOW strata so bags/panels (MEDIUM) and dialogs always render in front.
-    ns.frame:SetFrameStrata("LOW")
-    ns.frame:SetFrameLevel(2)
+    -- Use MEDIUM strata at a low frame level so the frame sits at the same rendering
+    -- layer as the objective tracker content (also MEDIUM) but below Blizzard's own
+    -- tracker text which uses higher frame levels within MEDIUM.  LOW strata caused
+    -- the frames to render behind quest text while still overlapping it positionally.
+    ns.frame:SetFrameStrata("MEDIUM")
+    ns.frame:SetFrameLevel(1)
 
-    -- 3. Determine frame width — match ScenarioObjectiveTracker when available,
-    -- otherwise fall back to 260 px (a reasonable tracker-column width).
+    -- 3. Determine frame width — match ObjectiveTrackerFrame (outer tracker container)
+    -- for exact alignment with Blizzard's tracker. Fall back to ScenarioObjectiveTracker,
+    -- then hardcoded 248 px.
     local frameWidth = 0
-    if ScenarioObjectiveTracker and ScenarioObjectiveTracker.GetWidth then
-        frameWidth = ScenarioObjectiveTracker:GetWidth()
+    if ObjectiveTrackerFrame and ObjectiveTrackerFrame.GetWidth then
+        frameWidth = ObjectiveTrackerFrame:GetWidth()
     end
-    if frameWidth < 100 or frameWidth > 300 then
+    if frameWidth < 100 or frameWidth > 400 then
+        if ScenarioObjectiveTracker and ScenarioObjectiveTracker.GetWidth then
+            frameWidth = ScenarioObjectiveTracker:GetWidth()
+        end
+    end
+    if frameWidth < 100 or frameWidth > 400 then
         frameWidth = 248  -- match Delves section content box width
     end
-    -- Inner content width: 6 px padding each side (matches ObjectiveTracker label inset)
-    local contentWidth = frameWidth - 12
+    -- Inner content width: 6 px label inset each side (matches ObjectiveTracker label inset),
+    -- minus 16 px to account for the 8px left/right padding on the content frame anchors.
+    local contentWidth = frameWidth - 12 - 16
 
-    -- Set size and default anchor (above ChatFrame1 when available)
+    -- Set size and default anchor (below ObjectiveTrackerFrame on the right side)
     ns.frame:SetSize(frameWidth, 160)
-    if ChatFrame1 then
-        ns.frame:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 10)
+    if ObjectiveTrackerFrame then
+        ns.frame:SetPoint("TOPRIGHT", ObjectiveTrackerFrame, "BOTTOMRIGHT", 0, -4)
     else
-        ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 130)
+        ns.frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -200)
     end
 
-    -- 4a. Header frame — manual recreation of Blizzard ObjectiveTracker section header.
-    -- Dark olive background, bright gold top+bottom border lines, ObjectiveTitleFont title
-    -- left-aligned, gold en-dash collapse button far right. Matches Blizzard "Delves" header.
+    -- 4a. Header frame — matches Blizzard ObjectiveTracker section header precisely.
+    -- Dark semi-transparent background bar, larger gold text, full-width gold underline.
     local header = CreateFrame("Button", nil, ns.frame)
     ns.header = header
     ns.headerFrame = header
-    header:SetHeight(28)
+    header:SetHeight(26)
     header:SetPoint("TOPLEFT",  ns.frame, "TOPLEFT",  0, 0)
     header:SetPoint("TOPRIGHT", ns.frame, "TOPRIGHT", 0, 0)
     header:EnableMouse(true)
@@ -690,46 +831,51 @@ function ns:OnLoad()
     header:SetScript("OnDragStop", function()
         ns.frame:StopMovingOrSizing()
         if DelveCompanionStatsDB then
-            local point, _, relPoint, x, y = ns.frame:GetPoint()
-            DelveCompanionStatsDB.position = {point=point, relPoint=relPoint, x=x, y=y}
+            local point, _, relativePoint, x, y = ns.frame:GetPoint()
+            DelveCompanionStatsDB.position = {point=point, relativePoint=relativePoint, x=x, y=y}
         end
     end)
 
-    -- Background: dark olive/brown gradient
+    -- Dark semi-transparent background bar — matches Blizzard ObjectiveTracker section headers.
     local headerBg = header:CreateTexture(nil, "BACKGROUND")
     headerBg:SetAllPoints(header)
-    headerBg:SetColorTexture(0.15, 0.12, 0.03, 0.95)
+    headerBg:SetColorTexture(0, 0, 0, 0.5)
 
-    -- Top border: bright gold line
-    local headerTopLine = header:CreateTexture(nil, "BORDER")
-    headerTopLine:SetHeight(1)
-    headerTopLine:SetPoint("TOPLEFT",  header, "TOPLEFT",  0, 0)
-    headerTopLine:SetPoint("TOPRIGHT", header, "TOPRIGHT", 0, 0)
-    headerTopLine:SetColorTexture(1, 0.78, 0.1, 1)
-
-    -- Bottom border: bright gold line
-    local headerBottomLine = header:CreateTexture(nil, "BORDER")
-    headerBottomLine:SetHeight(1)
-    headerBottomLine:SetPoint("BOTTOMLEFT",  header, "BOTTOMLEFT",  0, 0)
-    headerBottomLine:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
-    headerBottomLine:SetColorTexture(1, 0.78, 0.1, 1)
-
-    -- Title: large bright gold, left-aligned; font set explicitly (not as CreateFontString
-    -- 3rd-arg) to guarantee it renders even if ObjectiveTitleFont is not yet loaded.
-    local headerTitle = header:CreateFontString(nil, "OVERLAY")
-    headerTitle:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+    -- Title: GameFontNormalLarge (14pt) matching Blizzard tracker header size.
+    -- Try ObjectiveTitleFont first (exact Blizzard font); fall back to GameFontNormalLarge.
+    local headerTitle = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    -- Try the exact Blizzard tracker header font first; fall back silently.
+    pcall(function() headerTitle:SetFontObject(ObjectiveTitleFont) end)
     headerTitle:SetPoint("LEFT", header, "LEFT", 8, 0)
     headerTitle:SetJustifyV("MIDDLE")
     headerTitle:SetText("Companion")
+    -- Gold matching Blizzard section headers: R=1 G=0.82 B=0 (same as tracker "Delves" text)
     headerTitle:SetTextColor(1, 0.82, 0.0, 1)
 
-    -- Collapse button: gold en-dash, far right, vertically centred
+    -- Collapse button: gold en-dash, far right, vertically centred.
+    -- Sized at 36x36 for easy clicking.
+    -- Created BEFORE the gold lines so the lines can anchor to the header edges.
     local collapseBtn = CreateFrame("Button", nil, header)
-    collapseBtn:SetSize(20, 28)
-    collapseBtn:SetPoint("RIGHT", header, "RIGHT", -6, 0)
+    collapseBtn:SetSize(36, 36)
+    collapseBtn:SetPoint("RIGHT", header, "RIGHT", -4, 0)
+
+    -- Gold line: full width across the TOP of the header bar.
+    local headerTopLine = header:CreateTexture(nil, "ARTWORK")
+    headerTopLine:SetHeight(1)
+    headerTopLine:SetPoint("TOPLEFT",  header, "TOPLEFT",  0, 0)
+    headerTopLine:SetPoint("TOPRIGHT", header, "TOPRIGHT", 0, 0)
+    headerTopLine:SetColorTexture(0.9, 0.75, 0.1, 0.8)
+
+    -- Gold line: full width across the BOTTOM of the header bar — from left edge to right edge.
+    -- Matches Blizzard's ObjectiveTracker section headers exactly.
+    local headerBottomLine = header:CreateTexture(nil, "ARTWORK")
+    headerBottomLine:SetHeight(1)
+    headerBottomLine:SetPoint("BOTTOMLEFT",  header, "BOTTOMLEFT",  0, 0)
+    headerBottomLine:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
+    headerBottomLine:SetColorTexture(0.9, 0.75, 0.1, 0.8)
     -- Font set explicitly (not as 3rd arg) so text renders even before font objects load
     local collapseBtnText = collapseBtn:CreateFontString(nil, "OVERLAY")
-    collapseBtnText:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+    collapseBtnText:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
     collapseBtnText:SetAllPoints(collapseBtn)
     collapseBtnText:SetJustifyH("CENTER")
     collapseBtnText:SetJustifyV("MIDDLE")
@@ -738,6 +884,7 @@ function ns:OnLoad()
     collapseBtn:SetFontString(collapseBtnText)
 
     collapseBtn:SetScript("OnClick", function()
+        if not ns.contentFrame then return end
         if ns.contentFrame:IsShown() then
             ns.contentFrame:Hide()
             collapseBtnText:SetText("+")
@@ -765,22 +912,39 @@ function ns:OnLoad()
     -- Pin button: to the LEFT of the collapse button. Lock icon indicates whether
     -- the frame is anchored to the Blizzard tracker (locked/pinned) or freely draggable
     -- (unlocked/unpinned). Default: pinned (locked icon).
+    -- Pin button: sized at 26x26 (at least 10px larger than old 16x16) for easy clicking.
     local pinBtn = CreateFrame("Button", nil, header)
-    pinBtn:SetSize(16, 16)
-    pinBtn:SetPoint("RIGHT", collapseBtn, "LEFT", -6, 0)
+    pinBtn:SetSize(26, 26)
+    pinBtn:SetPoint("RIGHT", collapseBtn, "LEFT", -4, 0)
     pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
     pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
     pinBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight", "ADD")
     pinBtn:EnableMouse(true)
     ns.pinBtn = pinBtn
 
-    -- ApplyPinnedState: anchor frame to tracker, disable dragging, gold icon.
+    -- ApplyPinnedState: anchor frame below the objective tracker, disable dragging, lock icon.
+    -- Uses ObjectiveTrackerFrame (the outer auto-sizing container) as the anchor so DCS
+    -- sits directly below all tracker content.  Falls back to a right-side default when
+    -- the tracker is not yet visible (e.g. at load time before PLAYER_ENTERING_WORLD).
     local function ApplyPinnedState()
         ns.isDraggable = false
         ns.frame:SetMovable(false)
-        if ScenarioObjectiveTracker then
-            ns.frame:ClearAllPoints()
-            ns.frame:SetPoint("TOP", ScenarioObjectiveTracker, "BOTTOM", 0, -4)
+        ns.frame:ClearAllPoints()
+        local trackerAnchor = GetTrackerAnchor()
+        if trackerAnchor then
+            ns.frame:SetPoint("TOPRIGHT", trackerAnchor, "BOTTOMRIGHT", 0, -4)
+            if ObjectiveTrackerFrame and ObjectiveTrackerFrame.GetWidth then
+                local tw = ObjectiveTrackerFrame:GetWidth()
+                if tw and tw >= 100 and tw <= 400 then
+                    ns.frame:SetWidth(tw)
+                end
+            end
+            dcslog("Info", "ApplyPinnedState: anchored below ObjectiveTrackerFrame")
+        else
+            -- Tracker not visible yet — park on right side of screen until
+            -- PLAYER_ENTERING_WORLD fires and re-anchors us properly.
+            ns.frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -200)
+            dcslog("Info", "ApplyPinnedState: tracker not visible — parked TOPRIGHT fallback")
         end
         ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
         ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
@@ -801,26 +965,10 @@ function ns:OnLoad()
         if not db then return end
         if db.pinned == false then
             -- currently unpinned → pin it
-            db.pinned = true
-            ns.frame:SetMovable(false)
-            ns.frame:ClearAllPoints()
-            if ScenarioObjectiveTracker then
-                ns.frame:SetPoint("TOP", ScenarioObjectiveTracker, "BOTTOM", 0, -4)
-            else
-                ns.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-            end
-            if ns.pinBtn then
-                ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
-                ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
-            end
+            ApplyPinnedState()
         else
             -- currently pinned (or nil) → unpin it
-            db.pinned = false
-            ns.frame:SetMovable(true)
-            if ns.pinBtn then
-                ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Unlocked-Up")
-                ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Unlocked-Down")
-            end
+            ApplyUnpinnedState()
         end
     end)
 
@@ -839,55 +987,51 @@ function ns:OnLoad()
     else
         contentFrame = CreateFrame("Frame", nil, ns.frame)
     end
-    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",  10, -8)
-    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT", 0, -8)
-    -- Subtle dark content background with rounded gold border
-    contentFrame:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 12,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
-    })
-    contentFrame:SetBackdropColor(0.05, 0.04, 0.01, 0.95)
-    contentFrame:SetBackdropBorderColor(1, 0.78, 0.1, 0.8)
+    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",   0, -2)
+    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT",  0, -2)
+    -- No visible backdrop — content text floats on transparent background matching
+    -- Blizzard's ObjectiveTracker content area (no box, no border, no background panel).
     -- Store on ns so UpdateCompanionData can resize it
     ns.contentFrame = contentFrame
 
-    -- 5. Name label — GameFontHighlightSmall (11pt) white text, matching tracker body style
+    -- 5. Name label — objective body text style (white, ~11pt), matching tracker objective
+    -- lines ("- 1/3 Elementary Voidcore Shard" etc).  8px left padding, 8px top padding.
     ns.nameLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.nameLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 6, -4)
+    ns.nameLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 8, -8)
     ns.nameLabel:SetWidth(contentWidth)
     ns.nameLabel:SetJustifyH("LEFT")
-    ns.nameLabel:SetFontObject("GameFontHighlightSmall")
+    -- Apply font object then override color so ObjectiveFont default color is not kept.
     pcall(function() ns.nameLabel:SetFontObject(ObjectiveFont) end)
-    ns.nameLabel:SetTextColor(1, 1, 1, 1)
+    ns.nameLabel:SetTextColor(1, 1, 1, 1)  -- pure white, set AFTER font object
     ns.nameLabel:SetText("No companion data")
     ns.nameLabel:SetShadowOffset(1, -1)
     ns.nameLabel:SetShadowColor(0, 0, 0, 1)
     ns.nameLabel:SetWordWrap(false)
 
-    -- 6c. Boon header label — "Boons" sub-header, shown only when boons are present
-    -- GameFontNormalSmall (11pt, slightly bolder) in muted gold
+    -- 6c. Boon header label — "Boons" section header, styled like Blizzard quest/objective
+    -- titles (e.g. "An Elementary Voidcore"): muted gold, GameFontNormalSmall.
+    -- Shown whenever a companion is active; positioned 6px below the level line.
     ns.boonHeaderLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ns.boonHeaderLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -4)
-    ns.boonHeaderLabel:SetFontObject("GameFontNormalSmall")
-    pcall(function() ns.boonHeaderLabel:SetFontObject(ObjectiveFont) end)
+    ns.boonHeaderLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -6)
     ns.boonHeaderLabel:SetWidth(contentWidth)
     ns.boonHeaderLabel:SetJustifyH("LEFT")
+    -- Use ObjectiveFont when available; set color AFTER so muted gold is preserved.
+    pcall(function() ns.boonHeaderLabel:SetFontObject(ObjectiveFont) end)
     ns.boonHeaderLabel:SetTextColor(0.9, 0.75, 0.3, 1)
     ns.boonHeaderLabel:SetShadowOffset(1, -1)
     ns.boonHeaderLabel:SetShadowColor(0, 0, 0, 1)
     ns.boonHeaderLabel:SetText("Boons")
     ns.boonHeaderLabel:Hide()
 
-    -- 6d. Boon label — one boon per line, positioned below the Boons sub-header
-    -- GameFontHighlightSmall (11pt) in white
+    -- 6d. Boon value label — stat values "Max HP: 6%, Move Spd: 10%" or "None".
+    -- Matches Blizzard objective text style: white for active values, grey for "None".
+    -- Anchored 4px below the Boons header.
     ns.boonLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.boonLabel:SetPoint("TOPLEFT", ns.boonHeaderLabel, "BOTTOMLEFT", 0, -2)
-    ns.boonLabel:SetFontObject("GameFontHighlightSmall")
-    pcall(function() ns.boonLabel:SetFontObject(ObjectiveFont) end)
+    ns.boonLabel:SetPoint("TOPLEFT", ns.boonHeaderLabel, "BOTTOMLEFT", 0, -4)
     ns.boonLabel:SetWidth(contentWidth)
     ns.boonLabel:SetJustifyH("LEFT")
+    -- Apply font then set color to ensure white is not overridden by font defaults.
+    pcall(function() ns.boonLabel:SetFontObject(ObjectiveFont) end)
     ns.boonLabel:SetTextColor(1, 1, 1, 1)
     ns.boonLabel:SetShadowOffset(1, -1)
     ns.boonLabel:SetShadowColor(0, 0, 0, 1)
@@ -903,31 +1047,33 @@ function ns:OnLoad()
     ns.xpLabel:SetText("")
     ns.xpLabel:Hide()
 
-    -- 6e. Nemesis label — "Nemesis Strongbox (n/n)" sub-header; GameFontNormalSmall muted-gold
+    -- 6e. Nemesis header label — "Enemy Groups Remaining" section sub-header, styled like
+    -- Blizzard objective/quest title text: muted gold, GameFontNormalSmall.
+    -- Anchored 6px below the boon value label; shown only when nemesis data is present.
     ns.nemesisLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -4)
-    ns.nemesisLabel:SetFontObject("GameFontNormalSmall")
-    pcall(function() ns.nemesisLabel:SetFontObject(ObjectiveFont) end)
+    ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -6)
     ns.nemesisLabel:SetWidth(contentWidth)
     ns.nemesisLabel:SetJustifyH("LEFT")
+    -- Use ObjectiveFont when available; set color AFTER so muted gold is preserved.
+    pcall(function() ns.nemesisLabel:SetFontObject(ObjectiveFont) end)
     ns.nemesisLabel:SetTextColor(0.9, 0.75, 0.3, 1)
     ns.nemesisLabel:SetShadowOffset(1, -1)
     ns.nemesisLabel:SetShadowColor(0, 0, 0, 1)
     ns.nemesisLabel:SetText("")
+    ns.nemesisLabel:Hide()
 
-    -- 6f. Nemesis detail label — white body lines below the Nemesis Strongbox header;
-    -- mirrors boonLabel: one line per combat criterion ("description: qty/total")
-    -- GameFontHighlightSmall (11pt) in white
+    -- 6f. Nemesis value label — "X / Y" count below the header; white objective text.
     ns.nemesisDetailLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.nemesisDetailLabel:SetPoint("TOPLEFT", ns.nemesisLabel, "BOTTOMLEFT", 0, -2)
-    ns.nemesisDetailLabel:SetFontObject("GameFontHighlightSmall")
-    pcall(function() ns.nemesisDetailLabel:SetFontObject(ObjectiveFont) end)
+    ns.nemesisDetailLabel:SetPoint("TOPLEFT", ns.nemesisLabel, "BOTTOMLEFT", 0, -4)
     ns.nemesisDetailLabel:SetWidth(contentWidth)
     ns.nemesisDetailLabel:SetJustifyH("LEFT")
-    ns.nemesisDetailLabel:SetTextColor(1, 1, 1, 1)  -- WHITE, same as boonLabel
+    -- Apply font then set white so font default color is not kept.
+    pcall(function() ns.nemesisDetailLabel:SetFontObject(ObjectiveFont) end)
+    ns.nemesisDetailLabel:SetTextColor(1, 1, 1, 1)
     ns.nemesisDetailLabel:SetShadowOffset(1, -1)
     ns.nemesisDetailLabel:SetShadowColor(0, 0, 0, 1)
     ns.nemesisDetailLabel:SetText("")
+    ns.nemesisDetailLabel:Hide()
 
     -- 7. Make frame movable (only active when not anchored to the tracker)
     -- Safe: frame created above in this same function before drag handlers registered
@@ -939,7 +1085,7 @@ function ns:OnLoad()
         local posOk = pcall(function()
             local p = db.position
             ns.frame:ClearAllPoints()
-            -- Support both 'relativePoint' (legacy) and 'relPoint' (new pin-save format)
+            -- Support both 'relativePoint' (canonical) and 'relPoint' (legacy)
             ns.frame:SetPoint(p.point, UIParent, p.relativePoint or p.relPoint, p.x, p.y)
         end)
         -- posOk == false means corrupt position data; default anchor from step 3 remains
@@ -959,17 +1105,12 @@ function ns:OnLoad()
         local pos = DelveCompanionStatsDB.position
         if pos and pos.point then
             ns.frame:ClearAllPoints()
-            ns.frame:SetPoint(pos.point, UIParent, pos.relPoint or pos.point, pos.x or 0, pos.y or 0)
+            ns.frame:SetPoint(pos.point, UIParent, pos.relativePoint or pos.relPoint or pos.point, pos.x or 0, pos.y or 0)
         end
         if ns.pinBtn then ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Unlocked-Up") end
     else
-        -- pinned (true or nil) → immovable, locked icon, normalise db value to true
-        DelveCompanionStatsDB.pinned = true
-        ns.frame:SetMovable(false)
-        if ns.pinBtn then
-            ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
-            ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
-        end
+        -- pinned (true or nil) → anchor to tracker, immovable, locked icon
+        ApplyPinnedState()
     end
 
     -- 9. Determine frame visibility based on active delve state
@@ -978,7 +1119,11 @@ function ns:OnLoad()
     -- ResizeToTracker: re-measure ScenarioObjectiveTracker width and apply to all labels.
     -- Called on PLAYER_ENTERING_WORLD so the tracker is fully sized before we read it.
     local function ResizeToTracker()
-        local w = 248  -- Fixed width for Delves section content box
+        local w = 248  -- fallback width
+        if ObjectiveTrackerFrame and ObjectiveTrackerFrame.GetWidth then
+            local tw = ObjectiveTrackerFrame:GetWidth()
+            if tw and tw >= 100 and tw <= 400 then w = tw end
+        end
         if ns.frame then ns.frame:SetWidth(w) end
         if ns.header then ns.header:SetWidth(w) end
         if ns.headerFrame then ns.headerFrame:SetWidth(w) end
@@ -1009,15 +1154,58 @@ function ns:OnLoad()
         -- QUEST_WATCH_LIST_CHANGED fires when quests are tracked/untracked;
         -- re-anchor so we stay below the full tracker content.
         ns.frame:RegisterEvent("QUEST_WATCH_LIST_CHANGED")
+        -- Additional re-anchor triggers: world quests / bonus objectives appearing
+        -- when entering a zone can shift tracker height without a QUEST_WATCH_LIST_CHANGED.
+        ns.frame:RegisterEvent("QUEST_LOG_UPDATE")
+        ns.frame:RegisterEvent("QUEST_POI_UPDATE")
+        pcall(function() ns.frame:RegisterEvent("QUEST_ACCEPTED") end)
+        pcall(function() ns.frame:RegisterEvent("QUEST_REMOVED") end)
+        pcall(function() ns.frame:RegisterEvent("SCENARIO_UPDATE") end)
+        pcall(function() ns.frame:RegisterEvent("TRACKED_ACHIEVEMENT_UPDATE") end)
         -- UNIT_AURA fires when buffs/debuffs change on a unit; used to detect
         -- when the boon aura (spell 1280098) becomes active after zone-in.
         ns.frame:RegisterEvent("UNIT_AURA")
+        -- SPELL_DATA_LOAD_RESULT fires when an asynchronous spell description
+        -- finishes loading.  Boon spell 1280098 may not be cached on first query;
+        -- re-running UpdateCompanionData when it arrives guarantees fresh values.
+        pcall(function() ns.frame:RegisterEvent("SPELL_DATA_LOAD_RESULT") end)
         ns.frame:SetScript("OnEvent", function(self, event, ...)
+            -- Suppress all event handling if functionally disabled via /cp disable
+            if ns._cpDisabled then return end
             -- UNIT_AURA: only refresh boon data when player's own auras change in a delve.
             -- Avoids redundant updates for non-player units (party members, NPCs, etc.).
+            -- Throttled to once every THROTTLE_INTERVAL seconds to prevent continuous spam.
             if event == "UNIT_AURA" then
                 local unitID = ...
                 if unitID == "player" and IsInDelve() then
+                    local now = GetTime()
+                    if now - lastAuraUpdate >= THROTTLE_INTERVAL then
+                        lastAuraUpdate = now
+                        pendingAuraTimer = false
+                        ns:UpdateCompanionData(event)
+                    elseif not pendingAuraTimer and C_Timer and C_Timer.After then
+                        -- A boon was collected during the throttle window.
+                        -- Schedule exactly one deferred retry so it is never dropped.
+                        pendingAuraTimer = true
+                        local retryDelay = THROTTLE_INTERVAL - (now - lastAuraUpdate) + 0.1
+                        C_Timer.After(retryDelay, function()
+                            pendingAuraTimer = false
+                            if IsInDelve() then
+                                lastAuraUpdate = GetTime()
+                                ns:UpdateCompanionData("UNIT_AURA_RETRY")
+                            end
+                        end)
+                    end
+                end
+                return
+            end
+
+            -- SPELL_DATA_LOAD_RESULT: fires when an async spell description finishes
+            -- loading.  Re-run boon data if we are in a delve and the loaded spell is
+            -- the boon spell (1280098), or if no spellID arg is available (fire anyway).
+            if event == "SPELL_DATA_LOAD_RESULT" then
+                local spellID = ...
+                if IsInDelve() and (spellID == nil or spellID == 1280098) then
                     ns:UpdateCompanionData(event)
                 end
                 return
@@ -1040,23 +1228,63 @@ function ns:OnLoad()
                             ns:UpdateCompanionData("TIMER_2S_PEW")
                         end
                     end)
-                    C_Timer.After(5, function()
-                        if IsInDelve() then
-                            AnchorFrame()
-                            ns:UpdateCompanionData("TIMER_5S_PEW")
-                        end
-                    end)
                 end
                 return
             end
 
-            -- QUEST_WATCH_LIST_CHANGED: re-anchor after a short delay so the
-            -- tracker has time to finish its layout before we read its bounds.
-            if event == "QUEST_WATCH_LIST_CHANGED" then
-                if C_Timer and C_Timer.After then
-                    C_Timer.After(0.1, function() AnchorFrame() end)
+            -- QUEST_WATCH_LIST_CHANGED and related tracker-content events: re-anchor
+            -- after a short delay so the tracker has time to finish its layout before
+            -- we read its bounds.  World quests / bonus objectives appearing on zone-in
+            -- may fire QUEST_LOG_UPDATE or QUEST_POI_UPDATE rather than QUEST_WATCH_LIST_CHANGED.
+            if event == "QUEST_WATCH_LIST_CHANGED"
+                or event == "QUEST_LOG_UPDATE"
+                or event == "QUEST_POI_UPDATE"
+                or event == "QUEST_ACCEPTED"
+                or event == "QUEST_REMOVED"
+                or event == "SCENARIO_UPDATE"
+                or event == "TRACKED_ACHIEVEMENT_UPDATE" then
+                if not _reanchorPending then
+                    _reanchorPending = true
+                    dcslog("Debug", "DCS re-anchor event: " .. event .. " — scheduling delayed AnchorFrame")
+                    if C_Timer and C_Timer.After then
+                        C_Timer.After(0.2, function()
+                            _reanchorPending = false
+                            AnchorFrame()
+                        end)
+                    else
+                        _reanchorPending = false
+                        AnchorFrame()
+                    end
                 end
                 return
+            end
+
+            -- ZONE_CHANGED_NEW_AREA: use a slightly longer delay (0.5s) because
+            -- world quests / bonus-objective sections in the tracker take longer to
+            -- populate after a zone transition.  Fall through so existing zone
+            -- handling below also runs.
+            if event == "ZONE_CHANGED_NEW_AREA" then
+                if not _reanchorPending then
+                    _reanchorPending = true
+                    dcslog("Debug", "DCS re-anchor event: ZONE_CHANGED_NEW_AREA — scheduling delayed AnchorFrame(0.5s)")
+                    if C_Timer and C_Timer.After then
+                        C_Timer.After(0.5, function()
+                            _reanchorPending = false
+                            AnchorFrame()
+                        end)
+                    else
+                        _reanchorPending = false
+                        AnchorFrame()
+                    end
+                end
+                -- intentional fall-through to existing zone handling
+            end
+
+            -- UPDATE_FACTION: fires in pairs every time reputation changes; throttle it.
+            if event == "UPDATE_FACTION" then
+                local now = GetTime()
+                if now - lastFactionUpdate < THROTTLE_INTERVAL then return end
+                lastFactionUpdate = now
             end
 
             -- All other events: refresh visibility then data.
@@ -1070,10 +1298,10 @@ function ns:OnLoad()
     -- Explicitly show nameLabel (belt-and-suspenders: ensures visibility even if parent Show() is pending)
     if ns.nameLabel then ns.nameLabel:Show() end
 
-    -- Polling fallbacks: data may not be ready immediately on ADDON_LOADED
+    -- Polling fallbacks: data may not be ready immediately on ADDON_LOADED.
+    -- Two staggered timers (3s and 10s) are sufficient; the 5s duplicate is removed.
     if C_Timer and C_Timer.After then
         C_Timer.After(3,  function() ns:UpdateCompanionData("TIMER_3S") end)
-        C_Timer.After(5,  function() ns:UpdateCompanionData("TIMER_5S") end)
         C_Timer.After(10, function() ns:UpdateCompanionData("TIMER_10S") end)
     end
 end
@@ -1102,10 +1330,10 @@ end
 local BOON_ABBREV = {
     ["Maximum Health"]         = "Max HP",
     ["Movement Speed"]         = "Move Spd",
-    ["Strength"]               = "Strength",
+    ["Strength"]               = "Str",
     ["Haste"]                  = "Haste",
     ["Critical Strike"]        = "Crit",
-    ["Mastery"]                = "Mastery",
+    ["Mastery"]                = "Mast",
     ["Versatility"]            = "Vers",
     ["Damage Reduction"]       = "Dmg Red",
 }
@@ -1136,35 +1364,64 @@ GetBoonAbbrev = function(statName)
 end
 
 -------------------------------------------------------------------------------
--- GetBoonsDisplayText: Reads the tooltip for boon spell 1280098 and returns a
--- one-per-line summary of non-zero stats, e.g. "Max HP: 6%\nMove Spd: 10%".
--- Returns "" if no boon lines are found (hides the boon label).
+-- GetBoonsDisplayText: Reads boon spell 1280098 via C_Spell.GetSpellDescription
+-- and returns a one-per-line summary of non-zero stats,
+-- e.g. "Max HP: 6%\nMove Spd: 10%".
+-- Returns "" if not in a delve or no boon data is found.
+-- NOTE: Does NOT use GameTooltip — no floating tooltip side-effect.
 -------------------------------------------------------------------------------
 GetBoonsDisplayText = function()
-    local parts = {}
-    local ok = pcall(function()
-        GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
-        GameTooltip:SetSpellByID(1280098)
-        local numLines = GameTooltip:NumLines()
-        for i = 1, numLines do
-            local lineText = _G["GameTooltipTextLeft"..i] and _G["GameTooltipTextLeft"..i]:GetText()
-            -- Guard: if the tooltip still contains unresolved spell template variables
-            -- (e.g. "$w1%"), the boon aura hasn't been applied yet; skip the line.
-            if lineText and not lineText:find("%$w%d") then
-                for subline in (lineText .. "\n"):gmatch("([^\n]*)\n") do
-                    local stat, pct = subline:match("^(.+): (%d+)%%.?%s*$")
-                    local n = tonumber(pct)
-                    if stat and n and n > 0 then
-                        local abbrev = GetBoonAbbrev(stat)
-                        table.insert(parts, abbrev .. ": " .. n .. "%")
-                    end
-                end
+    -- Only show boon info when inside a delve
+    if not IsInDelve() then return "" end
+
+    if not C_Spell or not C_Spell.GetSpellDescription then return "None" end
+    local ok, desc = pcall(C_Spell.GetSpellDescription, 1280098)
+    if not ok or not desc or desc == "" then return "None" end
+
+    -- Debug: log the raw spell description so we can diagnose format mismatches.
+    dcslog("Debug", "GetBoonsDisplayText: raw desc=" .. tostring(desc))
+
+    -- Strip WoW color codes:
+    --   |cnNAME:text|r  (named color codes, TWW+)
+    --   |cXXXXXXXXtext|r  (hex ARGB color codes)
+    local clean = desc
+        :gsub("|cn[^:]+:", "")
+        :gsub("|c%x%x%x%x%x%x%x%x", "")
+        :gsub("|r", "")
+
+    -- Parse lines of the form "Stat Name: N%" or "Stat Name: N%." (trailing punctuation ok).
+    -- Pattern priority:
+    --   1. "Stat: 5%"  — percent sign present, optional trailing non-digit chars then EOL
+    --   2. "Stat: 5"   — bare number, optional trailing non-digit chars then EOL
+    -- This handles: "Strength: 2%." (period after %) and plain "Strength: 2%".
+    local stats = {}
+    for line in (clean .. "\n"):gmatch("([^\n]*)\n") do
+        local statName, numStr
+        -- Pattern 1: percent sign explicitly present; allow trailing punctuation/spaces.
+        statName, numStr = line:match("^(.+):%s*(%d+)%%%D*$")
+        if not statName then
+            -- Pattern 2: no percent sign; allow trailing non-digit chars.
+            statName, numStr = line:match("^(.+):%s*(%d+)%D*$")
+            -- Exclude lines where the "number" is embedded in a longer word (e.g. version strings).
+            if statName and line:match("^.+:%s*%d+%a") then
+                statName = nil
+                numStr = nil
             end
         end
-        GameTooltip:Hide()
-    end)
-    if not ok or #parts == 0 then return "" end
-    return table.concat(parts, "\n")
+        if statName and numStr then
+            -- Trim any remaining whitespace from the stat name.
+            statName = statName:match("^%s*(.-)%s*$")
+            local val = tonumber(numStr)
+            if val and val > 0 then
+                local abbrev = GetBoonAbbrev(statName)
+                stats[#stats + 1] = abbrev .. ": " .. val .. "%"
+                dcslog("Debug", "GetBoonsDisplayText: matched stat=" .. statName .. " val=" .. val)
+            end
+        end
+    end
+
+    if #stats == 0 then return "None" end
+    return table.concat(stats, ", ")
 end
 
 -------------------------------------------------------------------------------
@@ -1214,46 +1471,32 @@ end
 -- Expose for unit testing
 ns.IsCombatCriteria = IsCombatCriteria
 
--- GetNemesisProgress: Returns "Nemesis Strongbox (current/max)" by summing
--- quantity and totalQuantity across all combat criteria, or "" when none qualify.
--- Non-combat objectives (Speak with, Find, Collect, etc.) are excluded so
--- only enemy-kill trackers contribute to the count.
+-- GetNemesisProgress: Returns nemesis enemy-group count from
+-- C_Spell.GetSpellDescription(472952), which inside a delve contains a line:
+--   "Enemy groups remaining: |cnWHITE_FONT_COLOR:X / Y|r"
+-- Returns just the count "X / Y" (the header label provides the section title).
+-- Returns "" if unavailable.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
-    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
-    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
-    if not stepInfo or not stepInfo.numCriteria then return "" end
+    if not C_Spell or not C_Spell.GetSpellDescription then return "" end
+    local ok, desc = pcall(C_Spell.GetSpellDescription, 472952)
+    if not ok or not desc or desc == "" then return "" end
 
-    local currentTotal, maxTotal = 0, 0
-    for i = 1, stepInfo.numCriteria do
-        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and IsCombatCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
-            currentTotal = currentTotal + (c.quantity or 0)
-            maxTotal     = maxTotal + c.totalQuantity
-        end
-    end
-    if maxTotal == 0 then return "" end
-    return string.format("Nemesis Strongbox (%d/%d)", currentTotal, maxTotal)
+    -- Strip WoW color codes: |cnNAME: ... |r
+    local clean = desc:gsub("|cn[^:]+:", ""):gsub("|r", "")
+
+    -- Extract "Enemy groups remaining: X / Y"
+    local current, total = clean:match("Enemy groups remaining:%s*(%d+)%s*/%s*(%d+)")
+    if not current or not total then return "" end
+
+    return string.format("%s / %s", current, total)
 end
 
 -------------------------------------------------------------------------------
--- GetNemesisDetailText: Returns newline-separated white body lines for each
--- qualifying combat criterion, formatted as "description: quantity/totalQuantity".
--- Returns "" when no criteria qualify (mirrors GetBoonsDisplayText pattern).
+-- GetNemesisDetailText: Disabled — see GetNemesisProgress comment above.
 -------------------------------------------------------------------------------
 local function GetNemesisDetailText()
-    if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then return "" end
-    local stepInfo = C_ScenarioInfo.GetScenarioStepInfo()
-    if not stepInfo or not stepInfo.numCriteria then return "" end
-
-    local lines = {}
-    for i = 1, stepInfo.numCriteria do
-        local ok, c = pcall(C_ScenarioInfo.GetCriteriaInfo, i)
-        if ok and c and IsCombatCriteria(c.description) and c.totalQuantity and c.totalQuantity > 0 then
-            table.insert(lines, string.format("%s: %d/%d", c.description, c.quantity or 0, c.totalQuantity))
-        end
-    end
-    return table.concat(lines, "\n")
+    return ""
 end
 ns.GetNemesisDetailText = GetNemesisDetailText
 
@@ -1264,6 +1507,8 @@ ns.GetNemesisDetailText = GetNemesisDetailText
 -------------------------------------------------------------------------------
 function ns:UpdateCompanionData(event)
     if not ns.frame then return end
+
+    dcslog("Debug", "UpdateCompanionData called, event=" .. tostring(event))
 
     -- Step 1: Get the active companion's faction ID directly (no args required)
     local factionID = nil
@@ -1279,10 +1524,10 @@ function ns:UpdateCompanionData(event)
         ns._lastFactionID = nil
         ns._lastName      = nil
         ns._lastLevel     = nil
-        if ns.nameLabel  then ns.nameLabel:SetText("No Companion") end
+        if ns.nameLabel       then ns.nameLabel:SetText("No Companion") end
         if ns.boonHeaderLabel then ns.boonHeaderLabel:Hide() end
-        if ns.boonLabel  then ns.boonLabel:SetText(""); ns.boonLabel:Hide() end
-        if ns.nemesisLabel then ns.nemesisLabel:SetText(""); ns.nemesisLabel:Hide() end
+        if ns.boonLabel       then ns.boonLabel:SetText(""); ns.boonLabel:Hide() end
+        if ns.nemesisLabel    then ns.nemesisLabel:SetText(""); ns.nemesisLabel:Hide() end
         if ns.nemesisDetailLabel then ns.nemesisDetailLabel:SetText(""); ns.nemesisDetailLabel:Hide() end
         return
     end
@@ -1311,6 +1556,8 @@ function ns:UpdateCompanionData(event)
     ns._lastFactionID = factionID
     ns._lastName      = name
     ns._lastLevel     = level
+    dcslog("Info", "UpdateCompanionData: factionID=" .. tostring(factionID) ..
+           " name=" .. tostring(name) .. " level=" .. tostring(level))
 
     -- Update header title to show companion name dynamically
     if ns.headerTitle then
@@ -1346,67 +1593,85 @@ function ns:UpdateCompanionData(event)
         ns.nameLabel:SetText(table.concat(parts, "  "))
     end
 
-    -- Boon display — sub-header "Boons" + body lines; both shown/hidden together
+    -- Boon display — header "Boons" (gold) + value "stat1, stat2" or "None" (white/grey).
+    -- boonHeaderLabel is shown whenever a companion is active in a delve.
+    -- boonLabel shows the value line returned by GetBoonsDisplayText().
+    local boonsShown = false
+    local boonText = GetBoonsDisplayText()
+    -- Log whether boon text actually changed since the last update.  This makes
+    -- it easy to diagnose stale-display bugs: if "boon CHANGED" never appears
+    -- after collecting a boon the event/throttle path is the culprit; if it does
+    -- appear but the UI looks wrong the rendering path needs attention.
+    local prevBoonText = ns._lastBoonText
+    if boonText ~= prevBoonText then
+        dcslog("Debug", "UpdateCompanionData: boon CHANGED [" .. tostring(prevBoonText) .. "] -> [" .. tostring(boonText) .. "]")
+        ns._lastBoonText = boonText
+    else
+        dcslog("Debug", "UpdateCompanionData: boon unchanged [" .. tostring(boonText) .. "]")
+    end
+    if ns.boonHeaderLabel then
+        if boonText ~= "" then
+            ns.boonHeaderLabel:Show()
+        else
+            ns.boonHeaderLabel:Hide()
+        end
+    end
     if ns.boonLabel then
-        local boonText = GetBoonsDisplayText()
         ns.boonLabel:SetText(boonText)
         if boonText == "" then
-            if ns.boonHeaderLabel then ns.boonHeaderLabel:Hide() end
             ns.boonLabel:Hide()
         else
-            if ns.boonHeaderLabel then
-                ns.boonHeaderLabel:SetText("Boons")
-                ns.boonHeaderLabel:Show()
+            boonsShown = true
+            -- "None" is shown in grey/muted; actual stats in white
+            if boonText == "None" then
+                ns.boonLabel:SetTextColor(0.6, 0.6, 0.6, 1)
+            else
+                ns.boonLabel:SetTextColor(1, 1, 1, 1)
             end
             ns.boonLabel:Show()
         end
     end
 
-    -- Nemesis progress display — "Nemesis Strongbox (n/n)" sub-header (gold) + white detail lines
+    -- Nemesis display — header "Enemy Groups Remaining" (gold, nemesisLabel) +
+    -- value "X / Y" (white, nemesisDetailLabel).
+    local nemesisText = ""
+    pcall(function() nemesisText = GetNemesisProgress() end)
     if ns.nemesisLabel then
-        local nemesisText = GetNemesisProgress()
-        ns.nemesisLabel:SetText(nemesisText)
-        if nemesisText == "" then
-            ns.nemesisLabel:Hide()
-            if ns.nemesisDetailLabel then
-                ns.nemesisDetailLabel:SetText("")
-                ns.nemesisDetailLabel:Hide()
-            end
-        else
+        if nemesisText ~= "" then
+            ns.nemesisLabel:SetText("Enemy Groups Remaining")
             ns.nemesisLabel:Show()
-            if ns.nemesisDetailLabel then
-                local detailText = GetNemesisDetailText()
-                ns.nemesisDetailLabel:SetText(detailText)
-                if detailText == "" then
-                    ns.nemesisDetailLabel:Hide()
-                else
-                    ns.nemesisDetailLabel:Show()
-                end
-            end
+        else
+            ns.nemesisLabel:SetText("")
+            ns.nemesisLabel:Hide()
+        end
+    end
+    if ns.nemesisDetailLabel then
+        if nemesisText ~= "" then
+            ns.nemesisDetailLabel:SetText(nemesisText)
+            ns.nemesisDetailLabel:Show()
+        else
+            ns.nemesisDetailLabel:SetText("")
+            ns.nemesisDetailLabel:Hide()
         end
     end
 
     -- Dynamic frame height based on visible content
     if ns.frame then
-        -- Content frame: 4px top + nameLabel(16) + 4px bottom = 24px base
-        local contentHeight = 24
-        -- Boon section: 3px gap + header(16) + body lines(16 each)
+        -- Content frame: 8px top + nameLabel(16) + 4px bottom = 28px base
+        local contentHeight = 28
+        -- Boon section: 6px gap + header(16) + 4px gap + value(16)
         if ns.boonHeaderLabel and ns.boonHeaderLabel:IsShown() then
-            contentHeight = contentHeight + 3 + 16
+            contentHeight = contentHeight + 6 + 16
         end
         if ns.boonLabel and ns.boonLabel:IsShown() then
-            local boonText = ns.boonLabel:GetText() or ""
-            local _, newlines = boonText:gsub("\n", "\n")
-            contentHeight = contentHeight + (newlines + 1) * 16
+            contentHeight = contentHeight + 4 + 16
         end
-        -- Nemesis section: 3px gap + header(16) + detail lines(16 each)
+        -- Nemesis section: 6px gap + header(16) + 4px gap + value(16)
         if ns.nemesisLabel and ns.nemesisLabel:IsShown() then
-            contentHeight = contentHeight + 3 + 16
+            contentHeight = contentHeight + 6 + 16
         end
         if ns.nemesisDetailLabel and ns.nemesisDetailLabel:IsShown() then
-            local detailText = ns.nemesisDetailLabel:GetText() or ""
-            local _, newlines = detailText:gsub("\n", "\n")
-            contentHeight = contentHeight + (newlines + 1) * 16
+            contentHeight = contentHeight + 4 + 16
         end
         -- Resize contentFrame then total frame (header height + content, or header only when collapsed)
         if ns.contentFrame then ns.contentFrame:SetHeight(contentHeight) end
