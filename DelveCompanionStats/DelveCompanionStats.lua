@@ -19,6 +19,11 @@ _G.DelveCompanionStatsNS = ns
 
 ns.version = "1.0.0"
 
+-- Throttle timestamps for high-frequency events (seconds)
+local lastAuraUpdate    = 0
+local lastFactionUpdate = 0
+local THROTTLE_INTERVAL = 2  -- minimum seconds between processing
+
 -------------------------------------------------------------------------------
 -- dcsprint: Write a coloured message to the chat frame (or print fallback).
 -- Delegates to CouchPotatoLog when available; bare fallback otherwise.
@@ -1045,10 +1050,15 @@ function ns:OnLoad()
             if ns._cpDisabled then return end
             -- UNIT_AURA: only refresh boon data when player's own auras change in a delve.
             -- Avoids redundant updates for non-player units (party members, NPCs, etc.).
+            -- Throttled to once every THROTTLE_INTERVAL seconds to prevent continuous spam.
             if event == "UNIT_AURA" then
                 local unitID = ...
                 if unitID == "player" and IsInDelve() then
-                    ns:UpdateCompanionData(event)
+                    local now = GetTime()
+                    if now - lastAuraUpdate >= THROTTLE_INTERVAL then
+                        lastAuraUpdate = now
+                        ns:UpdateCompanionData(event)
+                    end
                 end
                 return
             end
@@ -1070,12 +1080,6 @@ function ns:OnLoad()
                             ns:UpdateCompanionData("TIMER_2S_PEW")
                         end
                     end)
-                    C_Timer.After(5, function()
-                        if IsInDelve() then
-                            AnchorFrame()
-                            ns:UpdateCompanionData("TIMER_5S_PEW")
-                        end
-                    end)
                 end
                 return
             end
@@ -1089,6 +1093,13 @@ function ns:OnLoad()
                 return
             end
 
+            -- UPDATE_FACTION: fires in pairs every time reputation changes; throttle it.
+            if event == "UPDATE_FACTION" then
+                local now = GetTime()
+                if now - lastFactionUpdate < THROTTLE_INTERVAL then return end
+                lastFactionUpdate = now
+            end
+
             -- All other events: refresh visibility then data.
             ns:UpdateFrameVisibility()
             if ns.frame:IsShown() then
@@ -1100,10 +1111,10 @@ function ns:OnLoad()
     -- Explicitly show nameLabel (belt-and-suspenders: ensures visibility even if parent Show() is pending)
     if ns.nameLabel then ns.nameLabel:Show() end
 
-    -- Polling fallbacks: data may not be ready immediately on ADDON_LOADED
+    -- Polling fallbacks: data may not be ready immediately on ADDON_LOADED.
+    -- Two staggered timers (3s and 10s) are sufficient; the 5s duplicate is removed.
     if C_Timer and C_Timer.After then
         C_Timer.After(3,  function() ns:UpdateCompanionData("TIMER_3S") end)
-        C_Timer.After(5,  function() ns:UpdateCompanionData("TIMER_5S") end)
         C_Timer.After(10, function() ns:UpdateCompanionData("TIMER_10S") end)
     end
 end
