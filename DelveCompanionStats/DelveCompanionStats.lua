@@ -707,9 +707,12 @@ function ns:OnLoad()
     ns.frame = frameResult
     dcslog("Info", "Frame created successfully: DelveCompanionStatsFrame")
 
-    -- Use LOW strata so bags/panels (MEDIUM) and dialogs always render in front.
-    ns.frame:SetFrameStrata("LOW")
-    ns.frame:SetFrameLevel(2)
+    -- Use MEDIUM strata at a low frame level so the frame sits at the same rendering
+    -- layer as the objective tracker content (also MEDIUM) but below Blizzard's own
+    -- tracker text which uses higher frame levels within MEDIUM.  LOW strata caused
+    -- the frames to render behind quest text while still overlapping it positionally.
+    ns.frame:SetFrameStrata("MEDIUM")
+    ns.frame:SetFrameLevel(1)
 
     -- 3. Determine frame width — match ScenarioObjectiveTracker when available,
     -- otherwise fall back to 260 px (a reasonable tracker-column width).
