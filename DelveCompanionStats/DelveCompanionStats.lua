@@ -1132,10 +1132,10 @@ end
 local BOON_ABBREV = {
     ["Maximum Health"]         = "Max HP",
     ["Movement Speed"]         = "Move Spd",
-    ["Strength"]               = "Strength",
+    ["Strength"]               = "Str",
     ["Haste"]                  = "Haste",
     ["Critical Strike"]        = "Crit",
-    ["Mastery"]                = "Mastery",
+    ["Mastery"]                = "Mast",
     ["Versatility"]            = "Vers",
     ["Damage Reduction"]       = "Dmg Red",
 }
