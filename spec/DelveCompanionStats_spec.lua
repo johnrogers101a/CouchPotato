@@ -840,41 +840,55 @@ describe("DelveCompanionStats", function()
             end
             _ClearMockBoonTooltip()
             C_ScenarioInfo._criteria = {}
+            _ClearMockNemesis()
         end)
 
         after_each(function()
             _ClearMockBoonTooltip()
             C_ScenarioInfo._criteria = {}
+            _ClearMockNemesis()
         end)
 
-        -- Nemesis display is disabled: GetNemesisProgress() always returns "".
-        -- Scenario criteria only contain quest objectives (criteriaType=92), not
-        -- "Enemy groups remaining" data.  The correct API source is unknown.
-        -- See CouchPotatoDiag Section 8 for the ongoing API hunt.
+        -- Nemesis display uses C_Spell.GetSpellDescription(472952).
+        -- Inside a delve that spell description contains:
+        --   "Enemy groups remaining: |cnWHITE_FONT_COLOR:X / Y|r"
 
-        it("nemesis label is always hidden (nemesis display disabled)", function()
+        it("nemesis label shows progress when spell description is available", function()
             _SetMockNemesis(2, 4)
             ns:UpdateCompanionData()
-            assert.equals("", ns.nemesisLabel._text)
-            assert.is_false(ns.nemesisLabel:IsShown())
+            assert.equals("Enemy groups remaining: 2 / 4", ns.nemesisLabel._text)
+            assert.is_true(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesis label is hidden when no criteria present", function()
+        it("nemesis label is hidden when spell description is absent (not in a delve)", function()
+            -- No spell description set → GetSpellDescription returns ""
             ns:UpdateCompanionData()
             assert.equals("", ns.nemesisLabel._text)
             assert.is_false(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesisDetailLabel is always hidden (nemesis display disabled)", function()
-            _SetMockNemesis({
-                { description = "Infiltrator Garand slain", quantity = 0, totalQuantity = 1 },
-            })
+        it("nemesis label shows 4/4 when all groups remain", function()
+            _SetMockNemesis(4, 4)
+            ns:UpdateCompanionData()
+            assert.equals("Enemy groups remaining: 4 / 4", ns.nemesisLabel._text)
+            assert.is_true(ns.nemesisLabel:IsShown())
+        end)
+
+        it("nemesis label shows 0/4 when all groups defeated", function()
+            _SetMockNemesis(0, 4)
+            ns:UpdateCompanionData()
+            assert.equals("Enemy groups remaining: 0 / 4", ns.nemesisLabel._text)
+            assert.is_true(ns.nemesisLabel:IsShown())
+        end)
+
+        it("nemesisDetailLabel is always hidden (detail moved to nemesisLabel)", function()
+            _SetMockNemesis(2, 4)
             ns:UpdateCompanionData()
             assert.equals("", ns.nemesisDetailLabel._text)
             assert.is_false(ns.nemesisDetailLabel:IsShown())
         end)
 
-        it("nemesisDetailLabel is hidden when no criteria qualify", function()
+        it("nemesisDetailLabel is hidden when no nemesis data present", function()
             ns:UpdateCompanionData()
             assert.is_false(ns.nemesisDetailLabel:IsShown())
         end)
@@ -1122,6 +1136,7 @@ describe("DelveCompanionStats", function()
             after_each(function()
                 _ClearMockBoonTooltip()
                 C_ScenarioInfo._criteria = {}
+                _ClearMockNemesis()
             end)
 
             it("base content height is 24 (4+16+4) when only nameLabel visible", function()
@@ -1138,19 +1153,16 @@ describe("DelveCompanionStats", function()
                 assert.equals(24, ns.contentFrame._height)
             end)
 
-            it("content height does not include nemesis section (nemesis disabled)", function()
+            it("content height includes nemesis section (3px gap + 16px label) when nemesis present", function()
                 _SetMockNemesis(1, 3)
                 ns:UpdateCompanionData()
-                -- nemesis always hidden: only base height 24
-                assert.equals(24, ns.contentFrame._height)
+                -- nemesis shown: base 24 + 3 gap + 16 label = 43
+                assert.equals(43, ns.contentFrame._height)
             end)
 
-            it("content height with boons does not include nemesis (nemesis disabled)", function()
-                -- Both boon and nemesis display are disabled; height stays at base.
-                _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%.\nMastery: 3%." })
-                _SetMockNemesis(2, 5)
+            it("content height without nemesis stays at base when no spell description", function()
+                -- No spell description → nemesis hidden → height 24
                 ns:UpdateCompanionData()
-                -- Boons disabled, nemesis disabled → contentHeight = 24
                 assert.equals(24, ns.contentFrame._height)
             end)
 

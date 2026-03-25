@@ -534,12 +534,18 @@ _G.C_Spell = {
         [85673] = { name = "Word of Glory", icon = "Interface\\Icons\\Spell_Holy_WordOfGlory", schoolMask = 2 }, -- Holy
     },
     
+    _descriptions = {},
+
     GetSpellInfo = function(spellID)
         local spell = _G.C_Spell._spells[spellID]
         if spell then
             return { name = spell.name, iconID = spell.icon, schoolMask = spell.schoolMask }
         end
         return nil
+    end,
+
+    GetSpellDescription = function(spellID)
+        return _G.C_Spell._descriptions[spellID] or ""
     end,
 }
 
@@ -1012,17 +1018,27 @@ _G._ClearMockAuras = function()
     _G.C_UnitAuras._auras = {}
 end
 
--- Test helper: set nemesis progress.
+-- Test helper: set nemesis progress via C_Spell.GetSpellDescription(472952).
 -- Two calling forms:
---   _SetMockNemesis(current, total)           -- single criterion (legacy)
---   _SetMockNemesis({ {desc, qty, total}, … }) -- explicit criteria table
+--   _SetMockNemesis(current, total)           -- sets spell description with X/Y counts
+--   _SetMockNemesis({ {desc, qty, total}, … }) -- ignored (legacy criteria form, no-op)
 _G._SetMockNemesis = function(criteriaOrCurrent, total)
     if type(criteriaOrCurrent) == "table" then
+        -- Legacy explicit-criteria form: no longer used for nemesis display.
+        -- Keep C_ScenarioInfo in sync for any tests that still inspect it.
         _G.C_ScenarioInfo._criteria = criteriaOrCurrent
     else
-        -- Legacy single-criterion form
-        _G.C_ScenarioInfo._criteria = {
-            { description = "Enemy group kills", quantity = criteriaOrCurrent, totalQuantity = total }
-        }
+        -- Primary form: set spell 472952 description to realistic mock data.
+        local current = criteriaOrCurrent
+        _G.C_Spell._descriptions[472952] =
+            "The Underpin's allies are wandering about the delve.\n\n" ..
+            "Defeating a group of these enemies upgrades the Nemesis Strongbox found " ..
+            "in the treasure room, providing additional rewards at the end of this delve.\n\n" ..
+            "Enemy groups remaining: |cnWHITE_FONT_COLOR:" .. current .. " / " .. total .. "|r"
     end
+end
+
+-- Helper to clear nemesis spell description between tests.
+_G._ClearMockNemesis = function()
+    _G.C_Spell._descriptions[472952] = nil
 end
