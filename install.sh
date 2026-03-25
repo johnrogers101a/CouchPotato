@@ -20,6 +20,7 @@ ADDON_NAMES=(
     ControllerCompanion
     ControllerCompanion_Loader
     DelveCompanionStats
+    DelversJourney
     StatPriority
 )
 
@@ -100,7 +101,8 @@ done
 KNOWN_ADDONS=("${ADDON_NAMES[@]}")
 
 for INSTALLED_DIR in "$ADDONS_PATH"/CouchPotato* "$ADDONS_PATH"/ControllerCompanion* \
-                     "$ADDONS_PATH"/DelveCompanion* "$ADDONS_PATH"/StatPriority*; do
+                     "$ADDONS_PATH"/DelveCompanion* "$ADDONS_PATH"/DelversJourney* \
+                     "$ADDONS_PATH"/StatPriority*; do
     [[ -d "$INSTALLED_DIR" ]] || continue
     BASENAME="$(basename "$INSTALLED_DIR")"
     FOUND=0

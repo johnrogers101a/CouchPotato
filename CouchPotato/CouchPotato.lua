@@ -134,6 +134,7 @@ local DB_DEFAULTS = {
     addonStates   = {
         ControllerCompanion  = true,
         DelveCompanionStats  = true,
+        DelversJourney       = true,
         StatPriority         = true,
     },
 }
@@ -180,6 +181,7 @@ local SUITE_PATTERNS = {
     "CouchPotato",
     "ControllerCompanion",
     "DelveCompanionStats",
+    "DelversJourney",
     "StatPriority",
 }
 
@@ -277,6 +279,7 @@ end)
 local ADDON_DISPLAY_NAMES = {
     ControllerCompanion  = "Controller Companion",
     DelveCompanionStats  = "Delve Companion Stats",
+    DelversJourney       = "Delver's Journey",
     StatPriority         = "Stat Priority",
 }
 
@@ -287,6 +290,8 @@ local ADDON_ALIASES = {
     cc                   = "ControllerCompanion",
     delvecompanionstats  = "DelveCompanionStats",
     dcs                  = "DelveCompanionStats",
+    delversjourney       = "DelversJourney",
+    dj                   = "DelversJourney",
     statpriority         = "StatPriority",
     sp                   = "StatPriority",
 }
@@ -323,7 +328,7 @@ end
 local function PrintAddonStatus()
     EnsureAddonStates()
     cpprint("Suite addon states:")
-    local order = { "ControllerCompanion", "DelveCompanionStats", "StatPriority" }
+    local order = { "ControllerCompanion", "DelveCompanionStats", "DelversJourney", "StatPriority" }
     for _, name in ipairs(order) do
         local state = CouchPotatoDB.addonStates[name]
         local label = (state == false) and "|cffff4444disabled|r" or "|cff44ff44enabled|r"
@@ -501,6 +506,475 @@ SlashCmdList["CC"] = function(msg)
                 CouchPotatoLog:Print("CP", "ControllerCompanion not available.")
             end
         end
+    end
+end
+
+-------------------------------------------------------------------------------
+-- /cpquery — Temporary diagnostic: probe APIs for companion role, curios,
+--            and Delver's Journey data. Output goes to Debug Log (exportable).
+-------------------------------------------------------------------------------
+SLASH_CPQUERY1 = "/cpquery"
+SlashCmdList["CPQUERY"] = function(msg)
+    local log = CP.CreateLogger("CPQ")
+
+    -- Helper: try an API call, log result or error, return result
+    local function tryAPI(label, fn, ...)
+        if not fn then
+            log("Info", label .. " => function does not exist")
+            return nil
+        end
+        local args = {...}
+        local ok, result = pcall(function() return fn(unpack(args)) end)
+        if not ok then
+            log("Info", label .. " => ERROR: " .. tostring(result))
+            return nil
+        end
+        if type(result) == "table" then
+            log("Info", label .. " => (table)")
+            for k, v in pairs(result) do
+                if type(v) == "table" then
+                    log("Info", "  [" .. tostring(k) .. "] = (subtable)")
+                    for k2, v2 in pairs(v) do
+                        log("Info", "    " .. tostring(k2) .. " = " .. tostring(v2))
+                    end
+                else
+                    log("Info", "  " .. tostring(k) .. " = " .. tostring(v))
+                end
+            end
+        else
+            log("Info", label .. " => " .. tostring(result))
+        end
+        return result
+    end
+
+    -- Helper: try calling a method by name on C_DelvesUI with optional args
+    local function tryDelvesAPI(name, ...)
+        local fn = C_DelvesUI and C_DelvesUI[name]
+        return tryAPI("C_DelvesUI." .. name .. "(" .. (select('#', ...) > 0 and tostring(select(1, ...)) or "") .. ")", fn, ...)
+    end
+
+    log("Info", "=== /cpQuery Diagnostic Start ===")
+    log("Info", "Timestamp: " .. (date and date("%Y-%m-%d %H:%M:%S") or "unknown"))
+
+    -- =======================================================================
+    -- SECTION 1: Full C_DelvesUI key dump
+    -- =======================================================================
+    log("Info", "")
+    log("Info", "--- FULL C_DelvesUI API Surface ---")
+    if C_DelvesUI then
+        local keys = {}
+        for k, _ in pairs(C_DelvesUI) do
+            keys[#keys + 1] = k
+        end
+        table.sort(keys)
+        for _, k in ipairs(keys) do
+            log("Info", "  C_DelvesUI." .. k .. " (" .. type(C_DelvesUI[k]) .. ")")
+        end
+        log("Info", "  Total keys: " .. #keys)
+    else
+        log("Info", "  C_DelvesUI is nil!")
+    end
+
+    -- =======================================================================
+    -- SECTION 2: Filtered key scan (role, curio, journey, season, rank)
+    -- =======================================================================
+    log("Info", "")
+    log("Info", "--- C_DelvesUI Filtered Keys (role/curio/journey/season/rank/companion/tank/healer/dps/delver/tier/progress) ---")
+    if C_DelvesUI then
+        local filters = {"role", "combat", "curio", "companion", "tank", "healer", "dps",
+                         "journey", "season", "rank", "delver", "tier", "progress", "equip"}
+        for k, _ in pairs(C_DelvesUI) do
+            local lk = k:lower()
+            for _, f in ipairs(filters) do
+                if lk:find(f) then
+                    log("Info", "  MATCH: C_DelvesUI." .. k)
+                    -- Try calling it with no args and with arg 1
+                    if type(C_DelvesUI[k]) == "function" then
+                        tryAPI("    call()", C_DelvesUI[k])
+                        tryAPI("    call(1)", C_DelvesUI[k], 1)
+                    end
+                    break
+                end
+            end
+        end
+    end
+
+    -- =======================================================================
+    -- SECTION 3: Companion Role probing
+    -- =======================================================================
+    log("Info", "")
+    log("Info", "--- Companion Role Probing ---")
+    tryDelvesAPI("GetRoleForCompanion")
+    tryDelvesAPI("GetRoleForCompanion", 1)
+    tryDelvesAPI("GetCompanionRole")
+    tryDelvesAPI("GetCompanionRole", 1)
+    tryDelvesAPI("GetCompanionCombatRole")
+    tryDelvesAPI("GetCompanionCombatRole", 1)
+    tryDelvesAPI("GetCompanionConfigInfo")
+    tryDelvesAPI("GetCompanionConfigInfo", 1)
+    tryDelvesAPI("GetActiveCompanionInfo")
+    tryDelvesAPI("GetCurrentCompanion")
+
+    -- =======================================================================
+    -- SECTION 4: Curio probing
+    -- =======================================================================
+    log("Info", "")
+    log("Info", "--- Curio Probing ---")
+    tryDelvesAPI("GetCurioInfoForCompanion")
+    tryDelvesAPI("GetCurioInfoForCompanion", 1)
+    tryDelvesAPI("GetEquippedCurios")
+    tryDelvesAPI("GetEquippedCurios", 1)
+    tryDelvesAPI("GetCombatCurio")
+    tryDelvesAPI("GetCombatCurio", 1)
+    tryDelvesAPI("GetUtilityCurio")
+    tryDelvesAPI("GetUtilityCurio", 1)
+    tryDelvesAPI("GetCurioCount")
+    tryDelvesAPI("GetCurioCount", 1)
+    tryDelvesAPI("GetCurioInfo", 1)
+    tryDelvesAPI("GetCurioInfo", 2)
+    tryDelvesAPI("GetOwnedCurios")
+    tryDelvesAPI("GetEquippedCuriosForCompanion")
+    tryDelvesAPI("GetEquippedCuriosForCompanion", 1)
+    tryDelvesAPI("GetCuriosForCompanion")
+    tryDelvesAPI("GetCuriosForCompanion", 1)
+    tryDelvesAPI("GetSlottedCurios")
+    tryDelvesAPI("GetSlottedCurios", 1)
+    tryDelvesAPI("GetCurioNodeForCompanion")
+    tryDelvesAPI("GetCurioNodeForCompanion", 1)
+    tryDelvesAPI("GetCurioNodeForCompanion", 1, 1)
+    tryDelvesAPI("GetCurioNodeForCompanion", 1, 2)
+
+    -- Try trait-tree approach for curios (they may be trait nodes)
+    log("Info", "")
+    log("Info", "--- Trait Tree Curio Approach ---")
+    tryDelvesAPI("GetCompanionTraitTreeID")
+    tryDelvesAPI("GetCompanionTraitTreeID", 1)
+    local treeID = nil
+    if C_DelvesUI and C_DelvesUI.GetCompanionTraitTreeID then
+        local ok, r = pcall(C_DelvesUI.GetCompanionTraitTreeID)
+        if ok and r then treeID = r end
+        if not treeID then
+            local ok2, r2 = pcall(C_DelvesUI.GetCompanionTraitTreeID, 1)
+            if ok2 and r2 then treeID = r2 end
+        end
+    end
+    if treeID and C_Traits then
+        log("Info", "Found treeID=" .. tostring(treeID) .. ", probing C_Traits...")
+        tryAPI("C_Traits.GetTreeNodes(" .. treeID .. ")", C_Traits.GetTreeNodes, treeID)
+        tryAPI("C_Traits.GetConfigIDByTreeID(" .. treeID .. ")", C_Traits.GetConfigIDByTreeID, treeID)
+    end
+
+    -- =======================================================================
+    -- SECTION 5: Delver's Journey / Season probing
+    -- =======================================================================
+    log("Info", "")
+    log("Info", "--- Delver's Journey / Season Probing ---")
+    tryDelvesAPI("GetDelversJourneyInfo")
+    tryDelvesAPI("GetSeasonProgress")
+    tryDelvesAPI("GetDelverRank")
+    tryDelvesAPI("GetCurrentDelvesSeasonNumber")
+    tryDelvesAPI("GetDelvesSeasonInfo")
+    tryDelvesAPI("GetSeasonalData")
+    tryDelvesAPI("GetCurrentSeasonRewardInfo")
+    tryDelvesAPI("GetGreatVaultProgress")
+
+    -- Probe C_MajorFactions
+    log("Info", "")
+    log("Info", "--- C_MajorFactions Scan ---")
+    if C_MajorFactions then
+        local mfKeys = {}
+        for k, _ in pairs(C_MajorFactions) do
+            mfKeys[#mfKeys + 1] = k
+        end
+        table.sort(mfKeys)
+        for _, k in ipairs(mfKeys) do
+            log("Info", "  C_MajorFactions." .. k .. " (" .. type(C_MajorFactions[k]) .. ")")
+        end
+        -- Try GetMajorFactionData with speculative IDs
+        if C_MajorFactions.GetMajorFactionData then
+            for id = 2600, 2610 do
+                local ok, data = pcall(C_MajorFactions.GetMajorFactionData, id)
+                if ok and data and data.name then
+                    log("Info", "  GetMajorFactionData(" .. id .. ") => name=" .. tostring(data.name) .. " renownLevel=" .. tostring(data.renownLevel))
+                end
+            end
+            for id = 2640, 2660 do
+                local ok, data = pcall(C_MajorFactions.GetMajorFactionData, id)
+                if ok and data and data.name then
+                    log("Info", "  GetMajorFactionData(" .. id .. ") => name=" .. tostring(data.name) .. " renownLevel=" .. tostring(data.renownLevel))
+                end
+            end
+        end
+    else
+        log("Info", "  C_MajorFactions is nil")
+    end
+
+    -- Probe reputation IDs for season-related factions
+    log("Info", "")
+    log("Info", "--- Speculative Reputation Scan (2600-2660) ---")
+    if C_Reputation and C_Reputation.GetFactionDataByID then
+        for id = 2600, 2660 do
+            local ok, data = pcall(C_Reputation.GetFactionDataByID, id)
+            if ok and data and data.name and data.name ~= "" then
+                log("Info", "  Faction " .. id .. ": " .. tostring(data.name) .. " (reaction=" .. tostring(data.reaction) .. ")")
+                -- Also get friendship rep for XP data
+                if C_GossipInfo and C_GossipInfo.GetFriendshipReputation then
+                    local ok2, fr = pcall(C_GossipInfo.GetFriendshipReputation, id)
+                    if ok2 and fr then
+                        log("Info", "    FriendshipRep: standing=" .. tostring(fr.standing) .. " nextThreshold=" .. tostring(fr.nextThreshold) .. " reaction=" .. tostring(fr.reaction))
+                    end
+                end
+            end
+        end
+    end
+
+    -- Probe currency IDs for delve/journey related currencies
+    log("Info", "")
+    log("Info", "--- Speculative Currency Scan (2800-2850, 3050-3100) ---")
+    if C_CurrencyInfo and C_CurrencyInfo.GetCurrencyInfo then
+        local ranges = {{2800, 2850}, {3050, 3100}}
+        for _, range in ipairs(ranges) do
+            for id = range[1], range[2] do
+                local ok, info = pcall(C_CurrencyInfo.GetCurrencyInfo, id)
+                if ok and info and info.name and info.name ~= "" then
+                    local lname = info.name:lower()
+                    if lname:find("delve") or lname:find("journey") or lname:find("season") or lname:find("vault") or lname:find("rank") then
+                        log("Info", "  Currency " .. id .. ": " .. tostring(info.name) .. " qty=" .. tostring(info.quantity) .. " max=" .. tostring(info.maxQuantity))
+                    end
+                end
+            end
+        end
+    end
+
+    -- Quest log scan for journey/season quests
+    log("Info", "")
+    log("Info", "--- Quest Log Scan (journey/delver/season/rank) ---")
+    if C_QuestLog and C_QuestLog.GetNumQuestLogEntries then
+        local ok, numEntries = pcall(C_QuestLog.GetNumQuestLogEntries)
+        if ok and numEntries then
+            log("Info", "  Total quest entries: " .. tostring(numEntries))
+            for i = 1, numEntries do
+                local ok2, info = pcall(C_QuestLog.GetInfo, i)
+                if ok2 and info and info.title then
+                    local t = info.title:lower()
+                    if t:find("journey") or t:find("delver") or t:find("season") or t:find("rank") or t:find("delve") then
+                        log("Info", "  [" .. i .. "] " .. info.title .. " questID=" .. tostring(info.questID) .. " isComplete=" .. tostring(info.isComplete))
+                    end
+                end
+            end
+        end
+    end
+
+    -- =======================================================================
+    -- SECTION 6: Existing companion data (for reference)
+    -- =======================================================================
+    log("Info", "")
+    log("Info", "--- Existing Companion Data (reference) ---")
+    if C_DelvesUI and C_DelvesUI.GetFactionForCompanion then
+        local factionID = tryAPI("C_DelvesUI.GetFactionForCompanion()", C_DelvesUI.GetFactionForCompanion)
+        if factionID and factionID ~= 0 then
+            tryAPI("C_Reputation.GetFactionDataByID(" .. factionID .. ")", C_Reputation.GetFactionDataByID, factionID)
+            if C_GossipInfo and C_GossipInfo.GetFriendshipReputation then
+                tryAPI("C_GossipInfo.GetFriendshipReputation(" .. factionID .. ")", C_GossipInfo.GetFriendshipReputation, factionID)
+            end
+        end
+    end
+
+    -- =======================================================================
+    -- SECTION 7: Targeted follow-up (trait node resolution, journey XP)
+    -- =======================================================================
+    log("Info", "")
+    log("Info", "--- SECTION 7: Targeted Trait Node & Journey Resolution ---")
+
+    -- 7a: Resolve Role node via C_Traits
+    log("Info", "")
+    log("Info", "-- 7a: Role Node Resolution --")
+    local roleNodeID = nil
+    if C_DelvesUI and C_DelvesUI.GetRoleNodeForCompanion then
+        local ok, r = pcall(C_DelvesUI.GetRoleNodeForCompanion)
+        if ok and r then roleNodeID = r end
+    end
+    log("Info", "RoleNodeID (active companion): " .. tostring(roleNodeID))
+
+    local traitTreeID = nil
+    if C_DelvesUI and C_DelvesUI.GetTraitTreeForCompanion then
+        local ok, r = pcall(C_DelvesUI.GetTraitTreeForCompanion)
+        if ok and r then traitTreeID = r end
+    end
+    log("Info", "TraitTreeID (active companion): " .. tostring(traitTreeID))
+
+    -- Get configID for the trait tree
+    local configID = nil
+    if C_Traits and traitTreeID then
+        tryAPI("C_Traits.GetConfigIDByTreeID(" .. traitTreeID .. ")", C_Traits and C_Traits.GetConfigIDByTreeID, traitTreeID)
+        local ok, r = pcall(C_Traits.GetConfigIDByTreeID, traitTreeID)
+        if ok and r then configID = r end
+    end
+    log("Info", "ConfigID: " .. tostring(configID))
+
+    -- Resolve role node info
+    if C_Traits and roleNodeID then
+        tryAPI("C_Traits.GetNodeInfo(configID=" .. tostring(configID) .. ", roleNode=" .. roleNodeID .. ")", C_Traits.GetNodeInfo, configID, roleNodeID)
+        -- Try getting the active entry for the role node
+        local ok, nodeInfo = pcall(C_Traits.GetNodeInfo, configID, roleNodeID)
+        if ok and nodeInfo then
+            log("Info", "Role node activeEntry: " .. tostring(nodeInfo.activeEntry))
+            log("Info", "Role node type: " .. tostring(nodeInfo.type))
+            log("Info", "Role node subTreeID: " .. tostring(nodeInfo.subTreeID))
+            if nodeInfo.activeEntry then
+                local entryID = type(nodeInfo.activeEntry) == "table" and nodeInfo.activeEntry.entryID or nodeInfo.activeEntry
+                log("Info", "Role activeEntry resolved: " .. tostring(entryID))
+                if entryID and C_Traits.GetEntryInfo then
+                    tryAPI("C_Traits.GetEntryInfo(configID, " .. tostring(entryID) .. ")", C_Traits.GetEntryInfo, configID, entryID)
+                    local ok2, entryInfo = pcall(C_Traits.GetEntryInfo, configID, entryID)
+                    if ok2 and entryInfo then
+                        log("Info", "Entry definitionID: " .. tostring(entryInfo.definitionID))
+                        log("Info", "Entry subTreeID: " .. tostring(entryInfo.subTreeID))
+                        if entryInfo.definitionID and C_Traits.GetDefinitionInfo then
+                            tryAPI("C_Traits.GetDefinitionInfo(" .. tostring(entryInfo.definitionID) .. ")", C_Traits.GetDefinitionInfo, entryInfo.definitionID)
+                        end
+                        if entryInfo.subTreeID and C_Traits.GetSubTreeInfo then
+                            tryAPI("C_Traits.GetSubTreeInfo(configID, " .. tostring(entryInfo.subTreeID) .. ")", C_Traits.GetSubTreeInfo, configID, entryInfo.subTreeID)
+                        end
+                    end
+                end
+            end
+            -- Also try entryIDs list
+            if nodeInfo.entryIDs then
+                log("Info", "Role node entryIDs: " .. table.concat(nodeInfo.entryIDs or {}, ", "))
+                for _, eid in ipairs(nodeInfo.entryIDs) do
+                    tryAPI("C_Traits.GetEntryInfo(configID, entryID=" .. eid .. ")", C_Traits.GetEntryInfo, configID, eid)
+                    local ok3, ei = pcall(C_Traits.GetEntryInfo, configID, eid)
+                    if ok3 and ei and ei.subTreeID and C_Traits.GetSubTreeInfo then
+                        tryAPI("C_Traits.GetSubTreeInfo(configID, subTree=" .. ei.subTreeID .. ")", C_Traits.GetSubTreeInfo, configID, ei.subTreeID)
+                    end
+                    if ok3 and ei and ei.definitionID and C_Traits.GetDefinitionInfo then
+                        tryAPI("C_Traits.GetDefinitionInfo(def=" .. ei.definitionID .. ")", C_Traits.GetDefinitionInfo, ei.definitionID)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Also probe GetRoleSubtreeForCompanion with different role types
+    log("Info", "")
+    log("Info", "-- Role subtree by type --")
+    if C_DelvesUI and C_DelvesUI.GetRoleSubtreeForCompanion then
+        for roleType = 0, 4 do
+            tryAPI("GetRoleSubtreeForCompanion(" .. roleType .. ")", C_DelvesUI.GetRoleSubtreeForCompanion, roleType)
+        end
+    end
+
+    -- 7b: Resolve Curio nodes
+    log("Info", "")
+    log("Info", "-- 7b: Curio Node Resolution --")
+    if C_DelvesUI and C_DelvesUI.GetCurioNodeForCompanion then
+        for curioType = 0, 3 do
+            local ok, nodeID = pcall(C_DelvesUI.GetCurioNodeForCompanion, curioType)
+            log("Info", "GetCurioNodeForCompanion(" .. curioType .. ") => " .. tostring(ok and nodeID or "ERROR: " .. tostring(nodeID)))
+            if ok and nodeID and C_Traits and configID then
+                local ok2, nodeInfo = pcall(C_Traits.GetNodeInfo, configID, nodeID)
+                if ok2 and nodeInfo then
+                    log("Info", "  Curio node " .. nodeID .. " activeEntry: " .. tostring(nodeInfo.activeEntry))
+                    log("Info", "  Curio node " .. nodeID .. " type: " .. tostring(nodeInfo.type))
+                    if nodeInfo.activeEntry then
+                        local entryID = type(nodeInfo.activeEntry) == "table" and nodeInfo.activeEntry.entryID or nodeInfo.activeEntry
+                        if entryID and C_Traits.GetEntryInfo then
+                            local ok3, entryInfo = pcall(C_Traits.GetEntryInfo, configID, entryID)
+                            if ok3 and entryInfo then
+                                log("Info", "  Entry definitionID: " .. tostring(entryInfo.definitionID))
+                                if entryInfo.definitionID and C_Traits.GetDefinitionInfo then
+                                    tryAPI("  C_Traits.GetDefinitionInfo(" .. entryInfo.definitionID .. ")", C_Traits.GetDefinitionInfo, entryInfo.definitionID)
+                                end
+                            end
+                        end
+                    end
+                    -- Also list all entryIDs and resolve them
+                    if nodeInfo.entryIDs then
+                        log("Info", "  Curio node entryIDs: " .. table.concat(nodeInfo.entryIDs, ", "))
+                        for _, eid in ipairs(nodeInfo.entryIDs) do
+                            local ok4, ei = pcall(C_Traits.GetEntryInfo, configID, eid)
+                            if ok4 and ei and ei.definitionID and C_Traits.GetDefinitionInfo then
+                                local ok5, def = pcall(C_Traits.GetDefinitionInfo, ei.definitionID)
+                                if ok5 and def then
+                                    log("Info", "    entryID=" .. eid .. " defID=" .. ei.definitionID .. " spellID=" .. tostring(def.spellID) .. " overrideName=" .. tostring(def.overrideName))
+                                    -- If we have a spellID, get the spell name
+                                    if def.spellID and C_Spell and C_Spell.GetSpellName then
+                                        local ok6, spellName = pcall(C_Spell.GetSpellName, def.spellID)
+                                        if ok6 then
+                                            log("Info", "    => spellName: " .. tostring(spellName))
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- 7c: Delver's Journey XP details
+    log("Info", "")
+    log("Info", "-- 7c: Delver's Journey XP --")
+
+    -- Try faction 2644 (Delves: Season 1 from MajorFactions)
+    if C_MajorFactions then
+        tryAPI("C_MajorFactions.GetMajorFactionData(2644)", C_MajorFactions.GetMajorFactionData, 2644)
+        if C_MajorFactions.GetMajorFactionRenownInfo then
+            tryAPI("C_MajorFactions.GetMajorFactionRenownInfo(2644)", C_MajorFactions.GetMajorFactionRenownInfo, 2644)
+        end
+        if C_MajorFactions.GetCurrentRenownLevel then
+            tryAPI("C_MajorFactions.GetCurrentRenownLevel(2644)", C_MajorFactions.GetCurrentRenownLevel, 2644)
+        end
+        if C_MajorFactions.GetRenownLevels then
+            tryAPI("C_MajorFactions.GetRenownLevels(2644)", C_MajorFactions.GetRenownLevels, 2644)
+        end
+        if C_MajorFactions.HasMaximumRenown then
+            tryAPI("C_MajorFactions.HasMaximumRenown(2644)", C_MajorFactions.HasMaximumRenown, 2644)
+        end
+        if C_MajorFactions.ShouldDisplayMajorFactionAsJourney then
+            tryAPI("C_MajorFactions.ShouldDisplayMajorFactionAsJourney(2644)", C_MajorFactions.ShouldDisplayMajorFactionAsJourney, 2644)
+        end
+        if C_MajorFactions.ShouldUseJourneyRewardTrack then
+            tryAPI("C_MajorFactions.ShouldUseJourneyRewardTrack(2644)", C_MajorFactions.ShouldUseJourneyRewardTrack, 2644)
+        end
+    end
+
+    -- Try faction 2742 (GetDelvesFactionForSeason result)
+    log("Info", "")
+    log("Info", "-- Faction 2742 (GetDelvesFactionForSeason) --")
+    if C_MajorFactions then
+        tryAPI("C_MajorFactions.GetMajorFactionData(2742)", C_MajorFactions.GetMajorFactionData, 2742)
+        if C_MajorFactions.GetMajorFactionRenownInfo then
+            tryAPI("C_MajorFactions.GetMajorFactionRenownInfo(2742)", C_MajorFactions.GetMajorFactionRenownInfo, 2742)
+        end
+        if C_MajorFactions.GetCurrentRenownLevel then
+            tryAPI("C_MajorFactions.GetCurrentRenownLevel(2742)", C_MajorFactions.GetCurrentRenownLevel, 2742)
+        end
+    end
+    if C_Reputation and C_Reputation.GetFactionDataByID then
+        tryAPI("C_Reputation.GetFactionDataByID(2742)", C_Reputation.GetFactionDataByID, 2742)
+    end
+    if C_GossipInfo and C_GossipInfo.GetFriendshipReputation then
+        tryAPI("C_GossipInfo.GetFriendshipReputation(2742)", C_GossipInfo.GetFriendshipReputation, 2742)
+    end
+
+    -- Also try the Delver's Journey currency (3068) in more detail
+    log("Info", "")
+    log("Info", "-- Delver's Journey Currency (3068) --")
+    if C_CurrencyInfo then
+        if C_CurrencyInfo.GetCurrencyInfo then
+            tryAPI("C_CurrencyInfo.GetCurrencyInfo(3068)", C_CurrencyInfo.GetCurrencyInfo, 3068)
+        end
+    end
+
+    log("Info", "")
+    log("Info", "=== /cpQuery Diagnostic Complete ===")
+
+    -- Direct user to the debug log
+    if _G.CouchPotatoLog then
+        _G.CouchPotatoLog:Print("CPQ", "Diagnostic complete — check Settings > Debug Log tab, then Export.")
     end
 end
 
