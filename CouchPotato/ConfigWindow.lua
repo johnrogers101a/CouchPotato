@@ -151,6 +151,7 @@ local _activeTab = "error"  -- "error", "debug", or "settings"
 local _errorTabContent = nil
 local _debugTabContent = nil
 local _settingsTabContent = nil
+local _addonCheckboxes = nil  -- keyed by canonical addon name, set in _build()
 
 local function RebuildErrorList()
     if not _scrollContent then return end
@@ -242,6 +243,15 @@ local function RebuildDebugList()
     _debugScrollContent:SetHeight(totalH)
 end
 
+local function RefreshAddonCheckboxes()
+    if not _addonCheckboxes then return end
+    local states = CouchPotatoDB and CouchPotatoDB.addonStates or {}
+    for addonKey, cb in pairs(_addonCheckboxes) do
+        local enabled = (states[addonKey] ~= false)
+        cb:SetChecked(enabled)
+    end
+end
+
 local function ShowErrorTab()
     _activeTab = "error"
     if _errorTabContent    then _errorTabContent:Show()    end
@@ -271,6 +281,8 @@ local function ShowSettingsTab()
     if _G.CouchPotatoLog then
         _G.CouchPotatoLog:Info("CP", "ConfigWindow: switched to Settings tab")
     end
+    -- Refresh addon visibility checkboxes to reflect current DB state
+    RefreshAddonCheckboxes()
     -- Refresh the StatPriority spec dropdown to reflect current DB value
     if _G.CouchPotatoConfigFrame and _G.CouchPotatoConfigFrame._spDropdown then
         pcall(UIDropDownMenu_SetSelectedValue, _G.CouchPotatoConfigFrame._spDropdown,
@@ -443,22 +455,83 @@ local function _build()
     settingsPanel:Hide()
     _settingsTabContent = settingsPanel
 
+    ---------------------------------------------------------------------------
+    -- Addon visibility checkboxes
+    ---------------------------------------------------------------------------
+    local addonVisLabel = settingsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    addonVisLabel:SetPoint("TOPLEFT", settingsPanel, "TOPLEFT", 20, -16)
+    addonVisLabel:SetText("Addon Visibility")
+    addonVisLabel:SetTextColor(1, 0.82, 0.0, 1)
+
+    local addonVisSep = settingsPanel:CreateTexture(nil, "ARTWORK")
+    addonVisSep:SetHeight(1)
+    addonVisSep:SetPoint("TOPLEFT",  settingsPanel, "TOPLEFT",  20, -36)
+    addonVisSep:SetPoint("TOPRIGHT", settingsPanel, "TOPRIGHT", -20, -36)
+    addonVisSep:SetColorTexture(0.4, 0.4, 0.4, 0.6)
+
+    -- Addons that get checkboxes (order matters for layout)
+    local ADDON_CHECKBOX_LIST = {
+        { key = "DelveCompanionStats",  label = "DelveCompanionStats"  },
+        { key = "StatPriority",         label = "StatPriority"         },
+        { key = "ControllerCompanion",  label = "ControllerCompanion"  },
+    }
+
+    local checkboxes = {}   -- keyed by addon canonical name
+
+    local CHECKBOX_SPACING = 28
+    for i, addonInfo in ipairs(ADDON_CHECKBOX_LIST) do
+        local cb = CreateFrame("CheckButton", nil, settingsPanel, "UICheckButtonTemplate")
+        cb:SetPoint("TOPLEFT", settingsPanel, "TOPLEFT", 20, -40 - (i - 1) * CHECKBOX_SPACING)
+        cb:SetSize(24, 24)
+
+        local cbLabel = settingsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        cbLabel:SetPoint("LEFT", cb, "RIGHT", 4, 0)
+        cbLabel:SetText(addonInfo.label)
+
+        local capturedKey = addonInfo.key
+        cb:SetScript("OnClick", function(self)
+            local isChecked = self:GetChecked()
+            if CP._ensureAddonStates then CP._ensureAddonStates() end
+            if isChecked then
+                CouchPotatoDB.addonStates[capturedKey] = true
+                if CP._doEnableAddon then
+                    CP._doEnableAddon(capturedKey)
+                end
+            else
+                CouchPotatoDB.addonStates[capturedKey] = false
+                if CP._doDisableAddon then
+                    CP._doDisableAddon(capturedKey)
+                end
+            end
+            if _G.CouchPotatoLog then
+                _G.CouchPotatoLog:Info("CP", "ConfigWindow: checkbox toggled " .. capturedKey ..
+                    " -> " .. (isChecked and "enabled" or "disabled"))
+            end
+        end)
+
+        checkboxes[addonInfo.key] = cb
+    end
+
+    -- Store checkboxes on frame and in module-level variable for refresh
+    f._addonCheckboxes = checkboxes
+    _addonCheckboxes = checkboxes
+
     -- Section header: StatPriority
     local spSectionLabel = settingsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    spSectionLabel:SetPoint("TOPLEFT", settingsPanel, "TOPLEFT", 20, -16)
+    spSectionLabel:SetPoint("TOPLEFT", settingsPanel, "TOPLEFT", 20, -16 - #ADDON_CHECKBOX_LIST * CHECKBOX_SPACING - 20)
     spSectionLabel:SetText("StatPriority")
     spSectionLabel:SetTextColor(1, 0.82, 0.0, 1)
 
     -- Separator under section header
     local spSep = settingsPanel:CreateTexture(nil, "ARTWORK")
     spSep:SetHeight(1)
-    spSep:SetPoint("TOPLEFT",  settingsPanel, "TOPLEFT",  20, -36)
-    spSep:SetPoint("TOPRIGHT", settingsPanel, "TOPRIGHT", -20, -36)
+    spSep:SetPoint("TOPLEFT",  spSectionLabel, "BOTTOMLEFT",  0, -4)
+    spSep:SetPoint("TOPRIGHT", settingsPanel,  "TOPRIGHT",   -20, 0)
     spSep:SetColorTexture(0.4, 0.4, 0.4, 0.6)
 
     -- "Display Spec" label
     local spDropLabel = settingsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    spDropLabel:SetPoint("TOPLEFT", settingsPanel, "TOPLEFT", 20, -52)
+    spDropLabel:SetPoint("TOPLEFT", spSectionLabel, "BOTTOMLEFT", 0, -20)
     spDropLabel:SetText("Display Spec:")
 
     -- UIDropDownMenu for spec override
@@ -587,6 +660,7 @@ local function _build()
         if _G.CouchPotatoLog then
             _G.CouchPotatoLog:Info("CP", "ConfigWindow: opened")
         end
+        RefreshAddonCheckboxes()
         if _activeTab == "debug" then
             RebuildDebugList()
             local log = (CouchPotatoDB and CouchPotatoDB.debugLog) or {}
@@ -649,4 +723,5 @@ CP.ConfigWindow = {
     end,
     _RebuildErrorList = RebuildErrorList,
     _RebuildDebugList = RebuildDebugList,
+    _RefreshAddonCheckboxes = RefreshAddonCheckboxes,
 }
