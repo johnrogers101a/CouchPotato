@@ -161,8 +161,8 @@ end
 -------------------------------------------------------------------------------
 -- IsInDelve: Returns true when the player is inside a delve instance.
 -- Uses IsInInstance() returning "scenario" as the primary signal (reliable
--- across all phases of a delve run in TWW), with HasActiveDelve() as a
--- secondary fallback.
+-- across all phases of a delve run in TWW), with HasActiveDelve() and
+-- C_PartyInfo.IsDelveInProgress() as secondary/tertiary fallbacks.
 -------------------------------------------------------------------------------
 local function IsInDelve()
     local _, instanceType = IsInInstance()
@@ -173,6 +173,11 @@ local function IsInDelve()
         return C_DelvesUI.HasActiveDelve and C_DelvesUI.HasActiveDelve()
     end)
     if ok and hasDelve then return true end
+    -- Tertiary fallback: C_PartyInfo.IsDelveInProgress() (confirmed reliable in cpdiag data)
+    local ok2, inProgress = pcall(function()
+        return C_PartyInfo and C_PartyInfo.IsDelveInProgress and C_PartyInfo.IsDelveInProgress()
+    end)
+    if ok2 and inProgress then return true end
     return false
 end
 
@@ -244,7 +249,20 @@ function ns:PrintDebugInfo()
             local hadOk, hadVal = pcall(function() return C_DelvesUI.HasActiveDelve() end)
             if hadOk then
                 table.insert(lines, ("  C_DelvesUI.HasActiveDelve() => %s"):format(tostring(hadVal)))
-                table.insert(lines, ("  -> IsInDelve will return %s"):format(tostring(hadVal == true)))
+                if hadVal then
+                    table.insert(lines, "  -> IsInDelve will return TRUE (HasActiveDelve)")
+                else
+                    table.insert(lines, "  -> HasActiveDelve() false; checking C_PartyInfo.IsDelveInProgress()...")
+                    local pipOk, pipVal = pcall(function()
+                        return C_PartyInfo and C_PartyInfo.IsDelveInProgress and C_PartyInfo.IsDelveInProgress()
+                    end)
+                    if pipOk then
+                        table.insert(lines, ("  C_PartyInfo.IsDelveInProgress() => %s"):format(tostring(pipVal)))
+                        table.insert(lines, ("  -> IsInDelve will return %s"):format(tostring(pipVal == true)))
+                    else
+                        table.insert(lines, "  C_PartyInfo.IsDelveInProgress() => <API error or unavailable>")
+                    end
+                end
             else
                 table.insert(lines, "  C_DelvesUI.HasActiveDelve() => <API error: " .. tostring(hadVal) .. ">")
             end
