@@ -136,11 +136,6 @@ local function BuildButton()
         _G.CouchPotatoLog:Debug("CP", "MinimapButton: frame created, strata=MEDIUM level=8")
     end
 
-    -- Background circle texture
-    local bg = btn:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Background")
-
     -- Icon: use BACKGROUND layer so it sits above the background circle but
     -- below any overlays.  20x20 keeps it comfortably inside the 32x32 button.
     -- SetTexCoord trims the built-in icon border that WoW bakes into every
