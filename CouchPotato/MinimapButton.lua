@@ -156,11 +156,6 @@ local function BuildButton()
         _G.CouchPotatoLog:Debug("CP", "MinimapButton: icon texture set to " .. tostring(ICON_TEXTURE))
     end
 
-    -- Highlight overlay
-    local hl = btn:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints()
-    hl:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-
     -- Border ring — MiniMap-TrackingBorder requires exactly 56x56 with a TOPLEFT
     -- anchor at (0, 0) to match its internal UV layout.  The previous 52x52 size
     -- with a (-6, 6) offset forced the texture into a region that does not map to
