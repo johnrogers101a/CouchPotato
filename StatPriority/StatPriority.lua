@@ -772,7 +772,7 @@ function ns:OnLoad()
         local anchor = GetTrackerAnchor()
         ns.frame:ClearAllPoints()
         if anchor then
-            ns.frame:SetPoint("TOP", anchor, "BOTTOM", 0, -8)
+            ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -8)
             local anchorName = (anchor.GetName and anchor:GetName()) or tostring(anchor)
             splog("Info", "ApplyPinnedState: anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ") with -8px gap")
         else
@@ -809,7 +809,7 @@ function ns:OnLoad()
             ns.frame:ClearAllPoints()
             local anchor = GetTrackerAnchor()
             if anchor then
-                ns.frame:SetPoint("TOP", anchor, "BOTTOM", 0, -8)
+                ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -8)
                 local anchorName = (anchor.GetName and anchor:GetName()) or tostring(anchor)
                 splog("Info", "PinButton OnClick: anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ")")
             else
@@ -1135,7 +1135,7 @@ function ns:OnLoad()
         local anchor = GetTrackerAnchor()
         ns.frame:ClearAllPoints()
         if anchor then
-            ns.frame:SetPoint("TOP", anchor, "BOTTOM", 0, -8)
+            ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -8)
             local anchorName = (anchor.GetName and anchor:GetName()) or tostring(anchor)
             splog("Info", "Pin restore: pinned — anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ")")
         else
