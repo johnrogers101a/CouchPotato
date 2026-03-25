@@ -1191,9 +1191,12 @@ end
 -- NOTE: Does NOT use GameTooltip — no floating tooltip side-effect.
 -------------------------------------------------------------------------------
 GetBoonsDisplayText = function()
-    if not C_Spell or not C_Spell.GetSpellDescription then return "" end
+    -- Only show boon info when inside a delve
+    if not IsInDelve() then return "" end
+
+    if not C_Spell or not C_Spell.GetSpellDescription then return "Boons: None" end
     local ok, desc = pcall(C_Spell.GetSpellDescription, 1280098)
-    if not ok or not desc or desc == "" then return "" end
+    if not ok or not desc or desc == "" then return "Boons: None" end
 
     -- Strip WoW color codes (|cnNAME:...|r  and  |cXXXXXXXX...|r)
     local clean = desc
@@ -1202,7 +1205,7 @@ GetBoonsDisplayText = function()
         :gsub("|r", "")
 
     -- Parse lines of the form "Stat Name: N%"
-    local lines = {}
+    local stats = {}
     for line in (clean .. "\n"):gmatch("([^\n]*)\n") do
         -- Match "Some Stat Name: 5%" or "Some Stat Name: 5" (with optional trailing %)
         local statName, numStr = line:match("^(.+):%s*(%d+)%%%s*$")
@@ -1213,12 +1216,13 @@ GetBoonsDisplayText = function()
             local val = tonumber(numStr)
             if val and val > 0 then
                 local abbrev = GetBoonAbbrev(statName)
-                lines[#lines + 1] = abbrev .. ": " .. val .. "%"
+                stats[#stats + 1] = abbrev .. ": " .. val .. "%"
             end
         end
     end
 
-    return table.concat(lines, "\n")
+    if #stats == 0 then return "Boons: None" end
+    return "Boons: " .. table.concat(stats, ", ")
 end
 
 -------------------------------------------------------------------------------
@@ -1389,21 +1393,18 @@ function ns:UpdateCompanionData(event)
         ns.nameLabel:SetText(table.concat(parts, "  "))
     end
 
-    -- Boon display — sub-header "Boons" + body lines; both shown/hidden together
+    -- Boon display — single line "Boons: None" or "Boons: stat1, stat2";
+    -- boonHeaderLabel is kept hidden (the prefix is embedded in the label text).
     local boonsShown = false
+    if ns.boonHeaderLabel then ns.boonHeaderLabel:Hide() end
     if ns.boonLabel then
         local boonText = GetBoonsDisplayText()
         dcslog("Debug", "UpdateCompanionData: boonText=" .. (boonText == "" and "(empty)" or boonText))
         ns.boonLabel:SetText(boonText)
         if boonText == "" then
-            if ns.boonHeaderLabel then ns.boonHeaderLabel:Hide() end
             ns.boonLabel:Hide()
         else
             boonsShown = true
-            if ns.boonHeaderLabel then
-                ns.boonHeaderLabel:SetText("Boons")
-                ns.boonHeaderLabel:Show()
-            end
             ns.boonLabel:Show()
         end
     end
@@ -1431,14 +1432,10 @@ function ns:UpdateCompanionData(event)
     if ns.frame then
         -- Content frame: 4px top + nameLabel(16) + 4px bottom = 24px base
         local contentHeight = 24
-        -- Boon section: 3px gap + header(16) + body lines(16 each)
-        if ns.boonHeaderLabel and ns.boonHeaderLabel:IsShown() then
-            contentHeight = contentHeight + 3 + 16
-        end
+        -- Boon section: 3px gap + single boon line (16px)
+        -- boonHeaderLabel is always hidden; the "Boons:" prefix is part of boonLabel text.
         if ns.boonLabel and ns.boonLabel:IsShown() then
-            local boonText = ns.boonLabel:GetText() or ""
-            local _, newlines = boonText:gsub("\n", "\n")
-            contentHeight = contentHeight + (newlines + 1) * 16
+            contentHeight = contentHeight + 3 + 16
         end
         -- Nemesis section: 3px gap + header(16) + detail lines(16 each)
         if ns.nemesisLabel and ns.nemesisLabel:IsShown() then

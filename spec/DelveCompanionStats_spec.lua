@@ -431,11 +431,14 @@ describe("DelveCompanionStats", function()
             _ClearMockBoonSpell()
             -- Clear nemesis so it doesn't interfere
             C_ScenarioInfo._criteria = {}
+            -- Boons only show when inside a delve
+            _G._isInInstanceType = "scenario"
         end)
 
         after_each(function()
             _ClearMockBoonSpell()
             C_ScenarioInfo._criteria = {}
+            _G._isInInstanceType = "none"
         end)
 
         it("boon display shows abbreviated stats parsed from C_Spell.GetSpellDescription", function()
@@ -453,15 +456,28 @@ describe("DelveCompanionStats", function()
             assert.is_truthy(ns.boonLabel._text:find("Str: 4%",       1, true), "expected Str: 4%")
             assert.is_truthy(ns.boonLabel._text:find("Mast: 5%",      1, true), "expected Mast: 5%")
             assert.is_true(ns.boonLabel:IsShown())
-            assert.is_true(ns.boonHeaderLabel:IsShown())
+            -- boonHeaderLabel is always hidden; "Boons:" prefix is embedded in boonLabel text
+            assert.is_false(ns.boonHeaderLabel:IsShown())
         end)
 
-        it("boon display hides label when no boon description available", function()
-            -- No spell description set — simulates spell not active or outside delve
+        it("boon display hides label when not in a delve and no boon description available", function()
+            -- No spell description set AND not in a delve — label should be hidden
+            _G._isInInstanceType = "none"
             ns:UpdateCompanionData()
 
             assert.equals("", ns.boonLabel._text)
             assert.is_false(ns.boonLabel:IsShown())
+            assert.is_false(ns.boonHeaderLabel:IsShown())
+        end)
+
+        it("boon display shows 'Boons: None' when in a delve but no spell description", function()
+            -- In a delve but no boon spell active yet
+            _G._isInInstanceType = "scenario"
+            _ClearMockBoonSpell()
+            ns:UpdateCompanionData()
+
+            assert.equals("Boons: None", ns.boonLabel._text)
+            assert.is_true(ns.boonLabel:IsShown())
             assert.is_false(ns.boonHeaderLabel:IsShown())
         end)
 
@@ -485,7 +501,8 @@ describe("DelveCompanionStats", function()
 
             assert.is_true(ns.boonLabel:IsShown())
             assert.is_truthy(ns.boonLabel._text:find("Vers: 7%", 1, true), "expected Vers: 7%")
-            assert.is_true(ns.boonHeaderLabel:IsShown())
+            -- boonHeaderLabel is always hidden; "Boons:" prefix is embedded in boonLabel text
+            assert.is_false(ns.boonHeaderLabel:IsShown())
         end)
 
     end)
@@ -518,14 +535,16 @@ describe("DelveCompanionStats", function()
             C_DelvesUI._SetHasActiveDelve(false)
         end)
 
-        it("GetBoonsDisplayText returns empty string when description has unresolved $w template vars", function()
-            -- Simulate early zone-in: WoW returns "$w1%" placeholders (no numeric value)
+        it("GetBoonsDisplayText shows 'Boons: None' when description has unresolved $w template vars", function()
+            -- Simulate early zone-in: WoW returns "$w1%" placeholders (no numeric value).
+            -- We are in a delve (before_each sets _isInInstanceType = "scenario"), so
+            -- the boon line is shown as "Boons: None" since no numeric stats are parsed.
             C_Spell._descriptions[1280098] =
                 "Brann's boon.\nMaximum Health: $w1%.\nMovement Speed: $w2%."
             ns:UpdateCompanionData()
-            -- Template vars must not be shown — label stays empty (no digits to parse)
-            assert.equals("", ns.boonLabel._text)
-            assert.is_false(ns.boonLabel:IsShown())
+            -- Template vars must not be shown — but we are in a delve so "Boons: None" appears
+            assert.equals("Boons: None", ns.boonLabel._text)
+            assert.is_true(ns.boonLabel:IsShown())
         end)
 
         it("GetBoonsDisplayText returns real values when description has resolved stats", function()
