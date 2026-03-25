@@ -1072,3 +1072,39 @@ end
 _G._ClearMockBoonSpell = function()
     _G.C_Spell._descriptions[1280098] = nil
 end
+
+-- Test helper: set boon spell description using the "period after %" format observed
+-- in live Blizzard tooltips (e.g. "Strength: 2%." — last stat gets a trailing period).
+-- Accepts the same {statName, pct} pairs as _SetMockBoonSpell.
+_G._SetMockBoonSpellWithPeriod = function(stats)
+    if not stats or #stats == 0 then
+        _G.C_Spell._descriptions[1280098] = nil
+        return
+    end
+    local lines = { "Brann's combat experience improves your abilities in this delve." }
+    for i, entry in ipairs(stats) do
+        local statName, pct = entry[1], entry[2]
+        -- Append a trailing period to the last stat, mirroring the live tooltip format.
+        if i == #stats then
+            lines[#lines + 1] = statName .. ": " .. pct .. "%."
+        else
+            lines[#lines + 1] = statName .. ": " .. pct .. "%"
+        end
+    end
+    _G.C_Spell._descriptions[1280098] = table.concat(lines, "\n")
+end
+
+-- Test helper: set boon spell description with WoW named color codes
+-- (e.g. |cnWHITE_FONT_COLOR:2%|r), as returned by some API versions.
+_G._SetMockBoonSpellWithColorCodes = function(stats)
+    if not stats or #stats == 0 then
+        _G.C_Spell._descriptions[1280098] = nil
+        return
+    end
+    local lines = { "Brann's combat experience improves your abilities in this delve." }
+    for _, entry in ipairs(stats) do
+        local statName, pct = entry[1], entry[2]
+        lines[#lines + 1] = statName .. ": |cnWHITE_FONT_COLOR:" .. pct .. "%|r"
+    end
+    _G.C_Spell._descriptions[1280098] = table.concat(lines, "\n")
+end
