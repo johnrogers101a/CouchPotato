@@ -409,13 +409,17 @@ function ns:PrintDebugInfo()
                 -- Strip color codes for display
                 local cleanDesc = spellDesc
                     :gsub("|cn[^:]+:", ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+                -- Also dump the raw (pre-strip) description for format diagnosis.
+                table.insert(lines, "  [raw, pre-strip]: " .. spellDesc)
                 local lineNum = 0
                 for ln in (cleanDesc .. "\n"):gmatch("([^\n]*)\n") do
                     lineNum = lineNum + 1
                     table.insert(lines, ("  L%d: %s"):format(lineNum, ln))
-                    local rawStat, rawNum = ln:match("^(.+):%s*(%d+)%%%s*$")
-                    if not rawStat then rawStat, rawNum = ln:match("^(.+):%s*(%d+)%s*$") end
+                    -- Use the same resilient patterns as GetBoonsDisplayText.
+                    local rawStat, rawNum = ln:match("^(.+):%s*(%d+)%%%D*$")
+                    if not rawStat then rawStat, rawNum = ln:match("^(.+):%s*(%d+)%D*$") end
                     if rawStat then
+                        rawStat = rawStat:match("^%s*(.-)%s*$")
                         table.insert(lines, ("    [boon] raw stat=%q  abbrev=%q"):format(
                             rawStat, GetBoonAbbrev(rawStat)))
                     end
@@ -716,8 +720,9 @@ function ns:OnLoad()
     if frameWidth < 100 or frameWidth > 300 then
         frameWidth = 248  -- match Delves section content box width
     end
-    -- Inner content width: 6 px padding each side (matches ObjectiveTracker label inset)
-    local contentWidth = frameWidth - 12
+    -- Inner content width: 6 px label inset each side (matches ObjectiveTracker label inset),
+    -- minus 16 px to account for the 8px left/right padding on the content frame anchors.
+    local contentWidth = frameWidth - 12 - 16
 
     -- Set size and default anchor (above ChatFrame1 when available)
     ns.frame:SetSize(frameWidth, 160)
@@ -897,8 +902,8 @@ function ns:OnLoad()
     else
         contentFrame = CreateFrame("Frame", nil, ns.frame)
     end
-    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",  0, -4)
-    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT", 0, -4)
+    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",   8, -4)
+    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT", -8, -4)
     -- Subtle dark content background with rounded gold border
     contentFrame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -1216,25 +1221,44 @@ GetBoonsDisplayText = function()
     local ok, desc = pcall(C_Spell.GetSpellDescription, 1280098)
     if not ok or not desc or desc == "" then return "Boons: None" end
 
-    -- Strip WoW color codes (|cnNAME:...|r  and  |cXXXXXXXX...|r)
+    -- Debug: log the raw spell description so we can diagnose format mismatches.
+    dcslog("Debug", "GetBoonsDisplayText: raw desc=" .. tostring(desc))
+
+    -- Strip WoW color codes:
+    --   |cnNAME:text|r  (named color codes, TWW+)
+    --   |cXXXXXXXXtext|r  (hex ARGB color codes)
     local clean = desc
         :gsub("|cn[^:]+:", "")
         :gsub("|c%x%x%x%x%x%x%x%x", "")
         :gsub("|r", "")
 
-    -- Parse lines of the form "Stat Name: N%"
+    -- Parse lines of the form "Stat Name: N%" or "Stat Name: N%." (trailing punctuation ok).
+    -- Pattern priority:
+    --   1. "Stat: 5%"  — percent sign present, optional trailing non-digit chars then EOL
+    --   2. "Stat: 5"   — bare number, optional trailing non-digit chars then EOL
+    -- This handles: "Strength: 2%." (period after %) and plain "Strength: 2%".
     local stats = {}
     for line in (clean .. "\n"):gmatch("([^\n]*)\n") do
-        -- Match "Some Stat Name: 5%" or "Some Stat Name: 5" (with optional trailing %)
-        local statName, numStr = line:match("^(.+):%s*(%d+)%%%s*$")
+        local statName, numStr
+        -- Pattern 1: percent sign explicitly present; allow trailing punctuation/spaces.
+        statName, numStr = line:match("^(.+):%s*(%d+)%%%D*$")
         if not statName then
-            statName, numStr = line:match("^(.+):%s*(%d+)%s*$")
+            -- Pattern 2: no percent sign; allow trailing non-digit chars.
+            statName, numStr = line:match("^(.+):%s*(%d+)%D*$")
+            -- Exclude lines where the "number" is embedded in a longer word (e.g. version strings).
+            if statName and line:match("^.+:%s*%d+%a") then
+                statName = nil
+                numStr = nil
+            end
         end
         if statName and numStr then
+            -- Trim any remaining whitespace from the stat name.
+            statName = statName:match("^%s*(.-)%s*$")
             local val = tonumber(numStr)
             if val and val > 0 then
                 local abbrev = GetBoonAbbrev(statName)
                 stats[#stats + 1] = abbrev .. ": " .. val .. "%"
+                dcslog("Debug", "GetBoonsDisplayText: matched stat=" .. statName .. " val=" .. val)
             end
         end
     end

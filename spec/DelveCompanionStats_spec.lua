@@ -1075,25 +1075,25 @@ describe("DelveCompanionStats", function()
         -- ── Spacing / padding ─────────────────────────────────────────────────
         describe("spacing and padding", function()
 
-            it("nameLabel width is frameWidth - 12", function()
-                -- frameWidth fallback is 248; contentWidth = 248 - 12 = 236
-                assert.equals(236, ns.nameLabel._width)
+            it("nameLabel width is frameWidth - 28 (12 label inset + 16 content frame padding)", function()
+                -- frameWidth fallback is 248; contentWidth = 248 - 12 - 16 = 220
+                assert.equals(220, ns.nameLabel._width)
             end)
 
-            it("boonHeaderLabel width is frameWidth - 12", function()
-                assert.equals(236, ns.boonHeaderLabel._width)
+            it("boonHeaderLabel width is frameWidth - 28", function()
+                assert.equals(220, ns.boonHeaderLabel._width)
             end)
 
-            it("boonLabel width is frameWidth - 12", function()
-                assert.equals(236, ns.boonLabel._width)
+            it("boonLabel width is frameWidth - 28", function()
+                assert.equals(220, ns.boonLabel._width)
             end)
 
-            it("nemesisLabel width is frameWidth - 12", function()
-                assert.equals(236, ns.nemesisLabel._width)
+            it("nemesisLabel width is frameWidth - 28", function()
+                assert.equals(220, ns.nemesisLabel._width)
             end)
 
-            it("nemesisDetailLabel width is frameWidth - 12", function()
-                assert.equals(236, ns.nemesisDetailLabel._width)
+            it("nemesisDetailLabel width is frameWidth - 28", function()
+                assert.equals(220, ns.nemesisDetailLabel._width)
             end)
 
         end)
@@ -1284,6 +1284,102 @@ describe("DelveCompanionStats", function()
             assert.is_not_nil(DelveCompanionStatsDB.position)
             -- relPoint key (not relativePoint) is what the new handler saves
             assert.is_not_nil(DelveCompanionStatsDB.position.relPoint)
+        end)
+
+    end)
+
+    -- -------------------------------------------------------------------------
+    -- Boon spell description parsing — resilient pattern tests
+    -- -------------------------------------------------------------------------
+    describe("GetBoonsDisplayText boon parsing", function()
+
+        before_each(function()
+            -- Put us in a delve so GetBoonsDisplayText proceeds past the early return.
+            _G._isInInstanceType = "scenario"
+            -- Provide a valid companion so UpdateCompanionData does not early-exit.
+            C_DelvesUI.GetFactionForCompanion = function() return 2744 end
+            C_Reputation.GetFactionDataByID   = function() return { name = "Brann Bronzebeard" } end
+            C_GossipInfo.GetFriendshipReputation = function()
+                return { friendshipRank = 10, standing = 50, reactionThreshold = 0, nextThreshold = 100 }
+            end
+            _ClearMockBoonSpell()
+        end)
+
+        after_each(function()
+            _ClearMockBoonSpell()
+            _G._isInInstanceType = "none"
+        end)
+
+        it("parses plain 'Stat: N%' format (no trailing period)", function()
+            _SetMockBoonSpell({ { "Strength", 2 } })
+            ns:UpdateCompanionData()
+            assert.is_truthy(ns.boonLabel._text:find("Str: 2%", 1, true),
+                "expected 'Str: 2%' in: " .. tostring(ns.boonLabel._text))
+        end)
+
+        it("parses 'Stat: N%.' format (trailing period after percent — live tooltip format)", function()
+            -- This is the bug format: "Strength: 2%." was not matched by the old pattern.
+            _SetMockBoonSpellWithPeriod({ { "Strength", 2 } })
+            ns:UpdateCompanionData()
+            assert.is_truthy(ns.boonLabel._text:find("Str: 2%", 1, true),
+                "expected 'Str: 2%' in: " .. tostring(ns.boonLabel._text))
+        end)
+
+        it("parses multiple stats when last one has trailing period", function()
+            -- Simulate: "Maximum Health: 0%\nMovement Speed: 0%\nStrength: 2%." (last has period)
+            _SetMockBoonSpellWithPeriod({
+                { "Maximum Health",  0 },
+                { "Movement Speed",  0 },
+                { "Strength",        2 },
+                { "Haste",           0 },
+                { "Critical Strike", 0 },
+                { "Mastery",         0 },
+                { "Versatility",     0 },
+                { "Damage Reduction", 0 },
+            })
+            ns:UpdateCompanionData()
+            -- Only Strength: 2 is non-zero.
+            assert.is_truthy(ns.boonLabel._text:find("Str: 2%", 1, true),
+                "expected 'Str: 2%' in: " .. tostring(ns.boonLabel._text))
+            -- Zero stats must not appear.
+            assert.is_nil(ns.boonLabel._text:find("Max HP", 1, true), "Max HP (0%) should be excluded")
+            assert.is_nil(ns.boonLabel._text:find("Move Spd", 1, true), "Move Spd (0%) should be excluded")
+        end)
+
+        it("parses color-coded 'Stat: |cnWHITE_FONT_COLOR:N%|r' format", function()
+            _SetMockBoonSpellWithColorCodes({ { "Haste", 3 } })
+            ns:UpdateCompanionData()
+            assert.is_truthy(ns.boonLabel._text:find("Haste: 3%", 1, true),
+                "expected 'Haste: 3%' in: " .. tostring(ns.boonLabel._text))
+        end)
+
+        it("raw spell description is logged via dcslog (smoke test: no crash)", function()
+            -- Set a description and verify parsing does not throw.
+            _SetMockBoonSpellWithPeriod({ { "Critical Strike", 5 } })
+            assert.has_no.errors(function() ns:UpdateCompanionData() end)
+            assert.is_truthy(ns.boonLabel._text:find("Crit: 5%", 1, true))
+        end)
+
+        it("shows 'Boons: None' when all stats are zero (period format)", function()
+            _SetMockBoonSpellWithPeriod({
+                { "Strength",        0 },
+                { "Haste",           0 },
+                { "Critical Strike", 0 },
+            })
+            ns:UpdateCompanionData()
+            assert.equals("Boons: None", ns.boonLabel._text)
+        end)
+
+        it("content frame has 8px left/right padding via anchor offsets", function()
+            -- contentFrame SetPoint args: { point, relativeTo, relPoint, x, y }
+            -- i.e. pt[1]=point, pt[2]=relativeTo, pt[3]=relPoint, pt[4]=x, pt[5]=y
+            local topleftX, toprightX
+            for _, pt in ipairs(ns.contentFrame._points or {}) do
+                if pt[1] == "TOPLEFT"  then topleftX  = pt[4] end
+                if pt[1] == "TOPRIGHT" then toprightX = pt[4] end
+            end
+            assert.equals(8,  topleftX,  "contentFrame TOPLEFT x-offset should be 8")
+            assert.equals(-8, toprightX, "contentFrame TOPRIGHT x-offset should be -8")
         end)
 
     end)
