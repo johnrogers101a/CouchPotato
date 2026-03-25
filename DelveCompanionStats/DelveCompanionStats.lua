@@ -1171,30 +1171,11 @@ end
 -- Returns "" if no boon lines are found (hides the boon label).
 -------------------------------------------------------------------------------
 GetBoonsDisplayText = function()
-    local parts = {}
-    local ok = pcall(function()
-        GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
-        GameTooltip:SetSpellByID(1280098)
-        local numLines = GameTooltip:NumLines()
-        for i = 1, numLines do
-            local lineText = _G["GameTooltipTextLeft"..i] and _G["GameTooltipTextLeft"..i]:GetText()
-            -- Guard: if the tooltip still contains unresolved spell template variables
-            -- (e.g. "$w1%"), the boon aura hasn't been applied yet; skip the line.
-            if lineText and not lineText:find("%$w%d") then
-                for subline in (lineText .. "\n"):gmatch("([^\n]*)\n") do
-                    local stat, pct = subline:match("^(.+): (%d+)%%.?%s*$")
-                    local n = tonumber(pct)
-                    if stat and n and n > 0 then
-                        local abbrev = GetBoonAbbrev(stat)
-                        table.insert(parts, abbrev .. ": " .. n .. "%")
-                    end
-                end
-            end
-        end
-        GameTooltip:Hide()
-    end)
-    if not ok or #parts == 0 then return "" end
-    return table.concat(parts, "\n")
+    -- Boon display disabled: reading spell 1280098 via GameTooltip caused an
+    -- unwanted floating tooltip to appear in-game. Return "" unconditionally so
+    -- boonLabel and boonHeaderLabel remain hidden. Re-enable when a non-tooltip
+    -- API source for boon data is identified.
+    return ""
 end
 
 -------------------------------------------------------------------------------
