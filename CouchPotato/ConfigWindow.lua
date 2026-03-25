@@ -307,7 +307,7 @@ local function _build()
     -- Title
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     title:SetPoint("LEFT", f.TitleBg, "LEFT", 5, 0)
-    title:SetText("CouchPotato v" .. CP.version)
+    title:SetText("Couch Potato Settings")
 
     f.CloseButton:SetScript("OnClick", function()
         if _G.CouchPotatoLog then
