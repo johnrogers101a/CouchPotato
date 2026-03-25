@@ -680,6 +680,118 @@ describe("StatPriority", function()
     end)
 
     -- =========================================================================
+    -- Test 11b: docking gap depends on anchor type
+    -- =========================================================================
+    -- When anchoring below DelveCompanionStatsFrame the gap must be -2px (tight,
+    -- gold headers abut each other).  When anchoring below any other frame
+    -- (tracker module, ObjectiveTrackerFrame) the gap must be -14px to match the
+    -- spacing DCS itself uses when docking below the tracker.
+    -- =========================================================================
+    describe("docking gap (ApplyPinnedState)", function()
+        after_each(function()
+            _G.DelveCompanionStatsFrame = nil
+            _G.ObjectiveTrackerFrame    = nil
+        end)
+
+        it("uses -2px gap when anchoring below DelveCompanionStatsFrame", function()
+            local dcsFrame = {
+                _shown  = true,
+                _points = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return "DelveCompanionStatsFrame" end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
+                ClearAllPoints = function(self) self._points = {} end,
+            }
+            _G.DelveCompanionStatsFrame = dcsFrame
+            _G.ObjectiveTrackerFrame    = nil
+
+            ns.ApplyPinnedState()
+
+            local gap = nil
+            for _, p in ipairs(ns.frame._points) do
+                if p[2] == dcsFrame then gap = p[5]; break end
+            end
+            assert.equals(-2, gap, "expected -2px gap when docking below DCS")
+        end)
+
+        it("uses -14px gap when anchoring below ObjectiveTrackerFrame (DCS hidden)", function()
+            _G.DelveCompanionStatsFrame = nil
+            local outerFrame = {
+                _shown  = true,
+                _points = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return "ObjectiveTrackerFrame" end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
+                ClearAllPoints = function(self) self._points = {} end,
+            }
+            _G.ObjectiveTrackerFrame = outerFrame
+
+            ns.ApplyPinnedState()
+
+            local gap = nil
+            for _, p in ipairs(ns.frame._points) do
+                if p[2] == outerFrame then gap = p[5]; break end
+            end
+            assert.equals(-14, gap, "expected -14px gap when docking below ObjectiveTrackerFrame")
+        end)
+
+        it("pin restore on load uses -14px gap when DCS is not shown", function()
+            _G.DelveCompanionStatsFrame = nil
+            local outerFrame = {
+                _shown  = true,
+                _points = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return "ObjectiveTrackerFrame" end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
+                ClearAllPoints = function(self) self._points = {} end,
+            }
+            _G.ObjectiveTrackerFrame = outerFrame
+
+            _G.StatPriorityDB    = { pinned = true }
+            _G.StatPriorityNS    = nil
+            _G.StatPriorityFrame = nil
+            dofile("StatPriority/StatPriority.lua")
+            local ns2 = _G.StatPriorityNS
+            ns2:OnLoad()
+
+            local gap = nil
+            for _, p in ipairs(ns2.frame._points) do
+                if p[2] == outerFrame then gap = p[5]; break end
+            end
+            assert.equals(-14, gap, "expected -14px gap on pin restore when docking below tracker")
+
+            _G.ObjectiveTrackerFrame = nil
+        end)
+
+        it("pin restore on load uses -2px gap when DCS is shown", function()
+            local dcsFrame = {
+                _shown  = true,
+                _points = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return "DelveCompanionStatsFrame" end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
+                ClearAllPoints = function(self) self._points = {} end,
+            }
+            _G.DelveCompanionStatsFrame = dcsFrame
+
+            _G.StatPriorityDB    = { pinned = true }
+            _G.StatPriorityNS    = nil
+            _G.StatPriorityFrame = nil
+            dofile("StatPriority/StatPriority.lua")
+            local ns2 = _G.StatPriorityNS
+            ns2:OnLoad()
+
+            local gap = nil
+            for _, p in ipairs(ns2.frame._points) do
+                if p[2] == dcsFrame then gap = p[5]; break end
+            end
+            assert.equals(-2, gap, "expected -2px gap on pin restore when docking below DCS")
+
+            _G.DelveCompanionStatsFrame = nil
+        end)
+    end)
+
+    -- =========================================================================
     -- Test 12a: tracker anchor resolution — docks below ObjectiveTrackerFrame
     -- =========================================================================
     -- GetTrackerAnchor anchors to ObjectiveTrackerFrame (the outer container)

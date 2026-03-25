@@ -824,7 +824,12 @@ function ns:OnLoad()
         local anchor = GetTrackerAnchor()
         ns.frame:ClearAllPoints()
         if anchor then
-            ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -2)
+            -- Use a tight -2px gap when docking directly below DCS (both frames
+            -- have gold headers that visually touch).  Use -14px for all other
+            -- anchors (tracker modules, ObjectiveTrackerFrame) to match the same
+            -- spacing that DCS itself uses when docking below the tracker.
+            local gap = (anchor == _G.DelveCompanionStatsFrame) and -2 or -14
+            ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, gap)
             -- Match width to the anchor: DCS width, or ObjectiveTrackerFrame width
             local widthSource = (anchor == _G.DelveCompanionStatsFrame) and _G.DelveCompanionStatsFrame or ObjectiveTrackerFrame
             if widthSource and widthSource.GetWidth then
@@ -834,7 +839,7 @@ function ns:OnLoad()
                 end
             end
             local anchorName = (anchor.GetName and anchor:GetName()) or tostring(anchor)
-            splog("Info", "ApplyPinnedState: anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ") with -8px gap")
+            splog("Info", "ApplyPinnedState: anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ") gap=" .. tostring(gap))
         else
             ns.frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -200)
             splog("Info", "ApplyPinnedState: no tracker visible — parked TOPRIGHT fallback")
@@ -1193,9 +1198,11 @@ function ns:OnLoad()
         local anchor = GetTrackerAnchor()
         ns.frame:ClearAllPoints()
         if anchor then
-            ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -2)
+            -- Same gap logic as ApplyPinnedState: -2px below DCS, -14px otherwise.
+            local gap = (anchor == _G.DelveCompanionStatsFrame) and -2 or -14
+            ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, gap)
             local anchorName = (anchor.GetName and anchor:GetName()) or tostring(anchor)
-            splog("Info", "Pin restore: pinned — anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ")")
+            splog("Info", "Pin restore: pinned — anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ") gap=" .. tostring(gap))
         else
             -- Tracker not visible yet — park on right side of screen until
             -- PLAYER_ENTERING_WORLD fires and re-anchors properly.
