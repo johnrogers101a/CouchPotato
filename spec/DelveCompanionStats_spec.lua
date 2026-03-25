@@ -439,6 +439,7 @@ describe("DelveCompanionStats", function()
         end)
 
         it("boon display shows abbreviated stats parsed from tooltip", function()
+            -- Boon display is disabled; GetBoonsDisplayText always returns "".
             _SetMockBoonTooltip({
                 "Boons",
                 "Maximum Health increased by 0%.\nStrength increased by 0%.\nMovement Speed increased by 0%.\nMastery increased by 0%.",
@@ -448,7 +449,8 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.equals("Max HP: 6%\nMove Spd: 10%\nStrength: 4%\nMastery: 5%", ns.boonLabel._text)
+            assert.equals("", ns.boonLabel._text)
+            assert.is_false(ns.boonLabel:IsShown())
         end)
 
         it("boon display hides label when no active boons", function()
@@ -461,19 +463,22 @@ describe("DelveCompanionStats", function()
         end)
 
         it("boon display excludes stats where value is 0", function()
+            -- Boon display is disabled; always hidden regardless of tooltip data.
             _SetMockBoonTooltip({
                 "Boons",
                 "",
                 "",
-                "Maximum Health: 3%.\nHaste: 0%.",  -- zero value, must be excluded
+                "Maximum Health: 3%.\nHaste: 0%.",
             })
 
             ns:UpdateCompanionData()
 
-            assert.equals("Max HP: 3%", ns.boonLabel._text)
+            assert.equals("", ns.boonLabel._text)
+            assert.is_false(ns.boonLabel:IsShown())
         end)
 
         it("boon label is shown when tooltip has boon lines", function()
+            -- Boon display is disabled; label and header stay hidden even with data.
             _SetMockBoonTooltip({
                 "Boons",
                 "",
@@ -483,11 +488,9 @@ describe("DelveCompanionStats", function()
 
             ns:UpdateCompanionData()
 
-            assert.is_true(ns.boonLabel:IsShown())
-            assert.equals("Vers: 7%", ns.boonLabel._text)
-            -- boonHeaderLabel must also be shown
-            assert.is_true(ns.boonHeaderLabel:IsShown())
-            assert.equals("Boons", ns.boonHeaderLabel._text)
+            assert.is_false(ns.boonLabel:IsShown())
+            assert.equals("", ns.boonLabel._text)
+            assert.is_false(ns.boonHeaderLabel:IsShown())
         end)
 
     end)
@@ -535,7 +538,7 @@ describe("DelveCompanionStats", function()
         end)
 
         it("GetBoonsDisplayText returns real values when tooltip has resolved stats", function()
-            -- Simulate boon fully applied: real numeric values
+            -- Boon display is disabled; GetBoonsDisplayText always returns "".
             _SetMockBoonTooltip({
                 "Boons",
                 "",
@@ -543,8 +546,8 @@ describe("DelveCompanionStats", function()
                 "Maximum Health: 6%.\nMovement Speed: 10%.",
             })
             ns:UpdateCompanionData()
-            assert.equals("Max HP: 6%\nMove Spd: 10%", ns.boonLabel._text)
-            assert.is_true(ns.boonLabel:IsShown())
+            assert.equals("", ns.boonLabel._text)
+            assert.is_false(ns.boonLabel:IsShown())
         end)
 
         it("PLAYER_ENTERING_WORLD schedules two delayed C_Timer.After calls", function()
@@ -566,7 +569,7 @@ describe("DelveCompanionStats", function()
         end)
 
         it("delayed timers from PLAYER_ENTERING_WORLD call UpdateCompanionData when in delve", function()
-            -- Ensure in a delve so timers fire an update
+            -- Boon display is disabled; even after timers fire the label stays empty.
             _G._isInInstanceType = "scenario"
             _SetMockBoonTooltip({
                 "Boons", "", "",
@@ -578,8 +581,9 @@ describe("DelveCompanionStats", function()
             -- Fire all pending timers (simulates 2s and 5s passing)
             C_Timer._FireAll()
 
-            -- After timers fire, boon label should have resolved data
-            assert.equals("Max HP: 8%", ns.boonLabel._text)
+            -- Boon display disabled — label always empty
+            assert.equals("", ns.boonLabel._text)
+            assert.is_false(ns.boonLabel:IsShown())
         end)
 
         it("delayed timers from PLAYER_ENTERING_WORLD do NOT call UpdateCompanionData when not in delve", function()
@@ -1127,11 +1131,11 @@ describe("DelveCompanionStats", function()
             end)
 
             it("content height adds 3+16 gap+header plus 16-per-boon-line", function()
-                -- One boon line
+                -- Boon display is disabled; tooltip data is ignored and height stays at base.
                 _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%." })
                 ns:UpdateCompanionData()
-                -- 24 (base) + 3 (gap) + 16 (boonHeader) + 16 (1 boon line) = 59
-                assert.equals(59, ns.contentFrame._height)
+                -- Boons disabled → no boon section added → contentHeight = 24
+                assert.equals(24, ns.contentFrame._height)
             end)
 
             it("content height does not include nemesis section (nemesis disabled)", function()
@@ -1142,11 +1146,12 @@ describe("DelveCompanionStats", function()
             end)
 
             it("content height with boons does not include nemesis (nemesis disabled)", function()
+                -- Both boon and nemesis display are disabled; height stays at base.
                 _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%.\nMastery: 3%." })
                 _SetMockNemesis(2, 5)
                 ns:UpdateCompanionData()
-                -- 24 (base) + 3+16 (boonHeader) + 2*16 (2 boon lines) = 75 (no nemesis)
-                assert.equals(75, ns.contentFrame._height)
+                -- Boons disabled, nemesis disabled → contentHeight = 24
+                assert.equals(24, ns.contentFrame._height)
             end)
 
         end)
