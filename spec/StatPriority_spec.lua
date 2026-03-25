@@ -109,15 +109,20 @@ describe("StatPriority", function()
             assert.equals("Restoration Druid", ns.headerTitle:GetText())
         end)
 
-        it("sets stats label with > separators for known specID (unified)", function()
+        it("circle display shows Int and Haste for Restoration Druid (unified)", function()
             ns:UpdateStatPriority()
-            local text = ns.statsLabel:GetText()
-            assert.is_not_nil(text)
-            -- Check that core stats appear in order
-            assert.is_truthy(text:find("Int", 1, true))
-            assert.is_truthy(text:find("Haste", 1, true))
-            -- Check that gold > separator is present
-            assert.is_truthy(text:find(">", 1, true))
+            -- Circles replace the flat text label in unified mode
+            assert.is_not_nil(ns.statCircles)
+            local found_int, found_haste = false, false
+            for _, circ in ipairs(ns.statCircles) do
+                if circ.frame:IsShown() then
+                    local name = circ.nameFS:GetText()
+                    if name == "Int"   then found_int   = true end
+                    if name == "Haste" then found_haste = true end
+                end
+            end
+            assert.is_true(found_int,   "Expected circle for 'Int'")
+            assert.is_true(found_haste, "Expected circle for 'Haste'")
         end)
 
         it("shows correct stat count for Restoration Druid (5 stats)", function()
@@ -247,22 +252,29 @@ describe("StatPriority", function()
     -- =========================================================================
     -- Test 5: Content label shows stats with " > " separators
     -- =========================================================================
-    describe("content label format", function()
-        it("stats are separated by the gold > color sequence", function()
+    describe("content label format (circle display)", function()
+        it("connector FontStrings exist and show '>' between different-priority stats", function()
             ns:UpdateStatPriority()
-            local text = ns.statsLabel:GetText()
-            -- The separator includes the WoW color escape: |cffFFD100>|r
-            assert.is_truthy(text:find("|cffFFD100>|r", 1, true))
+            assert.is_not_nil(ns.statConnectors)
+            -- Restoration Druid: 5 different-priority stats → 4 '>' connectors
+            local gt_count = 0
+            for _, conn in ipairs(ns.statConnectors) do
+                if conn:IsShown() and conn:GetText() == ">" then
+                    gt_count = gt_count + 1
+                end
+            end
+            assert.is_true(gt_count >= 1, "Expected at least one '>' connector")
         end)
 
-        it("first stat appears before first separator", function()
+        it("first circle (Int) precedes connector in rendered order (index 1 < connector 1)", function()
             ns:UpdateStatPriority()
-            local text = ns.statsLabel:GetText()
-            local intellPos = text:find("Int", 1, true)
-            local sepPos    = text:find("|cffFFD100>|r", 1, true)
-            assert.is_truthy(intellPos)
-            assert.is_truthy(sepPos)
-            assert.is_true(intellPos < sepPos)
+            assert.is_not_nil(ns.statCircles)
+            assert.is_not_nil(ns.statConnectors)
+            -- Circle 1 should have Int; connector 1 should be '>'
+            local circ1 = ns.statCircles[1]
+            assert.is_true(circ1.frame:IsShown())
+            assert.equals("Int", circ1.nameFS:GetText())
+            assert.is_true(ns.statConnectors[1]:IsShown())
         end)
     end)
 
@@ -347,9 +359,19 @@ describe("StatPriority", function()
     -- =========================================================================
     describe("unified display (_differs = false)", function()
         -- Restoration Druid (105) has _differs = false
-        it("statsLabel is shown when _differs is false", function()
+        it("statsLabel is hidden (circles used instead) when _differs is false", function()
             ns:UpdateStatPriority()
-            assert.is_true(ns.statsLabel:IsShown())
+            assert.is_false(ns.statsLabel:IsShown())
+        end)
+
+        it("circles are shown when _differs is false", function()
+            ns:UpdateStatPriority()
+            assert.is_not_nil(ns.statCircles)
+            local shown_count = 0
+            for _, circ in ipairs(ns.statCircles) do
+                if circ.frame:IsShown() then shown_count = shown_count + 1 end
+            end
+            assert.is_true(shown_count > 0, "Expected at least one circle shown")
         end)
 
         it("source labels are hidden when _differs is false", function()
@@ -388,9 +410,18 @@ describe("StatPriority", function()
             assert.is_false(data._differs)
         end)
 
-        it("statsLabel is shown for Frost DK (unified display)", function()
+        it("statsLabel is hidden for Frost DK (circles used instead)", function()
             ns:UpdateStatPriority()
-            assert.is_true(ns.statsLabel:IsShown())
+            assert.is_false(ns.statsLabel:IsShown())
+        end)
+
+        it("circles are shown for Frost DK (unified display)", function()
+            ns:UpdateStatPriority()
+            local shown_count = 0
+            for _, circ in ipairs(ns.statCircles) do
+                if circ.frame:IsShown() then shown_count = shown_count + 1 end
+            end
+            assert.is_true(shown_count > 0, "Expected at least one circle shown for Frost DK")
         end)
 
         it("source labels are hidden for Frost DK (unified display)", function()
@@ -407,11 +438,14 @@ describe("StatPriority", function()
             assert.is_false(ns.methodUrlBtn:IsShown())
         end)
 
-        it("statsLabel contains Frost DK stat priority", function()
+        it("first circle shows Frost DK's first stat priority", function()
             ns:UpdateStatPriority()
-            local text = ns.statsLabel:GetText()
             local data = StatPriorityData[251]
-            assert.is_truthy(text:find(data.stats[1], 1, true))
+            local firstStat = data.stats[1]
+            assert.is_not_nil(firstStat)
+            local circ1 = ns.statCircles[1]
+            assert.is_true(circ1.frame:IsShown())
+            assert.equals(firstStat, circ1.nameFS:GetText())
         end)
     end)
 
@@ -439,34 +473,49 @@ describe("StatPriority", function()
             assert.is_true(found)
         end)
 
-        it("Retribution Paladin stats label contains '=' separator for equal-priority stats", function()
+        it("Retribution Paladin has '=' connector for equal-priority stats in circles", function()
             ns:UpdateStatPriority()
-            local text = ns.statsLabel:GetText()
-            assert.is_not_nil(text)
-            assert.is_truthy(text:find("|cffFFD100=|r", 1, true))
+            local found_eq = false
+            for _, conn in ipairs(ns.statConnectors) do
+                if conn:IsShown() and conn:GetText() == "=" then
+                    found_eq = true; break
+                end
+            end
+            assert.is_true(found_eq, "Expected at least one '=' connector for Ret Pala equal-priority group")
         end)
 
-        it("Retribution Paladin stats label contains '>' separator between priority tiers", function()
+        it("Retribution Paladin has '>' connector between priority tiers in circles", function()
             ns:UpdateStatPriority()
-            local text = ns.statsLabel:GetText()
-            assert.is_truthy(text:find("|cffFFD100>|r", 1, true))
+            local found_gt = false
+            for _, conn in ipairs(ns.statConnectors) do
+                if conn:IsShown() and conn:GetText() == ">" then
+                    found_gt = true; break
+                end
+            end
+            assert.is_true(found_gt, "Expected at least one '>' connector for Ret Pala priority tiers")
         end)
 
-        it("Retribution Paladin stats label contains both Critical Strike and Haste", function()
+        it("Retribution Paladin circles include both Haste and Crit", function()
             ns:UpdateStatPriority()
-            local text = ns.statsLabel:GetText()
-            assert.is_truthy(text:find("Haste", 1, true))
-            assert.is_truthy(text:find("Crit", 1, true))
+            local found_haste, found_crit = false, false
+            for _, circ in ipairs(ns.statCircles) do
+                if circ.frame:IsShown() then
+                    local name = circ.nameFS:GetText()
+                    if name == "Haste" then found_haste = true end
+                    if name == "Crit"  then found_crit  = true end
+                end
+            end
+            assert.is_true(found_haste, "Expected circle for 'Haste'")
+            assert.is_true(found_crit,  "Expected circle for 'Crit'")
         end)
 
-        it("Retribution Paladin stats label contains Strength before the = group", function()
+        it("Retribution Paladin first circle is Str (before equal-priority group)", function()
             ns:UpdateStatPriority()
-            local text = ns.statsLabel:GetText()
-            local strPos   = text:find("Str", 1, true)
-            local eqPos    = text:find("|cffFFD100=|r", 1, true)
-            assert.is_truthy(strPos)
-            assert.is_truthy(eqPos)
-            assert.is_true(strPos < eqPos)
+            -- First circle should be Str (highest priority for Ret Pala)
+            local data = StatPriorityData[70]
+            local firstEntry = data.stats[1]
+            local expectedFirst = type(firstEntry) == "table" and firstEntry[1] or firstEntry
+            assert.equals(expectedFirst, ns.statCircles[1].nameFS:GetText())
         end)
 
         it("Retribution Paladin _differs is false (single archon source)", function()
@@ -827,15 +876,21 @@ describe("StatPriority", function()
             assert.equals("Blood Death Knight", ns.headerTitle:GetText())
         end)
 
-        it("override='loot' with loot specID=251 shows unified content for Frost DK", function()
+        it("override='loot' with loot specID=251 shows circle display for Frost DK", function()
             _G.StatPriorityDB.specOverride = "loot"
             _G._mockLootSpec = 251
             ns:UpdateStatPriority()
-            -- Frost DK has _differs=false (single archon source), should show unified label
-            assert.is_true(ns.statsLabel:IsShown())
+            -- Frost DK has _differs=false (single archon source), should show circles
+            assert.is_false(ns.statsLabel:IsShown())
             assert.is_false(ns.wowheadLabel:IsShown())
             assert.is_false(ns.icyveinsLabel:IsShown())
             assert.is_false(ns.methodLabel:IsShown())
+            -- At least one circle should be shown
+            local shown_count = 0
+            for _, circ in ipairs(ns.statCircles) do
+                if circ.frame:IsShown() then shown_count = shown_count + 1 end
+            end
+            assert.is_true(shown_count > 0, "Expected circles shown for Frost DK via loot spec override")
         end)
     end)
 
@@ -1123,6 +1178,179 @@ describe("StatPriority", function()
                 if p[2] == outerFrame then anchoredToOuter = true; break end
             end
             assert.is_true(anchoredToOuter, "SP should anchor to ObjectiveTrackerFrame when DCS is absent")
+        end)
+    end)
+
+    -- =========================================================================
+    -- Test 17b: Circle display pool creation
+    -- =========================================================================
+    describe("circle stat display pool", function()
+        it("creates 7 circle frames on OnLoad", function()
+            assert.is_not_nil(ns.statCircles)
+            assert.equals(7, #ns.statCircles)
+        end)
+
+        it("creates 6 connector FontStrings on OnLoad", function()
+            assert.is_not_nil(ns.statConnectors)
+            assert.equals(6, #ns.statConnectors)
+        end)
+
+        it("each circle frame has nameFS and valueFS font strings", function()
+            for i, circ in ipairs(ns.statCircles) do
+                assert.is_not_nil(circ.nameFS, "circle " .. i .. " missing nameFS")
+                assert.is_not_nil(circ.valueFS, "circle " .. i .. " missing valueFS")
+                assert.is_not_nil(circ.frame,   "circle " .. i .. " missing frame")
+            end
+        end)
+
+        it("circles are hidden by default before UpdateStatPriority", function()
+            -- After OnLoad+UpdateStatPriority ran in before_each, reset to check raw state
+            -- We just verify circles hidden when no data (nil spec)
+            _G.GetSpecialization = function() return nil end
+            ns:UpdateStatPriority()
+            local shown_count = 0
+            for _, circ in ipairs(ns.statCircles) do
+                if circ.frame:IsShown() then shown_count = shown_count + 1 end
+            end
+            assert.equals(0, shown_count)
+        end)
+
+        it("Restoration Druid (5 stats) shows exactly 5 circles", function()
+            -- Restore Resto Druid spec
+            _G.GetSpecialization = function() return 4 end
+            _G.GetSpecializationInfo = function(i)
+                if i == 4 then return 105, "Restoration Druid", "", "", "HEALER" end
+            end
+            ns:UpdateStatPriority()
+            local shown_count = 0
+            for _, circ in ipairs(ns.statCircles) do
+                if circ.frame:IsShown() then shown_count = shown_count + 1 end
+            end
+            assert.equals(5, shown_count)
+        end)
+
+        it("circles show stat abbreviations in priority order for Resto Druid", function()
+            _G.GetSpecialization = function() return 4 end
+            _G.GetSpecializationInfo = function(i)
+                if i == 4 then return 105, "Restoration Druid", "", "", "HEALER" end
+            end
+            ns:UpdateStatPriority()
+            local data = StatPriorityData[105]
+            assert.equals("Int",   ns.statCircles[1].nameFS:GetText())
+            assert.equals("Haste", ns.statCircles[2].nameFS:GetText())
+            assert.equals("Mast",  ns.statCircles[3].nameFS:GetText())
+            assert.equals("Crit",  ns.statCircles[4].nameFS:GetText())
+            assert.equals("Vers",  ns.statCircles[5].nameFS:GetText())
+        end)
+
+        it("circles show stat values (non-empty) for Resto Druid", function()
+            _G.GetSpecialization = function() return 4 end
+            _G.GetSpecializationInfo = function(i)
+                if i == 4 then return 105, "Restoration Druid", "", "", "HEALER" end
+            end
+            ns:UpdateStatPriority()
+            for i = 1, 5 do
+                local val = ns.statCircles[i].valueFS:GetText()
+                assert.is_not_nil(val, "circle " .. i .. " valueFS text is nil")
+                assert.is_true(val ~= "", "circle " .. i .. " valueFS text is empty")
+            end
+        end)
+
+        it("registers for UNIT_STATS and COMBAT_RATING_UPDATE events", function()
+            assert.is_not_nil(ns.statEventFrame)
+            assert.is_true(ns.statEventFrame:IsEventRegistered("UNIT_STATS"))
+            assert.is_true(ns.statEventFrame:IsEventRegistered("COMBAT_RATING_UPDATE"))
+        end)
+
+        it("UNIT_STATS event refreshes circle values without rebuilding layout", function()
+            _G.GetSpecialization = function() return 4 end
+            _G.GetSpecializationInfo = function(i)
+                if i == 4 then return 105, "Restoration Druid", "", "", "HEALER" end
+            end
+            ns:UpdateStatPriority()
+            -- Change mock haste, fire event
+            _G._mockHaste = 99.9
+            local onEvent = ns.statEventFrame:GetScript("OnEvent")
+            onEvent(ns.statEventFrame, "UNIT_STATS", "player")
+            -- Circle 2 is Haste
+            local hasteVal = ns.statCircles[2].valueFS:GetText()
+            assert.equals("99.9%", hasteVal)
+            _G._mockHaste = 28.5  -- restore
+        end)
+
+        it("UNIT_STATS event for non-player unit is ignored", function()
+            _G.GetSpecialization = function() return 4 end
+            _G.GetSpecializationInfo = function(i)
+                if i == 4 then return 105, "Restoration Druid", "", "", "HEALER" end
+            end
+            ns:UpdateStatPriority()
+            local initialVal = ns.statCircles[2].valueFS:GetText()
+            _G._mockHaste = 55.0
+            local onEvent = ns.statEventFrame:GetScript("OnEvent")
+            onEvent(ns.statEventFrame, "UNIT_STATS", "target")  -- non-player
+            local afterVal = ns.statCircles[2].valueFS:GetText()
+            assert.equals(initialVal, afterVal, "Value should not change for non-player UNIT_STATS")
+            _G._mockHaste = 28.5  -- restore
+        end)
+    end)
+
+    -- =========================================================================
+    -- Test 17c: GetStatValue helper
+    -- =========================================================================
+    describe("GetStatValue helper", function()
+        it("returns comma-formatted integer for Int", function()
+            _G._mockUnitStats[4] = 12450
+            local val = _G.StatPriorityGetStatValue("Int")
+            assert.equals("12,450", val)
+        end)
+
+        it("returns comma-formatted integer for Str", function()
+            _G._mockUnitStats[1] = 1200
+            local val = _G.StatPriorityGetStatValue("Str")
+            assert.equals("1,200", val)
+        end)
+
+        it("returns comma-formatted integer for Agil", function()
+            _G._mockUnitStats[2] = 800
+            local val = _G.StatPriorityGetStatValue("Agil")
+            assert.equals("800", val)
+        end)
+
+        it("returns percentage string for Haste", function()
+            _G._mockHaste = 28.5
+            local val = _G.StatPriorityGetStatValue("Haste")
+            assert.equals("28.5%", val)
+        end)
+
+        it("returns percentage string for Crit", function()
+            _G._mockCrit = 15.2
+            local val = _G.StatPriorityGetStatValue("Crit")
+            assert.equals("15.2%", val)
+        end)
+
+        it("returns percentage string for Mast", function()
+            _G._mockMastery = 42.3
+            local val = _G.StatPriorityGetStatValue("Mast")
+            assert.equals("42.3%", val)
+        end)
+
+        it("returns percentage string for Vers", function()
+            _G._mockVers = 8.7
+            local val = _G.StatPriorityGetStatValue("Vers")
+            assert.equals("8.7%", val)
+        end)
+
+        it("returns '?' for unknown stat abbreviation", function()
+            local val = _G.StatPriorityGetStatValue("Unknown")
+            assert.equals("?", val)
+        end)
+
+        it("returns '?' when UnitStat API is unavailable", function()
+            local old = _G.UnitStat
+            _G.UnitStat = nil
+            local val = _G.StatPriorityGetStatValue("Int")
+            _G.UnitStat = old
+            assert.equals("?", val)
         end)
     end)
 
