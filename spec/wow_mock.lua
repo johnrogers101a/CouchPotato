@@ -1042,3 +1042,26 @@ end
 _G._ClearMockNemesis = function()
     _G.C_Spell._descriptions[472952] = nil
 end
+
+-- Test helper: set a realistic boon spell description for spell 1280098.
+-- Called with a table of {statName, pct} pairs, e.g.:
+--   _SetMockBoonSpell({ {"Maximum Health", 5}, {"Movement Speed", 3} })
+-- Generates a description string that mirrors what C_Spell.GetSpellDescription
+-- returns in-game for spell 1280098 (Brann companion boon buff).
+_G._SetMockBoonSpell = function(stats)
+    if not stats or #stats == 0 then
+        _G.C_Spell._descriptions[1280098] = nil
+        return
+    end
+    local lines = { "Brann's combat experience improves your abilities in this delve." }
+    for _, entry in ipairs(stats) do
+        local statName, pct = entry[1], entry[2]
+        lines[#lines + 1] = statName .. ": " .. pct .. "%"
+    end
+    _G.C_Spell._descriptions[1280098] = table.concat(lines, "\n")
+end
+
+-- Helper to clear boon spell description between tests.
+_G._ClearMockBoonSpell = function()
+    _G.C_Spell._descriptions[1280098] = nil
+end

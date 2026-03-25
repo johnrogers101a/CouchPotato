@@ -382,25 +382,32 @@ function ns:PrintDebugInfo()
     table.insert(lines, "")
     table.insert(lines, "=== BOON STATE ===")
     -- =========================================================================
-    -- Dump tooltip lines for spell 1280098 (source of boon stat values)
-    table.insert(lines, "--- Tooltip for 1280098 ---")
+    -- Dump C_Spell.GetSpellDescription(1280098) (source of boon stat values)
+    table.insert(lines, "--- C_Spell.GetSpellDescription(1280098) ---")
     pcall(function()
-        GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
-        GameTooltip:SetSpellByID(1280098)
-        for i = 1, GameTooltip:NumLines() do
-            local left = _G["GameTooltipTextLeft" .. i]
-            if left and left:GetText() then
-                local rawText = left:GetText()
-                table.insert(lines, ("  L%d: %s"):format(i, rawText))
-                -- Debug: show raw captured stat name and its resolved abbreviation
-                local rawStat, rawNum = rawText:match("^(.+): (%d+)%%.?%s*$")
-                if rawStat then
-                    table.insert(lines, ("    [boon] raw stat=%q  abbrev=%q"):format(
-                        rawStat, GetBoonAbbrev(rawStat)))
+        if C_Spell and C_Spell.GetSpellDescription then
+            local descOk, spellDesc = pcall(C_Spell.GetSpellDescription, 1280098)
+            if descOk and spellDesc and spellDesc ~= "" then
+                -- Strip color codes for display
+                local cleanDesc = spellDesc
+                    :gsub("|cn[^:]+:", ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+                local lineNum = 0
+                for ln in (cleanDesc .. "\n"):gmatch("([^\n]*)\n") do
+                    lineNum = lineNum + 1
+                    table.insert(lines, ("  L%d: %s"):format(lineNum, ln))
+                    local rawStat, rawNum = ln:match("^(.+):%s*(%d+)%%%s*$")
+                    if not rawStat then rawStat, rawNum = ln:match("^(.+):%s*(%d+)%s*$") end
+                    if rawStat then
+                        table.insert(lines, ("    [boon] raw stat=%q  abbrev=%q"):format(
+                            rawStat, GetBoonAbbrev(rawStat)))
+                    end
                 end
+            else
+                table.insert(lines, "  (no description returned)")
             end
+        else
+            table.insert(lines, "  C_Spell.GetSpellDescription not available")
         end
-        GameTooltip:Hide()
     end)
 
     local boonText = ""
@@ -1177,16 +1184,41 @@ GetBoonAbbrev = function(statName)
 end
 
 -------------------------------------------------------------------------------
--- GetBoonsDisplayText: Reads the tooltip for boon spell 1280098 and returns a
--- one-per-line summary of non-zero stats, e.g. "Max HP: 6%\nMove Spd: 10%".
--- Returns "" if no boon lines are found (hides the boon label).
+-- GetBoonsDisplayText: Reads boon spell 1280098 via C_Spell.GetSpellDescription
+-- and returns a one-per-line summary of non-zero stats,
+-- e.g. "Max HP: 6%\nMove Spd: 10%".
+-- Returns "" if not in a delve or no boon data is found.
+-- NOTE: Does NOT use GameTooltip — no floating tooltip side-effect.
 -------------------------------------------------------------------------------
 GetBoonsDisplayText = function()
-    -- Boon display disabled: reading spell 1280098 via GameTooltip caused an
-    -- unwanted floating tooltip to appear in-game. Return "" unconditionally so
-    -- boonLabel and boonHeaderLabel remain hidden. Re-enable when a non-tooltip
-    -- API source for boon data is identified.
-    return ""
+    if not C_Spell or not C_Spell.GetSpellDescription then return "" end
+    local ok, desc = pcall(C_Spell.GetSpellDescription, 1280098)
+    if not ok or not desc or desc == "" then return "" end
+
+    -- Strip WoW color codes (|cnNAME:...|r  and  |cXXXXXXXX...|r)
+    local clean = desc
+        :gsub("|cn[^:]+:", "")
+        :gsub("|c%x%x%x%x%x%x%x%x", "")
+        :gsub("|r", "")
+
+    -- Parse lines of the form "Stat Name: N%"
+    local lines = {}
+    for line in (clean .. "\n"):gmatch("([^\n]*)\n") do
+        -- Match "Some Stat Name: 5%" or "Some Stat Name: 5" (with optional trailing %)
+        local statName, numStr = line:match("^(.+):%s*(%d+)%%%s*$")
+        if not statName then
+            statName, numStr = line:match("^(.+):%s*(%d+)%s*$")
+        end
+        if statName and numStr then
+            local val = tonumber(numStr)
+            if val and val > 0 then
+                local abbrev = GetBoonAbbrev(statName)
+                lines[#lines + 1] = abbrev .. ": " .. val .. "%"
+            end
+        end
+    end
+
+    return table.concat(lines, "\n")
 end
 
 -------------------------------------------------------------------------------
