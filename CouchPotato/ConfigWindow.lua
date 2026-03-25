@@ -321,9 +321,17 @@ local function _build()
     ---------------------------------------------------------------------------
     local BTN_W, BTN_H = 110, 22
 
+    local settingsTabBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    settingsTabBtn:SetSize(BTN_W, BTN_H)
+    settingsTabBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -34)
+    settingsTabBtn:SetText("Settings")
+    settingsTabBtn:SetScript("OnClick", function()
+        ShowSettingsTab()
+    end)
+
     local errorTabBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     errorTabBtn:SetSize(BTN_W, BTN_H)
-    errorTabBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -34)
+    errorTabBtn:SetPoint("LEFT", settingsTabBtn, "RIGHT", 4, 0)
     errorTabBtn:SetText("Error Log")
     errorTabBtn:SetScript("OnClick", function()
         ShowErrorTab()
@@ -346,17 +354,9 @@ local function _build()
         end
     end)
 
-    local settingsTabBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-    settingsTabBtn:SetSize(BTN_W, BTN_H)
-    settingsTabBtn:SetPoint("LEFT", debugTabBtn, "RIGHT", 4, 0)
-    settingsTabBtn:SetText("Settings")
-    settingsTabBtn:SetScript("OnClick", function()
-        ShowSettingsTab()
-    end)
-
     -- Entry count label (shared, repositioned below tabs)
     local errorCountFS = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    errorCountFS:SetPoint("LEFT", settingsTabBtn, "RIGHT", 10, 0)
+    errorCountFS:SetPoint("LEFT", debugTabBtn, "RIGHT", 10, 0)
     f._errorCountFS = errorCountFS
 
     local debugCountFS = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
