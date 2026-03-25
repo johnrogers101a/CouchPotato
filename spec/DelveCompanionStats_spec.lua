@@ -456,8 +456,8 @@ describe("DelveCompanionStats", function()
             assert.is_truthy(ns.boonLabel._text:find("Str: 4%",       1, true), "expected Str: 4%")
             assert.is_truthy(ns.boonLabel._text:find("Mast: 5%",      1, true), "expected Mast: 5%")
             assert.is_true(ns.boonLabel:IsShown())
-            -- boonHeaderLabel is always hidden; "Boons:" prefix is embedded in boonLabel text
-            assert.is_false(ns.boonHeaderLabel:IsShown())
+            -- boonHeaderLabel is now shown as a separate "Boons" section header
+            assert.is_true(ns.boonHeaderLabel:IsShown())
         end)
 
         it("boon display hides label when not in a delve and no boon description available", function()
@@ -470,15 +470,16 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.boonHeaderLabel:IsShown())
         end)
 
-        it("boon display shows 'Boons: None' when in a delve but no spell description", function()
+        it("boon display shows 'None' when in a delve but no spell description", function()
             -- In a delve but no boon spell active yet
             _G._isInInstanceType = "scenario"
             _ClearMockBoonSpell()
             ns:UpdateCompanionData()
 
-            assert.equals("Boons: None", ns.boonLabel._text)
+            assert.equals("None", ns.boonLabel._text)
             assert.is_true(ns.boonLabel:IsShown())
-            assert.is_false(ns.boonHeaderLabel:IsShown())
+            -- boonHeaderLabel is shown as the section header whenever boons are shown
+            assert.is_true(ns.boonHeaderLabel:IsShown())
         end)
 
         it("boon display excludes stats where value is 0", function()
@@ -501,8 +502,8 @@ describe("DelveCompanionStats", function()
 
             assert.is_true(ns.boonLabel:IsShown())
             assert.is_truthy(ns.boonLabel._text:find("Vers: 7%", 1, true), "expected Vers: 7%")
-            -- boonHeaderLabel is always hidden; "Boons:" prefix is embedded in boonLabel text
-            assert.is_false(ns.boonHeaderLabel:IsShown())
+            -- boonHeaderLabel is shown as the "Boons" section header when boon data is present
+            assert.is_true(ns.boonHeaderLabel:IsShown())
         end)
 
     end)
@@ -535,15 +536,15 @@ describe("DelveCompanionStats", function()
             C_DelvesUI._SetHasActiveDelve(false)
         end)
 
-        it("GetBoonsDisplayText shows 'Boons: None' when description has unresolved $w template vars", function()
+        it("GetBoonsDisplayText shows 'None' when description has unresolved $w template vars", function()
             -- Simulate early zone-in: WoW returns "$w1%" placeholders (no numeric value).
             -- We are in a delve (before_each sets _isInInstanceType = "scenario"), so
-            -- the boon line is shown as "Boons: None" since no numeric stats are parsed.
+            -- the boon line is shown as "None" since no numeric stats are parsed.
             C_Spell._descriptions[1280098] =
                 "Brann's boon.\nMaximum Health: $w1%.\nMovement Speed: $w2%."
             ns:UpdateCompanionData()
-            -- Template vars must not be shown — but we are in a delve so "Boons: None" appears
-            assert.equals("Boons: None", ns.boonLabel._text)
+            -- Template vars must not be shown — but we are in a delve so "None" appears
+            assert.equals("None", ns.boonLabel._text)
             assert.is_true(ns.boonLabel:IsShown())
         end)
 
@@ -854,11 +855,13 @@ describe("DelveCompanionStats", function()
         -- Inside a delve that spell description contains:
         --   "Enemy groups remaining: |cnWHITE_FONT_COLOR:X / Y|r"
 
-        it("nemesis label shows progress when spell description is available", function()
+        it("nemesis label shows section header and detail shows progress when spell description is available", function()
             _SetMockNemesis(2, 4)
             ns:UpdateCompanionData()
-            assert.equals("Enemy groups remaining: 2 / 4", ns.nemesisLabel._text)
+            assert.equals("Enemy Groups Remaining", ns.nemesisLabel._text)
             assert.is_true(ns.nemesisLabel:IsShown())
+            assert.equals("2 / 4", ns.nemesisDetailLabel._text)
+            assert.is_true(ns.nemesisDetailLabel:IsShown())
         end)
 
         it("nemesis label is hidden when spell description is absent (not in a delve)", function()
@@ -868,25 +871,29 @@ describe("DelveCompanionStats", function()
             assert.is_false(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesis label shows 4/4 when all groups remain", function()
+        it("nemesis label shows header and detail shows 4/4 when all groups remain", function()
             _SetMockNemesis(4, 4)
             ns:UpdateCompanionData()
-            assert.equals("Enemy groups remaining: 4 / 4", ns.nemesisLabel._text)
+            assert.equals("Enemy Groups Remaining", ns.nemesisLabel._text)
             assert.is_true(ns.nemesisLabel:IsShown())
+            assert.equals("4 / 4", ns.nemesisDetailLabel._text)
+            assert.is_true(ns.nemesisDetailLabel:IsShown())
         end)
 
-        it("nemesis label shows 0/4 when all groups defeated", function()
+        it("nemesis label shows header and detail shows 0/4 when all groups defeated", function()
             _SetMockNemesis(0, 4)
             ns:UpdateCompanionData()
-            assert.equals("Enemy groups remaining: 0 / 4", ns.nemesisLabel._text)
+            assert.equals("Enemy Groups Remaining", ns.nemesisLabel._text)
             assert.is_true(ns.nemesisLabel:IsShown())
+            assert.equals("0 / 4", ns.nemesisDetailLabel._text)
+            assert.is_true(ns.nemesisDetailLabel:IsShown())
         end)
 
-        it("nemesisDetailLabel is always hidden (detail moved to nemesisLabel)", function()
+        it("nemesisDetailLabel shows the count value when nemesis data is present", function()
             _SetMockNemesis(2, 4)
             ns:UpdateCompanionData()
-            assert.equals("", ns.nemesisDetailLabel._text)
-            assert.is_false(ns.nemesisDetailLabel:IsShown())
+            assert.equals("2 / 4", ns.nemesisDetailLabel._text)
+            assert.is_true(ns.nemesisDetailLabel:IsShown())
         end)
 
         it("nemesisDetailLabel is hidden when no nemesis data present", function()
@@ -1140,31 +1147,31 @@ describe("DelveCompanionStats", function()
                 _ClearMockNemesis()
             end)
 
-            it("base content height is 24 (4+16+4) when only nameLabel visible", function()
+            it("base content height is 32 (8+16+8) when only nameLabel visible", function()
                 ns:UpdateCompanionData()
-                -- No boons, no nemesis → contentHeight = 24
-                assert.equals(24, ns.contentFrame._height)
+                -- No boons, no nemesis → contentHeight = 32 (8px top + 16px label + 8px bottom)
+                assert.equals(32, ns.contentFrame._height)
             end)
 
-            it("content height adds 3+16 gap+header plus 16-per-boon-line", function()
-                -- Boon display is disabled; tooltip data is ignored and height stays at base.
+            it("content height stays at base when boon tooltip data present but not in a delve", function()
+                -- Boon display requires IsInDelve(); not in a delve here → no boon section added.
                 _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%." })
                 ns:UpdateCompanionData()
-                -- Boons disabled → no boon section added → contentHeight = 24
-                assert.equals(24, ns.contentFrame._height)
+                -- Boons not in delve → no boon section → contentHeight = 32
+                assert.equals(32, ns.contentFrame._height)
             end)
 
-            it("content height includes nemesis section (3px gap + 16px label) when nemesis present", function()
+            it("content height includes nemesis section (6px gap + 16px header + 4px gap + 16px value) when nemesis present", function()
                 _SetMockNemesis(1, 3)
                 ns:UpdateCompanionData()
-                -- nemesis shown: base 24 + 3 gap + 16 label = 43
-                assert.equals(43, ns.contentFrame._height)
+                -- nemesis shown: base 32 + 6 gap + 16 header + 4 gap + 16 value = 74
+                assert.equals(74, ns.contentFrame._height)
             end)
 
             it("content height without nemesis stays at base when no spell description", function()
-                -- No spell description → nemesis hidden → height 24
+                -- No spell description → nemesis hidden → height 32
                 ns:UpdateCompanionData()
-                assert.equals(24, ns.contentFrame._height)
+                assert.equals(32, ns.contentFrame._height)
             end)
 
         end)
@@ -1360,26 +1367,27 @@ describe("DelveCompanionStats", function()
             assert.is_truthy(ns.boonLabel._text:find("Crit: 5%", 1, true))
         end)
 
-        it("shows 'Boons: None' when all stats are zero (period format)", function()
+        it("shows 'None' when all stats are zero (period format)", function()
             _SetMockBoonSpellWithPeriod({
                 { "Strength",        0 },
                 { "Haste",           0 },
                 { "Critical Strike", 0 },
             })
             ns:UpdateCompanionData()
-            assert.equals("Boons: None", ns.boonLabel._text)
+            assert.equals("None", ns.boonLabel._text)
         end)
 
-        it("content frame has 8px left/right padding via anchor offsets", function()
-            -- contentFrame SetPoint args: { point, relativeTo, relPoint, x, y }
-            -- i.e. pt[1]=point, pt[2]=relativeTo, pt[3]=relPoint, pt[4]=x, pt[5]=y
+        it("contentFrame has zero x-offset anchors (padding comes from nameLabel inset)", function()
+            -- Padding is now achieved by anchoring nameLabel 8px inside contentFrame
+            -- rather than offsetting contentFrame itself from the header.
+            -- contentFrame TOPLEFT and TOPRIGHT x-offsets are 0.
             local topleftX, toprightX
             for _, pt in ipairs(ns.contentFrame._points or {}) do
                 if pt[1] == "TOPLEFT"  then topleftX  = pt[4] end
                 if pt[1] == "TOPRIGHT" then toprightX = pt[4] end
             end
-            assert.equals(8,  topleftX,  "contentFrame TOPLEFT x-offset should be 8")
-            assert.equals(-8, toprightX, "contentFrame TOPRIGHT x-offset should be -8")
+            assert.equals(0,  topleftX,  "contentFrame TOPLEFT x-offset should be 0")
+            assert.equals(0, toprightX,  "contentFrame TOPRIGHT x-offset should be 0")
         end)
 
     end)

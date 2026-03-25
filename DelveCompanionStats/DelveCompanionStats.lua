@@ -902,8 +902,8 @@ function ns:OnLoad()
     else
         contentFrame = CreateFrame("Frame", nil, ns.frame)
     end
-    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",   8, -4)
-    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT", -8, -4)
+    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",   0,  0)
+    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT",  0,  0)
     -- Subtle dark content background with rounded gold border
     contentFrame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -917,8 +917,9 @@ function ns:OnLoad()
     ns.contentFrame = contentFrame
 
     -- 5. Name label — GameFontHighlightSmall (11pt) white text, matching tracker body style
+    -- 8px left padding, 8px top padding for proper content inset
     ns.nameLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.nameLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 6, -4)
+    ns.nameLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 8, -8)
     ns.nameLabel:SetWidth(contentWidth)
     ns.nameLabel:SetJustifyH("LEFT")
     ns.nameLabel:SetFontObject("GameFontHighlightSmall")
@@ -929,10 +930,10 @@ function ns:OnLoad()
     ns.nameLabel:SetShadowColor(0, 0, 0, 1)
     ns.nameLabel:SetWordWrap(false)
 
-    -- 6c. Boon header label — "Boons" sub-header, shown only when boons are present
-    -- GameFontNormalSmall (11pt, slightly bolder) in muted gold
+    -- 6c. Boon header label — "Boons" section header in muted gold (GameFontNormalSmall).
+    -- Shown whenever a companion is active; positioned 6px below the level line.
     ns.boonHeaderLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ns.boonHeaderLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -4)
+    ns.boonHeaderLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -6)
     ns.boonHeaderLabel:SetFontObject("GameFontNormalSmall")
     pcall(function() ns.boonHeaderLabel:SetFontObject(ObjectiveFont) end)
     ns.boonHeaderLabel:SetWidth(contentWidth)
@@ -943,10 +944,10 @@ function ns:OnLoad()
     ns.boonHeaderLabel:SetText("Boons")
     ns.boonHeaderLabel:Hide()
 
-    -- 6d. Boon label — one boon per line, positioned below the Boons sub-header
-    -- GameFontHighlightSmall (11pt) in white
+    -- 6d. Boon value label — stat values "Max HP: 6%, Move Spd: 10%" or "None".
+    -- Anchored 4px below the Boons header; white for stats, grey for "None".
     ns.boonLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.boonLabel:SetPoint("TOPLEFT", ns.boonHeaderLabel, "BOTTOMLEFT", 0, -2)
+    ns.boonLabel:SetPoint("TOPLEFT", ns.boonHeaderLabel, "BOTTOMLEFT", 0, -4)
     ns.boonLabel:SetFontObject("GameFontHighlightSmall")
     pcall(function() ns.boonLabel:SetFontObject(ObjectiveFont) end)
     ns.boonLabel:SetWidth(contentWidth)
@@ -966,9 +967,10 @@ function ns:OnLoad()
     ns.xpLabel:SetText("")
     ns.xpLabel:Hide()
 
-    -- 6e. Nemesis label — "Nemesis Strongbox (n/n)" sub-header; GameFontNormalSmall muted-gold
+    -- 6e. Nemesis header label — "Enemy Groups Remaining" section header in muted gold.
+    -- Anchored 6px below the boon value label; shown only when nemesis data is present.
     ns.nemesisLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -4)
+    ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -6)
     ns.nemesisLabel:SetFontObject("GameFontNormalSmall")
     pcall(function() ns.nemesisLabel:SetFontObject(ObjectiveFont) end)
     ns.nemesisLabel:SetWidth(contentWidth)
@@ -977,20 +979,20 @@ function ns:OnLoad()
     ns.nemesisLabel:SetShadowOffset(1, -1)
     ns.nemesisLabel:SetShadowColor(0, 0, 0, 1)
     ns.nemesisLabel:SetText("")
+    ns.nemesisLabel:Hide()
 
-    -- 6f. Nemesis detail label — white body lines below the Nemesis Strongbox header;
-    -- mirrors boonLabel: one line per combat criterion ("description: qty/total")
-    -- GameFontHighlightSmall (11pt) in white
+    -- 6f. Nemesis value label — "X / Y" count below the header; GameFontHighlightSmall white.
     ns.nemesisDetailLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ns.nemesisDetailLabel:SetPoint("TOPLEFT", ns.nemesisLabel, "BOTTOMLEFT", 0, -2)
+    ns.nemesisDetailLabel:SetPoint("TOPLEFT", ns.nemesisLabel, "BOTTOMLEFT", 0, -4)
     ns.nemesisDetailLabel:SetFontObject("GameFontHighlightSmall")
     pcall(function() ns.nemesisDetailLabel:SetFontObject(ObjectiveFont) end)
     ns.nemesisDetailLabel:SetWidth(contentWidth)
     ns.nemesisDetailLabel:SetJustifyH("LEFT")
-    ns.nemesisDetailLabel:SetTextColor(1, 1, 1, 1)  -- WHITE, same as boonLabel
+    ns.nemesisDetailLabel:SetTextColor(1, 1, 1, 1)
     ns.nemesisDetailLabel:SetShadowOffset(1, -1)
     ns.nemesisDetailLabel:SetShadowColor(0, 0, 0, 1)
     ns.nemesisDetailLabel:SetText("")
+    ns.nemesisDetailLabel:Hide()
 
     -- 7. Make frame movable (only active when not anchored to the tracker)
     -- Safe: frame created above in this same function before drag handlers registered
@@ -1217,9 +1219,9 @@ GetBoonsDisplayText = function()
     -- Only show boon info when inside a delve
     if not IsInDelve() then return "" end
 
-    if not C_Spell or not C_Spell.GetSpellDescription then return "Boons: None" end
+    if not C_Spell or not C_Spell.GetSpellDescription then return "None" end
     local ok, desc = pcall(C_Spell.GetSpellDescription, 1280098)
-    if not ok or not desc or desc == "" then return "Boons: None" end
+    if not ok or not desc or desc == "" then return "None" end
 
     -- Debug: log the raw spell description so we can diagnose format mismatches.
     dcslog("Debug", "GetBoonsDisplayText: raw desc=" .. tostring(desc))
@@ -1263,8 +1265,8 @@ GetBoonsDisplayText = function()
         end
     end
 
-    if #stats == 0 then return "Boons: None" end
-    return "Boons: " .. table.concat(stats, ", ")
+    if #stats == 0 then return "None" end
+    return table.concat(stats, ", ")
 end
 
 -------------------------------------------------------------------------------
@@ -1314,10 +1316,11 @@ end
 -- Expose for unit testing
 ns.IsCombatCriteria = IsCombatCriteria
 
--- GetNemesisProgress: Returns nemesis enemy-group progress from
+-- GetNemesisProgress: Returns nemesis enemy-group count from
 -- C_Spell.GetSpellDescription(472952), which inside a delve contains a line:
 --   "Enemy groups remaining: |cnWHITE_FONT_COLOR:X / Y|r"
--- Returns a formatted string "Enemy groups remaining: X / Y" or "" if unavailable.
+-- Returns just the count "X / Y" (the header label provides the section title).
+-- Returns "" if unavailable.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
     if not C_Spell or not C_Spell.GetSpellDescription then return "" end
@@ -1331,7 +1334,7 @@ GetNemesisProgress = function()
     local current, total = clean:match("Enemy groups remaining:%s*(%d+)%s*/%s*(%d+)")
     if not current or not total then return "" end
 
-    return string.format("Enemy groups remaining: %s / %s", current, total)
+    return string.format("%s / %s", current, total)
 end
 
 -------------------------------------------------------------------------------
@@ -1366,10 +1369,10 @@ function ns:UpdateCompanionData(event)
         ns._lastFactionID = nil
         ns._lastName      = nil
         ns._lastLevel     = nil
-        if ns.nameLabel  then ns.nameLabel:SetText("No Companion") end
+        if ns.nameLabel       then ns.nameLabel:SetText("No Companion") end
         if ns.boonHeaderLabel then ns.boonHeaderLabel:Hide() end
-        if ns.boonLabel  then ns.boonLabel:SetText(""); ns.boonLabel:Hide() end
-        if ns.nemesisLabel then ns.nemesisLabel:SetText(""); ns.nemesisLabel:Hide() end
+        if ns.boonLabel       then ns.boonLabel:SetText(""); ns.boonLabel:Hide() end
+        if ns.nemesisLabel    then ns.nemesisLabel:SetText(""); ns.nemesisLabel:Hide() end
         if ns.nemesisDetailLabel then ns.nemesisDetailLabel:SetText(""); ns.nemesisDetailLabel:Hide() end
         return
     end
@@ -1435,58 +1438,75 @@ function ns:UpdateCompanionData(event)
         ns.nameLabel:SetText(table.concat(parts, "  "))
     end
 
-    -- Boon display — single line "Boons: None" or "Boons: stat1, stat2";
-    -- boonHeaderLabel is kept hidden (the prefix is embedded in the label text).
+    -- Boon display — header "Boons" (gold) + value "stat1, stat2" or "None" (white/grey).
+    -- boonHeaderLabel is shown whenever a companion is active in a delve.
+    -- boonLabel shows the value line returned by GetBoonsDisplayText().
     local boonsShown = false
-    if ns.boonHeaderLabel then ns.boonHeaderLabel:Hide() end
+    local boonText = GetBoonsDisplayText()
+    dcslog("Debug", "UpdateCompanionData: boonText=" .. (boonText == "" and "(empty)" or boonText))
+    if ns.boonHeaderLabel then
+        if boonText ~= "" then
+            ns.boonHeaderLabel:Show()
+        else
+            ns.boonHeaderLabel:Hide()
+        end
+    end
     if ns.boonLabel then
-        local boonText = GetBoonsDisplayText()
-        dcslog("Debug", "UpdateCompanionData: boonText=" .. (boonText == "" and "(empty)" or boonText))
         ns.boonLabel:SetText(boonText)
         if boonText == "" then
             ns.boonLabel:Hide()
         else
             boonsShown = true
+            -- "None" is shown in grey/muted; actual stats in white
+            if boonText == "None" then
+                ns.boonLabel:SetTextColor(0.6, 0.6, 0.6, 1)
+            else
+                ns.boonLabel:SetTextColor(1, 1, 1, 1)
+            end
             ns.boonLabel:Show()
         end
     end
 
-    -- Nemesis progress display: driven by C_Spell.GetSpellDescription(472952)
-    -- which inside a delve contains "Enemy groups remaining: X / Y".
+    -- Nemesis display — header "Enemy Groups Remaining" (gold, nemesisLabel) +
+    -- value "X / Y" (white, nemesisDetailLabel).
     local nemesisText = ""
     pcall(function() nemesisText = GetNemesisProgress() end)
     if ns.nemesisLabel then
         if nemesisText ~= "" then
-            ns.nemesisLabel:SetText(nemesisText)
+            ns.nemesisLabel:SetText("Enemy Groups Remaining")
             ns.nemesisLabel:Show()
         else
             ns.nemesisLabel:SetText("")
             ns.nemesisLabel:Hide()
         end
     end
-    -- nemesisDetailLabel is not used by the new implementation; keep hidden.
     if ns.nemesisDetailLabel then
-        ns.nemesisDetailLabel:SetText("")
-        ns.nemesisDetailLabel:Hide()
+        if nemesisText ~= "" then
+            ns.nemesisDetailLabel:SetText(nemesisText)
+            ns.nemesisDetailLabel:Show()
+        else
+            ns.nemesisDetailLabel:SetText("")
+            ns.nemesisDetailLabel:Hide()
+        end
     end
 
     -- Dynamic frame height based on visible content
     if ns.frame then
-        -- Content frame: 4px top + nameLabel(16) + 4px bottom = 24px base
-        local contentHeight = 24
-        -- Boon section: 3px gap + single boon line (16px)
-        -- boonHeaderLabel is always hidden; the "Boons:" prefix is part of boonLabel text.
-        if ns.boonLabel and ns.boonLabel:IsShown() then
-            contentHeight = contentHeight + 3 + 16
+        -- Content frame: 8px top + nameLabel(16) + 8px bottom = 32px base
+        local contentHeight = 32
+        -- Boon section: 6px gap + header(16) + 4px gap + value(16)
+        if ns.boonHeaderLabel and ns.boonHeaderLabel:IsShown() then
+            contentHeight = contentHeight + 6 + 16
         end
-        -- Nemesis section: 3px gap + header(16) + detail lines(16 each)
+        if ns.boonLabel and ns.boonLabel:IsShown() then
+            contentHeight = contentHeight + 4 + 16
+        end
+        -- Nemesis section: 6px gap + header(16) + 4px gap + value(16)
         if ns.nemesisLabel and ns.nemesisLabel:IsShown() then
-            contentHeight = contentHeight + 3 + 16
+            contentHeight = contentHeight + 6 + 16
         end
         if ns.nemesisDetailLabel and ns.nemesisDetailLabel:IsShown() then
-            local detailText = ns.nemesisDetailLabel:GetText() or ""
-            local _, newlines = detailText:gsub("\n", "\n")
-            contentHeight = contentHeight + (newlines + 1) * 16
+            contentHeight = contentHeight + 4 + 16
         end
         -- Resize contentFrame then total frame (header height + content, or header only when collapsed)
         if ns.contentFrame then ns.contentFrame:SetHeight(contentHeight) end
