@@ -12,6 +12,13 @@ local frame = CreateFrame("Frame")
 -- State tracking
 local isLoaded = false
 
+-- ldrlog: structured log helper (delegates to CouchPotatoLog when available)
+local function ldrlog(level, msg)
+    if _G.CouchPotatoLog and _G.CouchPotatoLog[level] then
+        _G.CouchPotatoLog[level](_G.CouchPotatoLog, "Loader", msg)
+    end
+end
+
 -- SavedVariables (initialized in ADDON_LOADED)
 ControllerCompanionLoaderDB = ControllerCompanionLoaderDB or {
     lastKnownState = false,
@@ -20,13 +27,23 @@ ControllerCompanionLoaderDB = ControllerCompanionLoaderDB or {
 
 -- Load the main ControllerCompanion addon
 local function LoadControllerCompanion()
+    ldrlog("Info", "LoadControllerCompanion requested")
     -- Check if auto-load is disabled
     if not ControllerCompanionLoaderDB.autoLoad then
+        ldrlog("Info", "Auto-load is disabled — skipping load")
         return
     end
-    
+
+    -- Check if ControllerCompanion is functionally disabled via CouchPotato suite
+    if _G.CouchPotatoDB and _G.CouchPotatoDB.addonStates and
+       _G.CouchPotatoDB.addonStates.ControllerCompanion == false then
+        ldrlog("Info", "ControllerCompanion is disabled via /cp disable — skipping load")
+        return
+    end
+
     -- Already loaded?
     if C_AddOns.IsAddOnLoaded(MAIN_ADDON) then
+        ldrlog("Info", "ControllerCompanion already loaded — signalling OnControllerActivated")
         if ControllerCompanion then
             -- Signal it to activate
             ControllerCompanion:OnControllerActivated()
@@ -34,23 +51,27 @@ local function LoadControllerCompanion()
         isLoaded = true
         return
     end
-    
+
     -- Try to load
+    ldrlog("Info", "Requesting C_AddOns.LoadAddOn for " .. MAIN_ADDON)
     local loaded, reason = C_AddOns.LoadAddOn(MAIN_ADDON)
     if not loaded then
         if reason == "DISABLED" then
+            ldrlog("Warn", "Addon was DISABLED — enabling and retrying")
             -- Enable it and try again
             C_AddOns.EnableAddOn(MAIN_ADDON)
             loaded, reason = C_AddOns.LoadAddOn(MAIN_ADDON)
         end
-        
+
         if not loaded then
+            ldrlog("Error", "Failed to load ControllerCompanion: " .. tostring(reason))
             print(string.format("|cffff6600ControllerCompanion:|r Failed to load: %s", reason or "Unknown"))
             return
         end
     end
-    
+
     isLoaded = true
+    ldrlog("Info", "ControllerCompanion load SUCCESS")
     print("|cffff6600ControllerCompanion:|r Controller detected - addon loaded.")
     ControllerCompanionLoaderDB.lastKnownState = true
 
@@ -59,6 +80,7 @@ local function LoadControllerCompanion()
     -- (When the addon was already loaded we call this in the early-return branch above;
     --  here we mirror that call so both paths are identical.)
     if ControllerCompanion then
+        ldrlog("Info", "Calling OnControllerActivated")
         ControllerCompanion:OnControllerActivated()
     end
 end
@@ -123,7 +145,9 @@ end
 -- Initialize SavedVariables
 local function OnAddonLoaded(addonName)
     if addonName ~= ADDON_NAME then return end
-    
+
+    ldrlog("Info", "ADDON_LOADED fired for: " .. tostring(addonName))
+
     -- Ensure DB structure
     ControllerCompanionLoaderDB = ControllerCompanionLoaderDB or {}
     if ControllerCompanionLoaderDB.autoLoad == nil then
@@ -132,9 +156,11 @@ local function OnAddonLoaded(addonName)
     if ControllerCompanionLoaderDB.lastKnownState == nil then
         ControllerCompanionLoaderDB.lastKnownState = false
     end
-    
+
     -- Check if controller is active at load time
-    if C_GamePad.IsEnabled() then
+    local gpEnabled = C_GamePad.IsEnabled()
+    ldrlog("Info", "Initial C_GamePad.IsEnabled() = " .. tostring(gpEnabled))
+    if gpEnabled then
         LoadControllerCompanion()
     end
 end
@@ -169,32 +195,12 @@ frame:RegisterEvent("CVAR_UPDATE")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("ADDON_LOADED")
 
--- Slash command: /cp  (always available — force-loads main addon if needed)
-SLASH_CP1 = "/cp"
-SLASH_CP2 = "/couchpotato"
-SlashCmdList["CP"] = function(msg)
-    msg = strtrim(strlower(msg or ""))
-
-    -- Force-load the main addon regardless of controller state
-    if not C_AddOns.IsAddOnLoaded(MAIN_ADDON) then
-        C_AddOns.EnableAddOn(MAIN_ADDON)
-        C_AddOns.LoadAddOn(MAIN_ADDON)
-    end
-
-    -- Delegate everything to the main addon's handler if it loaded
-    if ControllerCompanion and ControllerCompanion.ChatCommand then
-        -- Default: open config window
-        if msg == "" then msg = "config" end
-        ControllerCompanion:ChatCommand(msg)
-    else
-        print("|cffff6600ControllerCompanion:|r Failed to load main addon.")
-    end
-end
-
 -- Slash command: /cpload
+-- NOTE: /cp and /cc are now registered by the CouchPotato shared addon.
 SLASH_CPLOAD1 = "/cpload"
 SlashCmdList["CPLOAD"] = function(msg)
     msg = strtrim(strlower(msg or ""))
+    ldrlog("Info", "/cpload received, args='" .. tostring(msg) .. "'")
     
     if msg == "" then
         -- Manual load

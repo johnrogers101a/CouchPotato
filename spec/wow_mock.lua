@@ -16,6 +16,13 @@ _G.IsInInstance = function()
     return nil, _G._isInInstanceType
 end
 
+-- C_PartyInfo stub (used by IsInDelve tertiary fallback)
+_G.C_PartyInfo = {
+    IsDelveInProgress = function() return C_PartyInfo._isDelveInProgress or false end,
+    _isDelveInProgress = false,
+    _SetIsDelveInProgress = function(val) C_PartyInfo._isDelveInProgress = val end,
+}
+
 -- C_DelvesUI stub (used by DelveCompanionStats to fetch active companion)
 _G.C_DelvesUI = {
     GetActiveCompanion = function() return nil end,
@@ -130,7 +137,34 @@ local function createMockFrame(frameType, name, parent, template)
     function frame:SetHeight(h) self._height = h end
     function frame:GetWidth() return self._width end
     function frame:GetHeight() return self._height end
-    function frame:SetPoint(...) self._points[#self._points + 1] = { ... } end
+    function frame:SetPoint(point, relativeTo, relativePoint, x, y)
+        -- Handle the 3-arg form: SetPoint("CENTER", x, y)
+        if type(relativeTo) == "number" then
+            x = relativeTo
+            y = relativePoint
+            relativeTo = nil
+            relativePoint = point
+        end
+        local rp = relativePoint or point
+        local ox = x or 0
+        local oy = y or 0
+        -- Store both named fields (for GetPoint) AND numeric indices (for test assertions
+        -- that read pt[1], pt[2], pt[4], pt[5] from the old array format).
+        table.insert(self._points, {
+            -- named fields (GetPoint path)
+            point        = point,
+            relativeTo   = relativeTo,
+            relativePoint = rp,
+            x            = ox,
+            y            = oy,
+            -- numeric fields (legacy test assertions)
+            [1] = point,
+            [2] = relativeTo,
+            [3] = rp,
+            [4] = ox,
+            [5] = oy,
+        })
+    end
     function frame:ClearAllPoints() self._points = {} end
     function frame:SetAllPoints(other) end
     function frame:SetParent(p) self._parent = p end
@@ -157,11 +191,18 @@ local function createMockFrame(frameType, name, parent, template)
     function frame:SetBackdropColor(r,g,b,a) self._backdropColor = {r,g,b,a} end
     function frame:SetBackdropBorderColor(r,g,b,a) self._backdropBorderColor = {r,g,b,a} end
     function frame:SetMovable(v) self._movable = v end
+    function frame:IsMovable() return self._movable == true end
     function frame:EnableMouse(v) self._mouseEnabled = v end
     function frame:RegisterForDrag(...) end
-    function frame:StartMoving() end
-    function frame:StopMovingOrSizing() end
+    function frame:StartMoving() self._moving = true end
+    function frame:StopMovingOrSizing() self._moving = false end
+    function frame:Raise() end
     function frame:GetPoint(index)
+        index = index or 1
+        local pt = self._points[index]
+        if pt then
+            return pt.point, pt.relativeTo, pt.relativePoint, pt.x, pt.y
+        end
         return "BOTTOMLEFT", nil, "BOTTOMLEFT", 0, 0
     end
     
@@ -219,6 +260,7 @@ local function createMockFrame(frameType, name, parent, template)
         function tex:GetWidth() return self._width or 0 end
         function tex:SetTexture(t) self._texture = t; return t ~= nil end
         function tex:GetTexture() return self._texture end
+        function tex:SetTexCoord(ul, ur, vl, vr) self._texCoord = {ul, ur, vl, vr} end
         function tex:SetColorTexture(r,g,b,a) self._color = {r,g,b,a} end
         function tex:SetVertexColor(r,g,b,a) end
         function tex:SetBlendMode(m) end
@@ -236,13 +278,13 @@ local function createMockFrame(frameType, name, parent, template)
             _shown = true,
         }
         function fs:SetPoint(...) end
+        function fs:ClearAllPoints() end
         function fs:SetAllPoints(anchor) end
         function fs:SetText(t) self._text = t end
         function fs:GetText() return self._text end
         function fs:SetTextColor(r,g,b,a) self._r = r; self._g = g; self._b = b; self._a = a end
         function fs:GetTextColor() return self._r or 1, self._g or 1, self._b or 1, self._a or 1 end
         function fs:SetFont(font, size, flags) self._fontPath = font; self._fontSize = size; self._fontFlags = flags end
-        function fs:SetVerticalAlign(v) self._verticalAlign = v end
         function fs:SetFontObject(obj)
             if type(obj) == "table" and obj._name then
                 self._fontPath = obj._name
@@ -298,6 +340,34 @@ local function createMockFrame(frameType, name, parent, template)
         frame._text = ""
         function frame:SetText(t) self._text = t end
         function frame:GetText() return self._text end
+    end
+
+    -- UICheckButtonTemplate support
+    if template and template:find("UICheckButtonTemplate") then
+        frame._checked = false
+        function frame:SetChecked(v) self._checked = v and true or false end
+        function frame:GetChecked() return self._checked end
+    end
+
+    -- BasicFrameTemplateWithInset support
+    -- Provides .TitleBg (texture), .CloseButton (button), .Inset (frame) children
+    -- matching the real Blizzard template's child widget names.
+    if template and template:find("BasicFrameTemplate") then
+        frame.TitleBg = {
+            _points = {},
+            SetPoint = function(self, ...) self._points[#self._points + 1] = { ... } end,
+            ClearAllPoints = function(self) self._points = {} end,
+        }
+        frame.CloseButton = {
+            _scripts = {},
+            SetScript = function(self, event, fn) self._scripts[event] = fn end,
+            GetScript = function(self, event) return self._scripts[event] end,
+            SetPoint   = function(self, ...) end,
+        }
+        frame.Inset = {
+            SetPoint   = function(self, ...) end,
+            ClearAllPoints = function(self) end,
+        }
     end
 
     -- ObjectiveTrackerSectionHeaderTemplate support
@@ -372,6 +442,8 @@ local function createMockFrame(frameType, name, parent, template)
     -- EditBox support
     if frameType == "EditBox" then
         frame._text = ""
+        frame._highlighted = false
+        frame._focused = false
         function frame:SetText(t) self._text = t end
         function frame:GetText() return self._text end
         function frame:SetMultiLine(v) end
@@ -379,6 +451,9 @@ local function createMockFrame(frameType, name, parent, template)
         function frame:SetFontObject(f) end
         function frame:SetFont(font, size, flags) end
         function frame:EnableMouse(v) self._mouseEnabled = v end
+        function frame:HighlightText() self._highlighted = true end
+        function frame:SetFocus() self._focused = true end
+        function frame:ClearFocus() self._focused = false end
     end
 
     -- ScrollFrame support
@@ -498,12 +573,18 @@ _G.C_Spell = {
         [85673] = { name = "Word of Glory", icon = "Interface\\Icons\\Spell_Holy_WordOfGlory", schoolMask = 2 }, -- Holy
     },
     
+    _descriptions = {},
+
     GetSpellInfo = function(spellID)
         local spell = _G.C_Spell._spells[spellID]
         if spell then
             return { name = spell.name, iconID = spell.icon, schoolMask = spell.schoolMask }
         end
         return nil
+    end,
+
+    GetSpellDescription = function(spellID)
+        return _G.C_Spell._descriptions[spellID] or ""
     end,
 }
 
@@ -622,6 +703,33 @@ _G.GetSpecializationInfo = function(specIndex)
         return 2, "Fire", "Fire Mage specialization", "Interface\\Icons\\Spell_Fire_Firebolt02", "DAMAGER"
     end
     return specIndex, "Unknown", "", "", "DAMAGER"
+end
+
+-- GetLootSpecialization: returns specID of loot spec, or 0 if "Current Spec".
+-- Default returns 0 (follow current spec). Tests can override _mockLootSpec.
+_G._mockLootSpec = 0
+_G.GetLootSpecialization = function()
+    return _G._mockLootSpec or 0
+end
+
+-- GetNumSpecializations: returns number of specs available to the current class.
+-- Default returns 4 (most classes have 4 specs in retail). Tests can override.
+_G.GetNumSpecializations = function()
+    return _G._mockNumSpecializations or 4
+end
+
+-- GetSpecializationInfoByID: returns info by specID directly.
+-- Used by StatPriority to get the spec name when displaying a fixed override.
+_G.GetSpecializationInfoByID = function(specID)
+    -- Return minimal info for known mock specIDs
+    if specID == 105 then
+        return 105, "Restoration Druid", "Heals allies.", "", "HEALER"
+    elseif specID == 251 then
+        return 251, "Frost Death Knight", "", "", "DAMAGER"
+    elseif specID == 250 then
+        return 250, "Blood Death Knight", "", "", "TANK"
+    end
+    return specID, "Unknown Spec", "", "", "DAMAGER"
 end
 
 _G.GetNumGroupMembers = function() return 0 end
@@ -826,7 +934,30 @@ _G.WorldMapFrame = {
     Hide     = function(self) self._shown = false end,
 }
 
-_G.GetTime = function() return os.time() end
+-- GetTime returns a WoW-style session-relative uptime in seconds.
+-- We offset by -1000 so GetTime() starts at ~1000, ensuring throttle guards
+-- that compare (now - 0) see a large difference on the very first call.
+local _sessionStart = os.clock() - 1000
+_G.GetTime = function() return os.clock() - _sessionStart end
+
+-- Minimap mock
+_G.Minimap = _G.Minimap or CreateFrame("Frame", "Minimap", UIParent)
+_G.Minimap:SetSize(160, 160)
+_G.Minimap:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -20)
+
+-- GameTooltip:AddLine (not in the base stub above)
+if _G.GameTooltip and not _G.GameTooltip.AddLine then
+    _G.GameTooltip.AddLine = function(self, text, r, g, b) end
+end
+
+-- GetCursorPosition
+_G.GetCursorPosition = _G.GetCursorPosition or function() return 500, 500 end
+
+-- geterrorhandler / seterrorhandler
+_G.geterrorhandler = _G.geterrorhandler or function()
+    return function(msg) print("ERROR: " .. tostring(msg)) end
+end
+_G.seterrorhandler = _G.seterrorhandler or function(handler) end
 
 _G._stateDrivers = {}  -- {[frame] = {[state] = macro}} — inspectable in tests
 _G.RegisterStateDriver = function(frame, state, macro)
@@ -949,17 +1080,119 @@ _G._ClearMockAuras = function()
     _G.C_UnitAuras._auras = {}
 end
 
--- Test helper: set nemesis progress.
+-- Test helper: set nemesis progress via C_Spell.GetSpellDescription(472952).
 -- Two calling forms:
---   _SetMockNemesis(current, total)           -- single criterion (legacy)
---   _SetMockNemesis({ {desc, qty, total}, … }) -- explicit criteria table
+--   _SetMockNemesis(current, total)           -- sets spell description with X/Y counts
+--   _SetMockNemesis({ {desc, qty, total}, … }) -- ignored (legacy criteria form, no-op)
 _G._SetMockNemesis = function(criteriaOrCurrent, total)
     if type(criteriaOrCurrent) == "table" then
+        -- Legacy explicit-criteria form: no longer used for nemesis display.
+        -- Keep C_ScenarioInfo in sync for any tests that still inspect it.
         _G.C_ScenarioInfo._criteria = criteriaOrCurrent
     else
-        -- Legacy single-criterion form
-        _G.C_ScenarioInfo._criteria = {
-            { description = "Enemy group kills", quantity = criteriaOrCurrent, totalQuantity = total }
-        }
+        -- Primary form: set spell 472952 description to realistic mock data.
+        local current = criteriaOrCurrent
+        _G.C_Spell._descriptions[472952] =
+            "The Underpin's allies are wandering about the delve.\n\n" ..
+            "Defeating a group of these enemies upgrades the Nemesis Strongbox found " ..
+            "in the treasure room, providing additional rewards at the end of this delve.\n\n" ..
+            "Enemy groups remaining: |cnWHITE_FONT_COLOR:" .. current .. " / " .. total .. "|r"
     end
+end
+
+-- Helper to clear nemesis spell description between tests.
+_G._ClearMockNemesis = function()
+    _G.C_Spell._descriptions[472952] = nil
+end
+
+-- Test helper: set a realistic boon spell description for spell 1280098.
+-- Called with a table of {statName, pct} pairs, e.g.:
+--   _SetMockBoonSpell({ {"Maximum Health", 5}, {"Movement Speed", 3} })
+-- Generates a description string that mirrors what C_Spell.GetSpellDescription
+-- returns in-game for spell 1280098 (Brann companion boon buff).
+_G._SetMockBoonSpell = function(stats)
+    if not stats or #stats == 0 then
+        _G.C_Spell._descriptions[1280098] = nil
+        return
+    end
+    local lines = { "Brann's combat experience improves your abilities in this delve." }
+    for _, entry in ipairs(stats) do
+        local statName, pct = entry[1], entry[2]
+        lines[#lines + 1] = statName .. ": " .. pct .. "%"
+    end
+    _G.C_Spell._descriptions[1280098] = table.concat(lines, "\n")
+end
+
+-- Helper to clear boon spell description between tests.
+_G._ClearMockBoonSpell = function()
+    _G.C_Spell._descriptions[1280098] = nil
+end
+
+-- =========================================================================
+-- Stat value APIs (used by StatPriority circle display)
+-- =========================================================================
+
+-- UnitStat: returns the base stat value for a player.
+-- stat index: 1=Str, 2=Agil, 3=Stam, 4=Int, 5=Spi
+_G._mockUnitStats = { [1] = 1200, [2] = 800, [3] = 50000, [4] = 12450, [5] = 0 }
+_G.UnitStat = function(unit, statIndex)
+    if unit == "player" then
+        return _G._mockUnitStats[statIndex] or 0
+    end
+    return 0
+end
+
+-- Secondary stat percentage APIs
+_G._mockHaste  = 28.5
+_G._mockCrit   = 15.2
+_G._mockMastery = 42.3
+_G._mockVers   = 8.7
+
+_G.GetHaste = function() return _G._mockHaste end
+_G.GetCritChance = function() return _G._mockCrit end
+_G.GetMasteryEffect = function() return _G._mockMastery end
+
+-- CR_VERSATILITY_DAMAGE_DONE constant (matches WoW's CR_ enum)
+_G.CR_VERSATILITY_DAMAGE_DONE = 40
+_G.GetCombatRatingBonus = function(ratingID)
+    if ratingID == _G.CR_VERSATILITY_DAMAGE_DONE then
+        return _G._mockVers
+    end
+    return 0
+end
+
+-- Test helper: set boon spell description using the "period after %" format observed
+-- in live Blizzard tooltips (e.g. "Strength: 2%." — last stat gets a trailing period).
+-- Accepts the same {statName, pct} pairs as _SetMockBoonSpell.
+_G._SetMockBoonSpellWithPeriod = function(stats)
+    if not stats or #stats == 0 then
+        _G.C_Spell._descriptions[1280098] = nil
+        return
+    end
+    local lines = { "Brann's combat experience improves your abilities in this delve." }
+    for i, entry in ipairs(stats) do
+        local statName, pct = entry[1], entry[2]
+        -- Append a trailing period to the last stat, mirroring the live tooltip format.
+        if i == #stats then
+            lines[#lines + 1] = statName .. ": " .. pct .. "%."
+        else
+            lines[#lines + 1] = statName .. ": " .. pct .. "%"
+        end
+    end
+    _G.C_Spell._descriptions[1280098] = table.concat(lines, "\n")
+end
+
+-- Test helper: set boon spell description with WoW named color codes
+-- (e.g. |cnWHITE_FONT_COLOR:2%|r), as returned by some API versions.
+_G._SetMockBoonSpellWithColorCodes = function(stats)
+    if not stats or #stats == 0 then
+        _G.C_Spell._descriptions[1280098] = nil
+        return
+    end
+    local lines = { "Brann's combat experience improves your abilities in this delve." }
+    for _, entry in ipairs(stats) do
+        local statName, pct = entry[1], entry[2]
+        lines[#lines + 1] = statName .. ": |cnWHITE_FONT_COLOR:" .. pct .. "%|r"
+    end
+    _G.C_Spell._descriptions[1280098] = table.concat(lines, "\n")
 end
