@@ -837,13 +837,23 @@ function ns:OnLoad()
     pinBtn:EnableMouse(true)
     ns.pinBtn = pinBtn
 
-    -- ApplyPinnedState: anchor frame to tracker, disable dragging, gold icon.
+    -- ApplyPinnedState: anchor frame below the objective tracker, disable dragging, lock icon.
+    -- Uses ObjectiveTrackerFrame (the outer auto-sizing container) as the anchor so DCS
+    -- sits directly below all tracker content.  Falls back to a right-side default when
+    -- the tracker is not yet visible (e.g. at load time before PLAYER_ENTERING_WORLD).
     local function ApplyPinnedState()
         ns.isDraggable = false
         ns.frame:SetMovable(false)
-        if ScenarioObjectiveTracker then
-            ns.frame:ClearAllPoints()
-            ns.frame:SetPoint("TOP", ScenarioObjectiveTracker, "BOTTOM", 0, -4)
+        ns.frame:ClearAllPoints()
+        local trackerAnchor = GetTrackerAnchor()
+        if trackerAnchor then
+            ns.frame:SetPoint("TOP", trackerAnchor, "BOTTOM", 0, -4)
+            dcslog("Info", "ApplyPinnedState: anchored below ObjectiveTrackerFrame")
+        else
+            -- Tracker not visible yet — park on right side of screen until
+            -- PLAYER_ENTERING_WORLD fires and re-anchors us properly.
+            ns.frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -200)
+            dcslog("Info", "ApplyPinnedState: tracker not visible — parked TOPRIGHT fallback")
         end
         ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
         ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
@@ -864,18 +874,7 @@ function ns:OnLoad()
         if not db then return end
         if db.pinned == false then
             -- currently unpinned → pin it
-            db.pinned = true
-            ns.frame:SetMovable(false)
-            ns.frame:ClearAllPoints()
-            if ScenarioObjectiveTracker then
-                ns.frame:SetPoint("TOP", ScenarioObjectiveTracker, "BOTTOM", 0, -4)
-            else
-                ns.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-            end
-            if ns.pinBtn then
-                ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
-                ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
-            end
+            ApplyPinnedState()
         else
             -- currently pinned (or nil) → unpin it
             db.pinned = false
@@ -1024,13 +1023,8 @@ function ns:OnLoad()
         end
         if ns.pinBtn then ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Unlocked-Up") end
     else
-        -- pinned (true or nil) → immovable, locked icon, normalise db value to true
-        DelveCompanionStatsDB.pinned = true
-        ns.frame:SetMovable(false)
-        if ns.pinBtn then
-            ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
-            ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
-        end
+        -- pinned (true or nil) → anchor to tracker, immovable, locked icon
+        ApplyPinnedState()
     end
 
     -- 9. Determine frame visibility based on active delve state
