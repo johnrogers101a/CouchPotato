@@ -394,21 +394,25 @@ end
 -- GetTrackerAnchor: Returns the best anchor frame for StatPriority to dock
 -- below.  The anchor chain is:
 --
---   ObjectiveTracker visible-content bottom
+--   ObjectiveTrackerFrame (auto-sizes to visible content)
 --     → DelveCompanionStatsFrame (if shown, dock below it instead)
 --       → StatPriority (docks below DCS)
 --
 -- This prevents StatPriority and DelveCompanionStats from overlapping when
 -- both are visible at the bottom of the quest tracker.
 --
+-- IMPORTANT: We anchor to ObjectiveTrackerFrame (the outer container) rather
+-- than individual module sub-frames (QuestObjectiveTracker, etc.).  The outer
+-- container auto-sizes its height to fit visible content, so its BOTTOM edge
+-- is always the actual rendered content bottom.  Individual module frames can
+-- have excess height (pre-allocated for max quest count) that does not shrink
+-- as quests are completed or removed, causing SP to overlap visible content.
+--
 -- Strategy:
 --   1. If DelveCompanionStatsFrame exists and is shown, anchor below it.
 --      This ensures SP always sits beneath DCS in the stack.
---   2. Otherwise walk ObjectiveTrackerFrame.MODULES (last visible = bottom
---      of actual quest content).
---   3. Fall back to named module globals in bottom-of-column priority order.
---   4. Last resort: ObjectiveTrackerFrame itself.
---   5. Returns nil when no tracker is visible at all.
+--   2. Otherwise anchor to ObjectiveTrackerFrame directly (same as DCS).
+--   3. Returns nil when no tracker is visible at all.
 -------------------------------------------------------------------------------
 local function GetTrackerAnchor()
     -- 1. Chain anchor: if DelveCompanionStatsFrame is visible, dock below it.
@@ -418,57 +422,21 @@ local function GetTrackerAnchor()
         splog("Info", "GetTrackerAnchor: DelveCompanionStatsFrame is visible — anchoring SP below DCS (chain: OT→DCS→SP)")
         return dcsFrame
     end
-    splog("Debug", "GetTrackerAnchor: DelveCompanionStatsFrame not visible — using ObjectiveTracker directly")
+    splog("Debug", "GetTrackerAnchor: DelveCompanionStatsFrame not visible — using ObjectiveTrackerFrame directly")
 
-    -- Guard: outer container must exist and be visible
-    if not (ObjectiveTrackerFrame
+    -- 2. Anchor to the outer ObjectiveTrackerFrame.  It auto-sizes to its
+    --    content so its BOTTOM is always the true rendered content bottom,
+    --    unlike individual module sub-frames which may carry excess height.
+    if ObjectiveTrackerFrame
             and ObjectiveTrackerFrame.IsShown
-            and ObjectiveTrackerFrame:IsShown()) then
-        splog("Debug", "GetTrackerAnchor: ObjectiveTrackerFrame not available/visible — returning nil")
-        return nil
+            and ObjectiveTrackerFrame:IsShown() then
+        splog("Info", "GetTrackerAnchor: using ObjectiveTrackerFrame as anchor")
+        return ObjectiveTrackerFrame
     end
 
-    -- 2. Walk the MODULES list to find the last visible content module.
-    --    ObjectiveTrackerFrame.MODULES is an ordered array in display order
-    --    (top to bottom), so the last shown entry is the bottom of content.
-    if ObjectiveTrackerFrame.MODULES and #ObjectiveTrackerFrame.MODULES > 0 then
-        local lastVisible = nil
-        for _, mod in ipairs(ObjectiveTrackerFrame.MODULES) do
-            if mod and mod.IsShown and mod:IsShown() then
-                lastVisible = mod
-            end
-        end
-        if lastVisible then
-            splog("Debug", "GetTrackerAnchor: found last visible MODULES entry — using it as anchor")
-            return lastVisible
-        end
-        splog("Debug", "GetTrackerAnchor: MODULES present but no visible module — falling through")
-    end
-
-    -- 3. Named module globals, checked in bottom-of-column priority order.
-    --    In a typical TWW session the order from top to bottom is:
-    --    BonusObjective → Scenario → Achievement → Quest
-    --    We want the one that is visible and furthest down (last in order).
-    local namedModules = {
-        _G.QuestObjectiveTracker,
-        _G.AchievementObjectiveTracker,
-        _G.ScenarioObjectiveTracker,
-        _G.BonusObjectiveTracker,
-    }
-    local lastNamed = nil
-    for _, mod in ipairs(namedModules) do
-        if mod and mod.IsShown and mod:IsShown() then
-            lastNamed = mod
-        end
-    end
-    if lastNamed then
-        splog("Debug", "GetTrackerAnchor: using named module global as anchor")
-        return lastNamed
-    end
-
-    -- 4. Last resort: the outer container (original behaviour).
-    splog("Debug", "GetTrackerAnchor: no module found — falling back to ObjectiveTrackerFrame")
-    return ObjectiveTrackerFrame
+    -- 3. No tracker visible.
+    splog("Debug", "GetTrackerAnchor: ObjectiveTrackerFrame not available/visible — returning nil")
+    return nil
 end
 
 -------------------------------------------------------------------------------
