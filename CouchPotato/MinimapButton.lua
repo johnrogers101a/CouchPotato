@@ -156,12 +156,15 @@ local function BuildButton()
     hl:SetAllPoints()
     hl:SetTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
-    -- Border ring — MiniMap-TrackingBorder is designed for ~54x54; using SetAllPoints()
-    -- would squish it to 32x32 and cover the icon entirely.  Size it to 52x52 and
-    -- offset TOPLEFT by (-6, 6) so the ring frames the button without obscuring it.
+    -- Border ring — MiniMap-TrackingBorder requires exactly 56x56 with a TOPLEFT
+    -- anchor at (0, 0) to match its internal UV layout.  The previous 52x52 size
+    -- with a (-6, 6) offset forced the texture into a region that does not map to
+    -- any valid UV content, causing Blizzard's renderer to fall back to a solid
+    -- black fill.  56x56 / TOPLEFT (0,0) is the standard pattern used by Blizzard
+    -- and most addon authors for this specific texture.
     local border = btn:CreateTexture(nil, "OVERLAY")
-    border:SetSize(52, 52)
-    border:SetPoint("TOPLEFT", btn, "TOPLEFT", -6, 6)
+    border:SetSize(56, 56)
+    border:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 
     -- Tooltip
