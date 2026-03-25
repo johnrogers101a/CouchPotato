@@ -664,6 +664,117 @@ describe("DelveCompanionStats", function()
             ns.UpdateCompanionData = originalUCD
         end)
 
+        it("UNIT_AURA throttle schedules deferred retry when event arrives mid-window", function()
+            -- Arrange: put us in a delve, prime the throttle so the window is active.
+            _G._isInInstanceType = "scenario"
+            _SetMockBoonSpell({ { "Versatility", 5 } })
+
+            -- Fire first event to set lastAuraUpdate to "now".
+            -- GetTime() returns os.time() (integer seconds); we simulate the throttle
+            -- being active by firing the first event, then immediately firing a second.
+            local eventCount = 0
+            local originalUCD = ns.UpdateCompanionData
+            ns.UpdateCompanionData = function(self, event)
+                eventCount = eventCount + 1
+                return originalUCD(self, event)
+            end
+
+            -- First UNIT_AURA: passes the throttle, eventCount becomes 1.
+            ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "player")
+            assert.equals(1, eventCount)
+
+            -- Second UNIT_AURA immediately: throttled — but a timer retry should be queued.
+            -- We reset eventCount so we can tell if the retry fires.
+            eventCount = 0
+            ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "player")
+            -- Not yet fired (timer pending)
+            assert.equals(0, eventCount)
+
+            -- Fire all pending timers (mock helper).
+            C_Timer._FireAll()
+
+            -- The retry should have called UpdateCompanionData once.
+            assert.equals(1, eventCount)
+
+            ns.UpdateCompanionData = originalUCD
+            C_Timer._Reset()
+        end)
+
+        it("second mid-window UNIT_AURA does NOT queue duplicate retry timers", function()
+            _G._isInInstanceType = "scenario"
+            _SetMockBoonSpell({ { "Haste", 3 } })
+
+            local timerCount = 0
+            local originalAfter = C_Timer.After
+            C_Timer.After = function(delay, cb)
+                timerCount = timerCount + 1
+                return originalAfter(delay, cb)
+            end
+
+            -- Prime the throttle.
+            ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "player")
+            timerCount = 0  -- reset after the first pass-through (which doesn't schedule a timer)
+
+            -- Two back-to-back mid-window events: only one retry timer should be queued.
+            ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "player")
+            ns.frame._scripts["OnEvent"](ns.frame, "UNIT_AURA", "player")
+
+            assert.equals(1, timerCount)
+
+            C_Timer.After = originalAfter
+            C_Timer._Reset()
+        end)
+
+        it("SPELL_DATA_LOAD_RESULT triggers UpdateCompanionData when in delve", function()
+            _G._isInInstanceType = "scenario"
+            _SetMockBoonSpell({ { "Mastery", 4 } })
+
+            local callCount = 0
+            local originalUCD = ns.UpdateCompanionData
+            ns.UpdateCompanionData = function(self, event)
+                callCount = callCount + 1
+                return originalUCD(self, event)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "SPELL_DATA_LOAD_RESULT", 1280098)
+
+            assert.equals(1, callCount)
+            ns.UpdateCompanionData = originalUCD
+        end)
+
+        it("SPELL_DATA_LOAD_RESULT does NOT trigger UpdateCompanionData when not in delve", function()
+            _G._isInInstanceType = "none"
+            C_DelvesUI._SetHasActiveDelve(false)
+
+            local callCount = 0
+            local originalUCD = ns.UpdateCompanionData
+            ns.UpdateCompanionData = function(self, event)
+                callCount = callCount + 1
+                return originalUCD(self, event)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "SPELL_DATA_LOAD_RESULT", 1280098)
+
+            assert.equals(0, callCount)
+            ns.UpdateCompanionData = originalUCD
+        end)
+
+        it("SPELL_DATA_LOAD_RESULT for a different spellID does NOT trigger UpdateCompanionData", function()
+            _G._isInInstanceType = "scenario"
+
+            local callCount = 0
+            local originalUCD = ns.UpdateCompanionData
+            ns.UpdateCompanionData = function(self, event)
+                callCount = callCount + 1
+                return originalUCD(self, event)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "SPELL_DATA_LOAD_RESULT", 99999)
+
+            assert.equals(0, callCount)
+            ns.UpdateCompanionData = originalUCD
+        end)
+
     end)
 
     -- -------------------------------------------------------------------------
