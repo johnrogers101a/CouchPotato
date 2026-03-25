@@ -1149,29 +1149,29 @@ describe("DelveCompanionStats", function()
 
             it("base content height is 32 (8+16+8) when only nameLabel visible", function()
                 ns:UpdateCompanionData()
-                -- No boons, no nemesis → contentHeight = 32 (8px top + 16px label + 8px bottom)
-                assert.equals(32, ns.contentFrame._height)
+                -- No boons, no nemesis → contentHeight = 28 (8px top + 16px label + 4px bottom)
+                assert.equals(28, ns.contentFrame._height)
             end)
 
             it("content height stays at base when boon tooltip data present but not in a delve", function()
                 -- Boon display requires IsInDelve(); not in a delve here → no boon section added.
                 _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%." })
                 ns:UpdateCompanionData()
-                -- Boons not in delve → no boon section → contentHeight = 32
-                assert.equals(32, ns.contentFrame._height)
+                -- Boons not in delve → no boon section → contentHeight = 28
+                assert.equals(28, ns.contentFrame._height)
             end)
 
             it("content height includes nemesis section (6px gap + 16px header + 4px gap + 16px value) when nemesis present", function()
                 _SetMockNemesis(1, 3)
                 ns:UpdateCompanionData()
-                -- nemesis shown: base 32 + 6 gap + 16 header + 4 gap + 16 value = 74
-                assert.equals(74, ns.contentFrame._height)
+                -- nemesis shown: base 28 + 6 gap + 16 header + 4 gap + 16 value = 70
+                assert.equals(70, ns.contentFrame._height)
             end)
 
             it("content height without nemesis stays at base when no spell description", function()
-                -- No spell description → nemesis hidden → height 32
+                -- No spell description → nemesis hidden → height 28
                 ns:UpdateCompanionData()
-                assert.equals(32, ns.contentFrame._height)
+                assert.equals(28, ns.contentFrame._height)
             end)
 
         end)
