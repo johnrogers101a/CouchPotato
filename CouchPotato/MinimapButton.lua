@@ -11,7 +11,12 @@ local CP = CouchPotatoShared
 -- can silently fail in newer clients, rendering as an invisible (nil) texture.
 local ICON_TEXTURE = 134046
 
-local BUTTON_SIZE = 32
+-- 33x33 matches Blizzard's standard minimap button size.  The
+-- MiniMap-TrackingBorder texture is a 56x56 ring whose UV layout assumes a
+-- 33x33 button anchored TOPLEFT (0,0).  A 32x32 button shifts the ring one
+-- pixel right and down, producing the asymmetric "gold tail" visible in the
+-- bottom-right corner.
+local BUTTON_SIZE = 33
 
 -- Convert polar angle (degrees, 0=top, clockwise) to Cartesian offset from
 -- minimap centre.
