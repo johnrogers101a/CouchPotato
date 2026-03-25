@@ -160,6 +160,13 @@ end)
 -- Enable/Disable addon management
 -------------------------------------------------------------------------------
 
+-- Canonical addon key → human-readable display name.
+local ADDON_DISPLAY_NAMES = {
+    ControllerCompanion  = "Controller Companion",
+    DelveCompanionStats  = "Delve Companion Stats",
+    StatPriority         = "Stat Priority",
+}
+
 -- Canonical addon name → display name mapping.
 -- Keys are lowercase aliases; value is the canonical SavedVars key.
 local ADDON_ALIASES = {
@@ -207,7 +214,8 @@ local function PrintAddonStatus()
     for _, name in ipairs(order) do
         local state = CouchPotatoDB.addonStates[name]
         local label = (state == false) and "|cffff4444disabled|r" or "|cff44ff44enabled|r"
-        cpprint("  " .. name .. ": " .. label)
+        local displayName = ADDON_DISPLAY_NAMES[name] or name
+        cpprint("  " .. displayName .. ": " .. label)
     end
 end
 
@@ -290,10 +298,11 @@ local function HandleEnableDisable(action, rawName)
 
     local states = CouchPotatoDB.addonStates
     local isEnabled = (states[canonical] ~= false)
+    local displayName = ADDON_DISPLAY_NAMES[canonical] or canonical
 
     if action == "disable" then
         if not isEnabled then
-            cpprint(canonical .. " is already disabled.")
+            cpprint(displayName .. " is already disabled.")
             return
         end
         states[canonical] = false
@@ -301,24 +310,24 @@ local function HandleEnableDisable(action, rawName)
         if canonical == "ControllerCompanion" then
             local inCombat = InCombatLockdown and InCombatLockdown() or false
             if inCombat then
-                cpprint(canonical .. " will be disabled after combat ends.")
+                cpprint(displayName .. " will be disabled after combat ends.")
                 table.insert(pendingCombatActions, function()
                     DoDisableAddon(canonical)
-                    cpprint(canonical .. " disabled (post-combat).")
+                    cpprint(displayName .. " disabled (post-combat).")
                 end)
                 return
             end
         end
         DoDisableAddon(canonical)
-        cpprint(canonical .. " disabled.")
+        cpprint(displayName .. " disabled.")
     elseif action == "enable" then
         if isEnabled then
-            cpprint(canonical .. " is already enabled.")
+            cpprint(displayName .. " is already enabled.")
             return
         end
         states[canonical] = true
         DoEnableAddon(canonical)
-        cpprint(canonical .. " enabled.")
+        cpprint(displayName .. " enabled.")
     end
 end
 

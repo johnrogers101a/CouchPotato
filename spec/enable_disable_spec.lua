@@ -158,9 +158,9 @@ describe("cp enable/disable — chat feedback", function()
         cp._handleEnableDisable("disable", "dcs")
         local found = false
         for _, m in ipairs(messages) do
-            if m:find("DelveCompanionStats") and m:find("disabled") then found = true; break end
+            if m:find("Delve Companion Stats") and m:find("disabled") then found = true; break end
         end
-        assert.is_true(found, "Expected 'DelveCompanionStats disabled.' message")
+        assert.is_true(found, "Expected 'Delve Companion Stats disabled.' message")
     end)
 
     it("enable prints '<Addon> enabled.'", function()
@@ -169,9 +169,9 @@ describe("cp enable/disable — chat feedback", function()
         cp._handleEnableDisable("enable", "sp")
         local found = false
         for _, m in ipairs(messages) do
-            if m:find("StatPriority") and m:find("enabled") then found = true; break end
+            if m:find("Stat Priority") and m:find("enabled") then found = true; break end
         end
-        assert.is_true(found, "Expected 'StatPriority enabled.' message")
+        assert.is_true(found, "Expected 'Stat Priority enabled.' message")
     end)
 
     it("already-disabled prints '<Addon> is already disabled.'", function()
@@ -180,7 +180,7 @@ describe("cp enable/disable — chat feedback", function()
         cp._handleEnableDisable("disable", "cc")
         local found = false
         for _, m in ipairs(messages) do
-            if m:find("ControllerCompanion") and m:find("already") and m:find("disabled") then found = true; break end
+            if m:find("Controller Companion") and m:find("already") and m:find("disabled") then found = true; break end
         end
         assert.is_true(found, "Expected 'already disabled' message")
     end)
@@ -189,7 +189,7 @@ describe("cp enable/disable — chat feedback", function()
         cp._handleEnableDisable("enable", "sp")
         local found = false
         for _, m in ipairs(messages) do
-            if m:find("StatPriority") and m:find("already") and m:find("enabled") then found = true; break end
+            if m:find("Stat Priority") and m:find("already") and m:find("enabled") then found = true; break end
         end
         assert.is_true(found, "Expected 'already enabled' message")
     end)
