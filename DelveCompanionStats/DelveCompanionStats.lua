@@ -718,13 +718,19 @@ function ns:OnLoad()
     ns.frame:SetFrameStrata("MEDIUM")
     ns.frame:SetFrameLevel(1)
 
-    -- 3. Determine frame width — match ScenarioObjectiveTracker when available,
-    -- otherwise fall back to 260 px (a reasonable tracker-column width).
+    -- 3. Determine frame width — match ObjectiveTrackerFrame (outer tracker container)
+    -- for exact alignment with Blizzard's tracker. Fall back to ScenarioObjectiveTracker,
+    -- then hardcoded 248 px.
     local frameWidth = 0
-    if ScenarioObjectiveTracker and ScenarioObjectiveTracker.GetWidth then
-        frameWidth = ScenarioObjectiveTracker:GetWidth()
+    if ObjectiveTrackerFrame and ObjectiveTrackerFrame.GetWidth then
+        frameWidth = ObjectiveTrackerFrame:GetWidth()
     end
-    if frameWidth < 100 or frameWidth > 300 then
+    if frameWidth < 100 or frameWidth > 400 then
+        if ScenarioObjectiveTracker and ScenarioObjectiveTracker.GetWidth then
+            frameWidth = ScenarioObjectiveTracker:GetWidth()
+        end
+    end
+    if frameWidth < 100 or frameWidth > 400 then
         frameWidth = 248  -- match Delves section content box width
     end
     -- Inner content width: 6 px label inset each side (matches ObjectiveTracker label inset),
@@ -763,22 +769,11 @@ function ns:OnLoad()
         end
     end)
 
-    -- Background: very subtle dark tint (alpha 0.45) — just enough for readability,
-    -- no visible box. Matches Blizzard tracker section header appearance.
-    local headerBg = header:CreateTexture(nil, "BACKGROUND")
-    headerBg:SetAllPoints(header)
-    headerBg:SetColorTexture(0, 0, 0, 0.45)
+    -- Header is fully transparent — matches Blizzard ObjectiveTracker section headers
+    -- (no background tint, no border box).
 
-    -- Underline: single thin gold line below the header text (Blizzard-style section divider)
-    local headerBottomLine = header:CreateTexture(nil, "BORDER")
-    headerBottomLine:SetHeight(1)
-    headerBottomLine:SetPoint("BOTTOMLEFT",  header, "BOTTOMLEFT",  0, 0)
-    headerBottomLine:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
-    headerBottomLine:SetColorTexture(1, 0.78, 0.1, 1)
-
-    -- Title: large bright gold, left-aligned; matches Blizzard ObjectiveTracker section
-    -- header style ("Delves", "Quests" etc).  Use ObjectiveTitleFont when available,
-    -- fall back to GameFontNormal, then explicit FRIZQT so it always renders.
+    -- Title: GameFontNormal base, try ObjectiveTitleFont (exact Blizzard tracker header font),
+    -- gold colour matching "Delves"/"Quests" section headers.
     local headerTitle = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     -- Try the exact Blizzard tracker header font first; fall back silently.
     pcall(function() headerTitle:SetFontObject(ObjectiveTitleFont) end)
@@ -787,6 +782,14 @@ function ns:OnLoad()
     headerTitle:SetText("Companion")
     -- Gold matching Blizzard section headers: R=1 G=0.82 B=0 (same as tracker "Delves" text)
     headerTitle:SetTextColor(1, 0.82, 0.0, 1)
+
+    -- Underline: thin 1px gold line from RIGHT of title text to RIGHT of header frame.
+    -- Blizzard's tracker headers have NO line under the text itself — line starts after text.
+    local headerBottomLine = header:CreateTexture(nil, "ARTWORK")
+    headerBottomLine:SetHeight(1)
+    headerBottomLine:SetPoint("LEFT",  headerTitle, "RIGHT", 4, 0)
+    headerBottomLine:SetPoint("RIGHT", header,      "RIGHT", 0, 0)
+    headerBottomLine:SetColorTexture(0.9, 0.75, 0.1, 0.8)
 
     -- Collapse button: gold en-dash, far right, vertically centred
     -- Sized at 26x26 (at least 10px larger than old 16px variants) for easy clicking.
