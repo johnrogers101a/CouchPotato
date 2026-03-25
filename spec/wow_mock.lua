@@ -137,7 +137,34 @@ local function createMockFrame(frameType, name, parent, template)
     function frame:SetHeight(h) self._height = h end
     function frame:GetWidth() return self._width end
     function frame:GetHeight() return self._height end
-    function frame:SetPoint(...) self._points[#self._points + 1] = { ... } end
+    function frame:SetPoint(point, relativeTo, relativePoint, x, y)
+        -- Handle the 3-arg form: SetPoint("CENTER", x, y)
+        if type(relativeTo) == "number" then
+            x = relativeTo
+            y = relativePoint
+            relativeTo = nil
+            relativePoint = point
+        end
+        local rp = relativePoint or point
+        local ox = x or 0
+        local oy = y or 0
+        -- Store both named fields (for GetPoint) AND numeric indices (for test assertions
+        -- that read pt[1], pt[2], pt[4], pt[5] from the old array format).
+        table.insert(self._points, {
+            -- named fields (GetPoint path)
+            point        = point,
+            relativeTo   = relativeTo,
+            relativePoint = rp,
+            x            = ox,
+            y            = oy,
+            -- numeric fields (legacy test assertions)
+            [1] = point,
+            [2] = relativeTo,
+            [3] = rp,
+            [4] = ox,
+            [5] = oy,
+        })
+    end
     function frame:ClearAllPoints() self._points = {} end
     function frame:SetAllPoints(other) end
     function frame:SetParent(p) self._parent = p end
@@ -171,6 +198,11 @@ local function createMockFrame(frameType, name, parent, template)
     function frame:StopMovingOrSizing() self._moving = false end
     function frame:Raise() end
     function frame:GetPoint(index)
+        index = index or 1
+        local pt = self._points[index]
+        if pt then
+            return pt.point, pt.relativeTo, pt.relativePoint, pt.x, pt.y
+        end
         return "BOTTOMLEFT", nil, "BOTTOMLEFT", 0, 0
     end
     
@@ -902,7 +934,30 @@ _G.WorldMapFrame = {
     Hide     = function(self) self._shown = false end,
 }
 
-_G.GetTime = function() return os.time() end
+-- GetTime returns a WoW-style session-relative uptime in seconds.
+-- We offset by -1000 so GetTime() starts at ~1000, ensuring throttle guards
+-- that compare (now - 0) see a large difference on the very first call.
+local _sessionStart = os.clock() - 1000
+_G.GetTime = function() return os.clock() - _sessionStart end
+
+-- Minimap mock
+_G.Minimap = _G.Minimap or CreateFrame("Frame", "Minimap", UIParent)
+_G.Minimap:SetSize(160, 160)
+_G.Minimap:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -20)
+
+-- GameTooltip:AddLine (not in the base stub above)
+if _G.GameTooltip and not _G.GameTooltip.AddLine then
+    _G.GameTooltip.AddLine = function(self, text, r, g, b) end
+end
+
+-- GetCursorPosition
+_G.GetCursorPosition = _G.GetCursorPosition or function() return 500, 500 end
+
+-- geterrorhandler / seterrorhandler
+_G.geterrorhandler = _G.geterrorhandler or function()
+    return function(msg) print("ERROR: " .. tostring(msg)) end
+end
+_G.seterrorhandler = _G.seterrorhandler or function(handler) end
 
 _G._stateDrivers = {}  -- {[frame] = {[state] = macro}} — inspectable in tests
 _G.RegisterStateDriver = function(frame, state, macro)

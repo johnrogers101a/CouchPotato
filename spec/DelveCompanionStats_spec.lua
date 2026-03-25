@@ -1503,4 +1503,125 @@ describe("DelveCompanionStats", function()
 
     end)
 
+    -- =========================================================================
+    -- Dynamic re-anchoring
+    -- =========================================================================
+    describe("Dynamic re-anchoring", function()
+
+        it("re-anchors when QUEST_WATCH_LIST_CHANGED fires", function()
+            local timerCount = 0
+            local originalAfter = C_Timer.After
+            C_Timer.After = function(delay, cb)
+                timerCount = timerCount + 1
+                return originalAfter(delay, cb)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "QUEST_WATCH_LIST_CHANGED")
+
+            -- A C_Timer.After call should have been scheduled for deferred re-anchor.
+            assert.is_true(timerCount >= 1,
+                "expected C_Timer.After to be called after QUEST_WATCH_LIST_CHANGED")
+
+            C_Timer.After = originalAfter
+            C_Timer._Reset()
+        end)
+
+        it("deduplicates rapid anchor events", function()
+            local timerCount = 0
+            local originalAfter = C_Timer.After
+            C_Timer.After = function(delay, cb)
+                timerCount = timerCount + 1
+                return originalAfter(delay, cb)
+            end
+
+            -- Fire QUEST_LOG_UPDATE 10 times in rapid succession.
+            for _ = 1, 10 do
+                ns.frame._scripts["OnEvent"](ns.frame, "QUEST_LOG_UPDATE")
+            end
+
+            -- Despite 10 events, only one timer should be queued (_reanchorPending guard).
+            assert.equals(1, timerCount,
+                "10 rapid QUEST_LOG_UPDATE events should schedule exactly 1 re-anchor timer")
+
+            -- After the timer fires the pending flag is cleared; a new event can queue again.
+            C_Timer._FireAll()
+            timerCount = 0
+            ns.frame._scripts["OnEvent"](ns.frame, "QUEST_LOG_UPDATE")
+            assert.equals(1, timerCount,
+                "after timer fires a new QUEST_LOG_UPDATE should schedule another timer")
+
+            C_Timer.After = originalAfter
+            C_Timer._Reset()
+        end)
+
+        it("re-anchors on ZONE_CHANGED_NEW_AREA", function()
+            local timerCount = 0
+            local originalAfter = C_Timer.After
+            C_Timer.After = function(delay, cb)
+                timerCount = timerCount + 1
+                return originalAfter(delay, cb)
+            end
+
+            ns.frame._scripts["OnEvent"](ns.frame, "ZONE_CHANGED_NEW_AREA")
+
+            assert.is_true(timerCount >= 1,
+                "expected C_Timer.After to be called after ZONE_CHANGED_NEW_AREA")
+
+            C_Timer.After = originalAfter
+            C_Timer._Reset()
+        end)
+
+    end)
+
+    -- =========================================================================
+    -- Header gold bars
+    -- =========================================================================
+    describe("Header gold bars", function()
+
+        it("header has gold top line", function()
+            -- Texture creation order on header: [1]=bg, [2]=topLine, [3]=bottomLine.
+            local header = ns.header
+            assert.is_not_nil(header, "ns.header should exist")
+            local topLine = header._textures[2]
+            assert.is_not_nil(topLine, "header should have a second texture (top gold line)")
+            -- Verify color is gold (r≈0.9, g≈0.75, b≈0.1).
+            local r, g, b = topLine._color[1], topLine._color[2], topLine._color[3]
+            assert.near(0.9,  r, 0.01, "top line red channel should be ~0.9 (gold)")
+            assert.near(0.75, g, 0.01, "top line green channel should be ~0.75 (gold)")
+            assert.near(0.1,  b, 0.01, "top line blue channel should be ~0.1 (gold)")
+            -- Verify it is visible.
+            assert.is_true(topLine._shown, "top gold line should be visible")
+        end)
+
+        it("header has gold bottom line", function()
+            -- Texture creation order on header: [1]=bg, [2]=topLine, [3]=bottomLine.
+            local header = ns.header
+            assert.is_not_nil(header, "ns.header should exist")
+            local bottomLine = header._textures[3]
+            assert.is_not_nil(bottomLine, "header should have a third texture (bottom gold line)")
+            local r, g, b = bottomLine._color[1], bottomLine._color[2], bottomLine._color[3]
+            assert.near(0.9,  r, 0.01, "bottom line red channel should be ~0.9 (gold)")
+            assert.near(0.75, g, 0.01, "bottom line green channel should be ~0.75 (gold)")
+            assert.near(0.1,  b, 0.01, "bottom line blue channel should be ~0.1 (gold)")
+            assert.is_true(bottomLine._shown, "bottom gold line should be visible")
+        end)
+
+    end)
+
+    -- =========================================================================
+    -- Collapse button size
+    -- =========================================================================
+    describe("Collapse button size", function()
+
+        it("collapse button is 36x36", function()
+            local collapseBtn = ns.collapseBtn
+            assert.is_not_nil(collapseBtn, "ns.collapseBtn should exist")
+            assert.equals(36, collapseBtn._width,
+                "collapse button width should be 36 (not the old 26)")
+            assert.equals(36, collapseBtn._height,
+                "collapse button height should be 36 (not the old 26)")
+        end)
+
+    end)
+
 end)
