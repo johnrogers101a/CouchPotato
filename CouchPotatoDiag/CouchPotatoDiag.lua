@@ -560,11 +560,15 @@ local function buildDiagText()
         local csInfo = safe(C_Scenario.GetInfo)
         if csInfo then
             lines[#lines + 1] = "  C_Scenario.GetInfo():"
-            for k, v in pairs(csInfo) do
-                local t = type(v)
-                if t == "string" or t == "number" or t == "boolean" then
-                    lines[#lines + 1] = ("    %s = %s"):format(tostring(k), tostring(v))
+            if type(csInfo) == "table" then
+                for k, v in pairs(csInfo) do
+                    local t = type(v)
+                    if t == "string" or t == "number" or t == "boolean" then
+                        lines[#lines + 1] = ("    %s = %s"):format(tostring(k), tostring(v))
+                    end
                 end
+            else
+                lines[#lines + 1] = ("    (non-table result: %s)"):format(tostring(csInfo))
             end
         else
             lines[#lines + 1] = "  C_Scenario.GetInfo() = nil"

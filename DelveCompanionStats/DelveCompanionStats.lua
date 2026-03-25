@@ -1236,14 +1236,24 @@ end
 -- Expose for unit testing
 ns.IsCombatCriteria = IsCombatCriteria
 
--- GetNemesisProgress: Disabled — scenario criteria do NOT contain nemesis data.
--- C_ScenarioInfo.GetCriteriaInfo only returns quest objectives (criteriaType=92),
--- not "Enemy groups remaining" counts.  The Nemesis Strongbox tooltip is a
--- Blizzard tooltip on an in-world object; the correct API has not been identified
--- yet.  See CouchPotatoDiag Section 8 for the ongoing API hunt.
+-- GetNemesisProgress: Returns nemesis enemy-group progress from
+-- C_Spell.GetSpellDescription(472952), which inside a delve contains a line:
+--   "Enemy groups remaining: |cnWHITE_FONT_COLOR:X / Y|r"
+-- Returns a formatted string "Enemy groups remaining: X / Y" or "" if unavailable.
 -------------------------------------------------------------------------------
 GetNemesisProgress = function()
-    return ""
+    if not C_Spell or not C_Spell.GetSpellDescription then return "" end
+    local ok, desc = pcall(C_Spell.GetSpellDescription, 472952)
+    if not ok or not desc or desc == "" then return "" end
+
+    -- Strip WoW color codes: |cnNAME: ... |r
+    local clean = desc:gsub("|cn[^:]+:", ""):gsub("|r", "")
+
+    -- Extract "Enemy groups remaining: X / Y"
+    local current, total = clean:match("Enemy groups remaining:%s*(%d+)%s*/%s*(%d+)")
+    if not current or not total then return "" end
+
+    return string.format("Enemy groups remaining: %s / %s", current, total)
 end
 
 -------------------------------------------------------------------------------
@@ -1366,13 +1376,20 @@ function ns:UpdateCompanionData(event)
         end
     end
 
-    -- Nemesis progress display: disabled — scenario criteria do not contain nemesis
-    -- data (see GetNemesisProgress comment).  Labels are kept in the frame but always
-    -- hidden until a reliable API source is identified via CouchPotatoDiag Section 8.
+    -- Nemesis progress display: driven by C_Spell.GetSpellDescription(472952)
+    -- which inside a delve contains "Enemy groups remaining: X / Y".
+    local nemesisText = ""
+    pcall(function() nemesisText = GetNemesisProgress() end)
     if ns.nemesisLabel then
-        ns.nemesisLabel:SetText("")
-        ns.nemesisLabel:Hide()
+        if nemesisText ~= "" then
+            ns.nemesisLabel:SetText(nemesisText)
+            ns.nemesisLabel:Show()
+        else
+            ns.nemesisLabel:SetText("")
+            ns.nemesisLabel:Hide()
+        end
     end
+    -- nemesisDetailLabel is not used by the new implementation; keep hidden.
     if ns.nemesisDetailLabel then
         ns.nemesisDetailLabel:SetText("")
         ns.nemesisDetailLabel:Hide()
