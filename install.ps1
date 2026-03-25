@@ -17,6 +17,7 @@ $AddonNames = @(
     'ControllerCompanion',
     'ControllerCompanion_Loader',
     'DelveCompanionStats',
+    'DelversJourney',
     'StatPriority'
 )
 
@@ -173,7 +174,7 @@ foreach ($AddonName in $AddonNames) {
 
 # Any addon directory matching our naming patterns that is NOT in $AddonNames
 # is a leftover from a previous layout and must be removed.
-$SuitePatterns = @('CouchPotato*', 'ControllerCompanion*', 'DelveCompanion*', 'StatPriority*')
+$SuitePatterns = @('CouchPotato*', 'ControllerCompanion*', 'DelveCompanion*', 'DelversJourney*', 'StatPriority*')
 foreach ($Pattern in $SuitePatterns) {
     $Matches = Get-ChildItem -LiteralPath $AddOnsPath -Directory -Filter $Pattern -ErrorAction SilentlyContinue
     foreach ($Dir in $Matches) {

@@ -7,8 +7,10 @@ local ADDON_COLORS = {
     ["ControllerCompanion"] = "|cff69ccf0",
     ["Loader"]              = "|cffff6600",
     ["DCS"]                 = "|cff00ccff",
+    ["DJ"]                  = "|cff33ccff",
     ["SP"]                  = "|cffff99cc",
     ["CP"]                  = "|cffaaddff",
+    ["CPQ"]                 = "|cffffff00",
 }
 
 -- Log level constants

@@ -472,6 +472,7 @@ local function _build()
     -- Addons that get checkboxes (order matters for layout)
     local ADDON_CHECKBOX_LIST = {
         { key = "DelveCompanionStats",  label = "Delve Companion Stats"  },
+        { key = "DelversJourney",       label = "Delver's Journey"       },
         { key = "StatPriority",         label = "Stat Priority"          },
         { key = "ControllerCompanion",  label = "Controller Companion"   },
     }

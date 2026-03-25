@@ -532,13 +532,22 @@ end
 --   3. Returns nil when no tracker is visible at all.
 -------------------------------------------------------------------------------
 local function GetTrackerAnchor()
-    -- 1. Chain anchor: if DelveCompanionStatsFrame is visible, dock below it.
+    -- Chain: OT → DJ → DCS → SP.
+    -- SP always docks below the lowest visible addon.
+    -- Check DCS first (it sits lowest in the chain), then DJ, then base tracker.
+    -- 1. If DCS is visible, dock below it (chain: OT→DJ→DCS→SP or OT→DCS→SP).
     local dcsFrame = _G.DelveCompanionStatsFrame
     if dcsFrame and dcsFrame.IsShown and dcsFrame:IsShown() then
-        splog("Info", "GetTrackerAnchor: DelveCompanionStatsFrame is visible — anchoring SP below DCS (chain: OT→DCS→SP)")
+        splog("Info", "GetTrackerAnchor: DelveCompanionStatsFrame is visible — anchoring SP below DCS")
         return dcsFrame
     end
-    splog("Debug", "GetTrackerAnchor: DelveCompanionStatsFrame not visible — using smart tracker anchor")
+    -- 2. If DJ is visible (but DCS is not), dock below DJ.
+    local djFrame = _G.DelversJourneyFrame
+    if djFrame and djFrame.IsShown and djFrame:IsShown() then
+        splog("Info", "GetTrackerAnchor: DelversJourneyFrame is visible — anchoring SP below DJ")
+        return djFrame
+    end
+    splog("Debug", "GetTrackerAnchor: neither DCS nor DJ visible — using smart tracker anchor")
 
     -- 2. Delegate to shared utility when available.
     if _G.CouchPotatoShared and _G.CouchPotatoShared.GetBaseTrackerAnchor then
@@ -824,14 +833,15 @@ function ns:OnLoad()
         local anchor = GetTrackerAnchor()
         ns.frame:ClearAllPoints()
         if anchor then
-            -- Use a tight -2px gap when docking directly below DCS (both frames
+            -- Use a tight -2px gap when docking directly below DJ or DCS (both frames
             -- have gold headers that visually touch).  Use -14px for all other
             -- anchors (tracker modules, ObjectiveTrackerFrame) to match the same
             -- spacing that DCS itself uses when docking below the tracker.
-            local gap = (anchor == _G.DelveCompanionStatsFrame) and -2 or -14
+            local isDocked = (anchor == _G.DelversJourneyFrame or anchor == _G.DelveCompanionStatsFrame)
+            local gap = isDocked and -2 or -14
             ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, gap)
-            -- Match width to the anchor: DCS width, or ObjectiveTrackerFrame width
-            local widthSource = (anchor == _G.DelveCompanionStatsFrame) and _G.DelveCompanionStatsFrame or ObjectiveTrackerFrame
+            -- Match width to the anchor: DJ/DCS width, or ObjectiveTrackerFrame width
+            local widthSource = isDocked and anchor or ObjectiveTrackerFrame
             if widthSource and widthSource.GetWidth then
                 local tw = widthSource:GetWidth()
                 if tw and tw >= 100 and tw <= 400 then
@@ -1198,8 +1208,8 @@ function ns:OnLoad()
         local anchor = GetTrackerAnchor()
         ns.frame:ClearAllPoints()
         if anchor then
-            -- Same gap logic as ApplyPinnedState: -2px below DCS, -14px otherwise.
-            local gap = (anchor == _G.DelveCompanionStatsFrame) and -2 or -14
+            -- Same gap logic as ApplyPinnedState: -2px below DJ or DCS, -14px otherwise.
+            local gap = (anchor == _G.DelversJourneyFrame or anchor == _G.DelveCompanionStatsFrame) and -2 or -14
             ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, gap)
             local anchorName = (anchor.GetName and anchor:GetName()) or tostring(anchor)
             splog("Info", "Pin restore: pinned — anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ") gap=" .. tostring(gap))

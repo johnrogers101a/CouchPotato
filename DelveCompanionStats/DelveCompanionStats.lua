@@ -591,6 +591,8 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             if ns.header then ns.header:SetWidth(w) end
             local cw = w - 12
             if ns.nameLabel then ns.nameLabel:SetWidth(cw) end
+            if ns.curioHeaderLabel then ns.curioHeaderLabel:SetWidth(cw) end
+            if ns.curioValueLabel  then ns.curioValueLabel:SetWidth(cw) end
             if ns.boonLabel then ns.boonLabel:SetWidth(cw) end
             if ns.boonHeaderLabel then ns.boonHeaderLabel:SetWidth(cw) end
             if ns.nemesisLabel then ns.nemesisLabel:SetWidth(cw) end
@@ -612,6 +614,12 @@ end)
 -- Returns nil when no tracker frame is visible at all.
 -------------------------------------------------------------------------------
 local function GetTrackerAnchor()
+    -- Chain: OT → DJ → DCS.  If DJ is visible, DCS docks below it.
+    local djFrame = _G.DelversJourneyFrame
+    if djFrame and djFrame.IsShown and djFrame:IsShown() then
+        dcslog("Info", "GetTrackerAnchor: DelversJourneyFrame visible — anchoring DCS below DJ")
+        return djFrame
+    end
     -- Delegate to shared utility when available; inline fallback for standalone loading.
     if _G.CouchPotatoShared and _G.CouchPotatoShared.GetBaseTrackerAnchor then
         return _G.CouchPotatoShared.GetBaseTrackerAnchor()
@@ -906,6 +914,18 @@ function ns:OnLoad()
         end
     end)
 
+    -- Role icon: displayed to the LEFT of the companion name in the header.
+    -- When hidden, headerTitle re-anchors directly to the header left edge.
+    ns.roleIcon = header:CreateTexture(nil, "OVERLAY")
+    ns.roleIcon:SetSize(16, 16)
+    ns.roleIcon:SetPoint("LEFT", header, "LEFT", 8, 0)
+    ns.roleIcon:Hide()
+
+    -- Now re-anchor headerTitle to sit right of the role icon (default: icon hidden,
+    -- so start with anchor to header LEFT; UpdateCompanionData will adjust dynamically).
+    headerTitle:ClearAllPoints()
+    headerTitle:SetPoint("LEFT", header, "LEFT", 8, 0)
+
     -- Store references on ns for test access and height calculations
     ns.headerFrame      = header
     ns.headerTitle      = headerTitle
@@ -1012,11 +1032,36 @@ function ns:OnLoad()
     ns.nameLabel:SetShadowColor(0, 0, 0, 1)
     ns.nameLabel:SetWordWrap(false)
 
+    -- 6b2. Curio header label — "Curios" section header, styled like boon header.
+    -- Positioned 6px below the nameLabel; hidden until curio data is available.
+    ns.curioHeaderLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ns.curioHeaderLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -6)
+    ns.curioHeaderLabel:SetWidth(contentWidth)
+    ns.curioHeaderLabel:SetJustifyH("LEFT")
+    pcall(function() ns.curioHeaderLabel:SetFontObject(ObjectiveFont) end)
+    ns.curioHeaderLabel:SetTextColor(0.9, 0.75, 0.3, 1)
+    ns.curioHeaderLabel:SetShadowOffset(1, -1)
+    ns.curioHeaderLabel:SetShadowColor(0, 0, 0, 1)
+    ns.curioHeaderLabel:SetText("Curios")
+    ns.curioHeaderLabel:Hide()
+
+    -- 6b3. Curio value label — "Combat: X\nUtility: Y" body text.
+    ns.curioValueLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ns.curioValueLabel:SetPoint("TOPLEFT", ns.curioHeaderLabel, "BOTTOMLEFT", 0, -4)
+    ns.curioValueLabel:SetWidth(contentWidth)
+    ns.curioValueLabel:SetJustifyH("LEFT")
+    pcall(function() ns.curioValueLabel:SetFontObject(ObjectiveFont) end)
+    ns.curioValueLabel:SetTextColor(1, 1, 1, 1)
+    ns.curioValueLabel:SetShadowOffset(1, -1)
+    ns.curioValueLabel:SetShadowColor(0, 0, 0, 1)
+    ns.curioValueLabel:SetText("")
+    ns.curioValueLabel:Hide()
+
     -- 6c. Boon header label — "Boons" section header, styled like Blizzard quest/objective
     -- titles (e.g. "An Elementary Voidcore"): muted gold, GameFontNormalSmall.
-    -- Shown whenever a companion is active; positioned 6px below the level line.
+    -- Shown whenever a companion is active; positioned 6px below the curio value label.
     ns.boonHeaderLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ns.boonHeaderLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -6)
+    ns.boonHeaderLabel:SetPoint("TOPLEFT", ns.curioValueLabel, "BOTTOMLEFT", 0, -6)
     ns.boonHeaderLabel:SetWidth(contentWidth)
     ns.boonHeaderLabel:SetJustifyH("LEFT")
     -- Use ObjectiveFont when available; set color AFTER so muted gold is preserved.
@@ -1133,6 +1178,8 @@ function ns:OnLoad()
         if ns.headerFrame then ns.headerFrame:SetWidth(w) end
         local cw = w - 12
         if ns.nameLabel         then ns.nameLabel:SetWidth(cw) end
+        if ns.curioHeaderLabel  then ns.curioHeaderLabel:SetWidth(cw) end
+        if ns.curioValueLabel   then ns.curioValueLabel:SetWidth(cw) end
         if ns.boonLabel         then ns.boonLabel:SetWidth(cw) end
         if ns.boonHeaderLabel   then ns.boonHeaderLabel:SetWidth(cw) end
         if ns.nemesisLabel      then ns.nemesisLabel:SetWidth(cw) end
@@ -1505,6 +1552,57 @@ end
 ns.GetNemesisDetailText = GetNemesisDetailText
 
 -------------------------------------------------------------------------------
+-- GetCompanionRole: Returns the role atlas ID and name for the active companion.
+-- Returns iconElementID, name (e.g. "UI-LFG-RoleIcon-Tank", "Tank") or nil.
+-------------------------------------------------------------------------------
+local function GetCompanionRole()
+    local ok, result = pcall(function()
+        local treeID = C_DelvesUI.GetTraitTreeForCompanion()
+        if not treeID then return nil end
+        local configID = C_Traits.GetConfigIDByTreeID(treeID)
+        if not configID then return nil end
+        local roleNodeID = C_DelvesUI.GetRoleNodeForCompanion()
+        if not roleNodeID then return nil end
+        local nodeInfo = C_Traits.GetNodeInfo(configID, roleNodeID)
+        if not nodeInfo or not nodeInfo.activeEntry or not nodeInfo.activeEntry.entryID then return nil end
+        local entryInfo = C_Traits.GetEntryInfo(configID, nodeInfo.activeEntry.entryID)
+        if not entryInfo or not entryInfo.subTreeID then return nil end
+        local subTreeInfo = C_Traits.GetSubTreeInfo(configID, entryInfo.subTreeID)
+        if not subTreeInfo or not subTreeInfo.iconElementID then return nil end
+        return subTreeInfo.iconElementID, subTreeInfo.name
+    end)
+    if ok then return result end
+    return nil
+end
+
+-------------------------------------------------------------------------------
+-- GetCuriosDisplayText: Returns combat and utility curio names for the active
+-- companion. Returns combatName, utilityName (each may be nil).
+-------------------------------------------------------------------------------
+local function GetCuriosDisplayText()
+    local function getCurio(curioType)
+        local ok, name = pcall(function()
+            local nodeID = C_DelvesUI.GetCurioNodeForCompanion(curioType)
+            if not nodeID then return nil end
+            local treeID = C_DelvesUI.GetTraitTreeForCompanion()
+            if not treeID then return nil end
+            local configID = C_Traits.GetConfigIDByTreeID(treeID)
+            if not configID then return nil end
+            local nodeInfo = C_Traits.GetNodeInfo(configID, nodeID)
+            if not nodeInfo or not nodeInfo.activeEntry or not nodeInfo.activeEntry.entryID then return nil end
+            local entryInfo = C_Traits.GetEntryInfo(configID, nodeInfo.activeEntry.entryID)
+            if not entryInfo or not entryInfo.definitionID then return nil end
+            local defInfo = C_Traits.GetDefinitionInfo(entryInfo.definitionID)
+            if not defInfo or not defInfo.spellID then return nil end
+            return C_Spell.GetSpellName(defInfo.spellID)
+        end)
+        if ok then return name end
+        return nil
+    end
+    return getCurio(0), getCurio(1)
+end
+
+-------------------------------------------------------------------------------
 -- UpdateCompanionData: Fetch active companion from C_DelvesUI and update UI
 -- Uses fully dynamic API calls — no hardcoded faction ID lookup tables.
 -- Called by event handlers and during initialization.
@@ -1529,6 +1627,13 @@ function ns:UpdateCompanionData(event)
         ns._lastName      = nil
         ns._lastLevel     = nil
         if ns.nameLabel       then ns.nameLabel:SetText("No Companion") end
+        if ns.roleIcon        then ns.roleIcon:Hide() end
+        if ns.headerTitle then
+            ns.headerTitle:ClearAllPoints()
+            ns.headerTitle:SetPoint("LEFT", ns.headerFrame, "LEFT", 8, 0)
+        end
+        if ns.curioHeaderLabel then ns.curioHeaderLabel:Hide() end
+        if ns.curioValueLabel  then ns.curioValueLabel:SetText(""); ns.curioValueLabel:Hide() end
         if ns.boonHeaderLabel then ns.boonHeaderLabel:Hide() end
         if ns.boonLabel       then ns.boonLabel:SetText(""); ns.boonLabel:Hide() end
         if ns.nemesisLabel    then ns.nemesisLabel:SetText(""); ns.nemesisLabel:Hide() end
@@ -1597,6 +1702,43 @@ function ns:UpdateCompanionData(event)
         ns.nameLabel:SetText(table.concat(parts, "  "))
     end
 
+    -- Role icon update — icon sits LEFT of the companion name in the header.
+    -- Re-anchor headerTitle each time to ensure correct position.
+    local roleAtlas = GetCompanionRole()
+    if roleAtlas and ns.roleIcon then
+        ns.roleIcon:SetAtlas(roleAtlas)
+        ns.roleIcon:Show()
+        if ns.headerTitle then
+            ns.headerTitle:ClearAllPoints()
+            ns.headerTitle:SetPoint("LEFT", ns.roleIcon, "RIGHT", 4, 0)
+        end
+        dcslog("Debug", "UpdateCompanionData: role icon set to " .. tostring(roleAtlas))
+    else
+        if ns.roleIcon then ns.roleIcon:Hide() end
+        if ns.headerTitle then
+            ns.headerTitle:ClearAllPoints()
+            ns.headerTitle:SetPoint("LEFT", ns.headerFrame, "LEFT", 8, 0)
+        end
+    end
+
+    -- Curio display update
+    local combatCurio, utilityCurio = GetCuriosDisplayText()
+    local curioLines = {}
+    if combatCurio then curioLines[#curioLines + 1] = "Combat: " .. combatCurio end
+    if utilityCurio then curioLines[#curioLines + 1] = "Utility: " .. utilityCurio end
+    dcslog("Debug", "UpdateCompanionData: curios combat=" .. tostring(combatCurio) .. " utility=" .. tostring(utilityCurio))
+
+    if #curioLines > 0 then
+        if ns.curioHeaderLabel then ns.curioHeaderLabel:Show() end
+        if ns.curioValueLabel then
+            ns.curioValueLabel:SetText(table.concat(curioLines, "\n"))
+            ns.curioValueLabel:Show()
+        end
+    else
+        if ns.curioHeaderLabel then ns.curioHeaderLabel:Hide() end
+        if ns.curioValueLabel then ns.curioValueLabel:SetText(""); ns.curioValueLabel:Hide() end
+    end
+
     -- Boon display — header "Boons" (gold) + value "stat1, stat2" or "None" (white/grey).
     -- boonHeaderLabel is shown whenever a companion is active in a delve.
     -- boonLabel shows the value line returned by GetBoonsDisplayText().
@@ -1663,6 +1805,16 @@ function ns:UpdateCompanionData(event)
     if ns.frame then
         -- Content frame: 8px top + nameLabel(16) + 4px bottom = 28px base
         local contentHeight = 28
+        -- Curio section height
+        if ns.curioHeaderLabel and ns.curioHeaderLabel:IsShown() then
+            contentHeight = contentHeight + 6 + 16  -- gap + header
+        end
+        if ns.curioValueLabel and ns.curioValueLabel:IsShown() then
+            local curioText = ns.curioValueLabel:GetText() or ""
+            local numCurioLines = 1
+            for _ in curioText:gmatch("\n") do numCurioLines = numCurioLines + 1 end
+            contentHeight = contentHeight + 4 + (numCurioLines * 16)  -- gap + lines
+        end
         -- Boon section: 6px gap + header(16) + 4px gap + value(16)
         if ns.boonHeaderLabel and ns.boonHeaderLabel:IsShown() then
             contentHeight = contentHeight + 6 + 16
