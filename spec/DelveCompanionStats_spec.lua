@@ -843,154 +843,36 @@ describe("DelveCompanionStats", function()
             C_ScenarioInfo._criteria = {}
         end)
 
-        it("nemesis progress displays 'Enemy groups remaining: n / n' format", function()
+        -- Nemesis display is disabled: GetNemesisProgress() always returns "".
+        -- Scenario criteria only contain quest objectives (criteriaType=92), not
+        -- "Enemy groups remaining" data.  The correct API source is unknown.
+        -- See CouchPotatoDiag Section 8 for the ongoing API hunt.
+
+        it("nemesis label is always hidden (nemesis display disabled)", function()
             _SetMockNemesis(2, 4)
-
             ns:UpdateCompanionData()
-
-            assert.equals("Enemy groups remaining: 2 / 4", ns.nemesisLabel._text)
-        end)
-
-        it("nemesis progress hides label if criterion not found", function()
-            -- No criteria set
-            ns:UpdateCompanionData()
-
             assert.equals("", ns.nemesisLabel._text)
             assert.is_false(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesis label is shown when criterion is found", function()
-            _SetMockNemesis(1, 4)
-
+        it("nemesis label is hidden when no criteria present", function()
             ns:UpdateCompanionData()
-
-            assert.is_true(ns.nemesisLabel:IsShown())
+            assert.equals("", ns.nemesisLabel._text)
+            assert.is_false(ns.nemesisLabel:IsShown())
         end)
 
-        it("nemesis progress sums multiple criteria into one 'Nemesis Strongbox (n/n)' header", function()
-            _SetMockNemesis({
-                { description = "Vilebranch Skeleton Charmers slain", quantity = 0, totalQuantity = 5 },
-                { description = "Totems destroyed",                   quantity = 1, totalQuantity = 6 },
-            })
-
-            ns:UpdateCompanionData()
-
-            -- 0+1 = 1 current, 5+6 = 11 total
-            assert.equals("Enemy groups remaining: 1 / 11", ns.nemesisLabel._text)
-        end)
-
-        it("nemesis progress skips criteria with zero totalQuantity", function()
-            _SetMockNemesis({
-                { description = "Cultists slain", quantity = 0, totalQuantity = 0 },
-                { description = "Totems destroyed", quantity = 2, totalQuantity = 3 },
-            })
-
-            ns:UpdateCompanionData()
-
-            assert.equals("Enemy groups remaining: 2 / 3", ns.nemesisLabel._text)
-        end)
-
-        it("nemesis counts 'Enemy groups remaining' criterion in header total", function()
-            _SetMockNemesis({
-                { description = "Enemy groups remaining", quantity = 1, totalQuantity = 3 },
-            })
-
-            ns:UpdateCompanionData()
-
-            assert.equals("Enemy groups remaining: 1 / 3", ns.nemesisLabel._text)
-        end)
-
-        it("nemesis shows non-combat criteria (Speak with) — IsCombatCriteria filter removed", function()
-            _SetMockNemesis({
-                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-            })
-
-            ns:UpdateCompanionData()
-
-            -- All criteria with totalQuantity > 0 now shown (filter was too restrictive)
-            assert.equals("Enemy groups remaining: 0 / 1", ns.nemesisLabel._text)
-            assert.is_true(ns.nemesisLabel:IsShown())
-        end)
-
-        it("nemesis shows label when all criteria have totalQuantity > 0", function()
-            _SetMockNemesis({
-                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-                { description = "Find the hidden passage", quantity = 0, totalQuantity = 1 },
-            })
-
-            ns:UpdateCompanionData()
-
-            -- IsCombatCriteria filter removed: both criteria are counted
-            assert.equals("Enemy groups remaining: 0 / 2", ns.nemesisLabel._text)
-            assert.is_true(ns.nemesisLabel:IsShown())
-        end)
-
-        it("nemesis sums across all criteria (IsCombatCriteria filter removed)", function()
-            _SetMockNemesis({
-                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-                { description = "Cultists slain",                 quantity = 2, totalQuantity = 5 },
-                { description = "Totems destroyed",               quantity = 1, totalQuantity = 3 },
-            })
-
-            ns:UpdateCompanionData()
-
-            -- All criteria included: 0+2+1=3 current, 1+5+3=9 total
-            assert.equals("Enemy groups remaining: 3 / 9", ns.nemesisLabel._text)
-        end)
-
-        -- -------------------------------------------------------------------------
-        -- nemesisDetailLabel: white body lines below the Nemesis Strongbox header
-        -- -------------------------------------------------------------------------
-        it("nemesisDetailLabel shows one white line per combat criterion", function()
+        it("nemesisDetailLabel is always hidden (nemesis display disabled)", function()
             _SetMockNemesis({
                 { description = "Infiltrator Garand slain", quantity = 0, totalQuantity = 1 },
             })
-
             ns:UpdateCompanionData()
-
-            assert.equals("Infiltrator Garand slain: 0/1", ns.nemesisDetailLabel._text)
-            assert.is_true(ns.nemesisDetailLabel:IsShown())
-        end)
-
-        it("nemesisDetailLabel shows multiple lines for multiple combat criteria", function()
-            _SetMockNemesis({
-                { description = "Cultists slain",  quantity = 2, totalQuantity = 5 },
-                { description = "Totems destroyed", quantity = 1, totalQuantity = 3 },
-            })
-
-            ns:UpdateCompanionData()
-
-            assert.equals("Cultists slain: 2/5\nTotems destroyed: 1/3", ns.nemesisDetailLabel._text)
-        end)
-
-        it("nemesisDetailLabel shows all non-completed criteria (IsCombatCriteria filter removed)", function()
-            _SetMockNemesis({
-                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-                { description = "Cultists slain",                 quantity = 1, totalQuantity = 3 },
-            })
-
-            ns:UpdateCompanionData()
-
-            -- All criteria with totalQuantity > 0 shown (filter removed)
-            assert.equals("Speak with Celoenus Blackflame: 0/1\nCultists slain: 1/3", ns.nemesisDetailLabel._text)
-        end)
-
-        it("nemesisDetailLabel is hidden when no combat criteria qualify", function()
-            -- No criteria at all
-            ns:UpdateCompanionData()
-
+            assert.equals("", ns.nemesisDetailLabel._text)
             assert.is_false(ns.nemesisDetailLabel:IsShown())
         end)
 
-        it("nemesisDetailLabel is shown when criteria have totalQuantity > 0", function()
-            _SetMockNemesis({
-                { description = "Speak with Celoenus Blackflame", quantity = 0, totalQuantity = 1 },
-            })
-
+        it("nemesisDetailLabel is hidden when no criteria qualify", function()
             ns:UpdateCompanionData()
-
-            -- IsCombatCriteria filter removed: criterion is shown
-            assert.is_true(ns.nemesisDetailLabel:IsShown())
+            assert.is_false(ns.nemesisDetailLabel:IsShown())
         end)
 
 
@@ -1252,19 +1134,19 @@ describe("DelveCompanionStats", function()
                 assert.equals(59, ns.contentFrame._height)
             end)
 
-            it("content height adds 3+16 for nemesis section", function()
+            it("content height does not include nemesis section (nemesis disabled)", function()
                 _SetMockNemesis(1, 3)
                 ns:UpdateCompanionData()
-                -- 24 (base) + 3 (gap) + 16 (nemesis header) + 16 (1 detail line) = 59
-                assert.equals(59, ns.contentFrame._height)
+                -- nemesis always hidden: only base height 24
+                assert.equals(24, ns.contentFrame._height)
             end)
 
-            it("content height stacks boon and nemesis sections with 3px gaps each", function()
+            it("content height with boons does not include nemesis (nemesis disabled)", function()
                 _SetMockBoonTooltip({ "Boons", "", "", "Haste: 5%.\nMastery: 3%." })
                 _SetMockNemesis(2, 5)
                 ns:UpdateCompanionData()
-                -- 24 (base) + 3+16 (boonHeader) + 2*16 (2 boon lines) + 3+16 (nemesis header) + 16 (1 detail line) = 110
-                assert.equals(110, ns.contentFrame._height)
+                -- 24 (base) + 3+16 (boonHeader) + 2*16 (2 boon lines) = 75 (no nemesis)
+                assert.equals(75, ns.contentFrame._height)
             end)
 
         end)

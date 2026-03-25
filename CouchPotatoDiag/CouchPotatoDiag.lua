@@ -215,6 +215,145 @@ local function buildDiagText()
     lines[#lines + 1] = "C_DelvesUI.HasActiveDelve()     = " .. tostring(hasActiveDelve)
     lines[#lines + 1] = ""
 
+    -- ----------------------------------------------------------------
+    -- Section 8: Nemesis Data Hunt
+    -- Tries every plausible API approach to locate "Enemy groups remaining: n/n"
+    -- which is visible in the Blizzard Nemesis Strongbox tooltip but is NOT
+    -- present in scenario criteria (criteriaType=92 = quest objectives only).
+    -- ----------------------------------------------------------------
+    lines[#lines + 1] = "=== Section 8: Nemesis Data Hunt ==="
+
+    -- 8a: Spell description for Nemesis Strongbox (spell 472952)
+    lines[#lines + 1] = "--- 8a: C_Spell.GetSpellDescription(472952) ---"
+    local spellDesc = safe(C_Spell and C_Spell.GetSpellDescription, 472952)
+    lines[#lines + 1] = "  result = " .. tostring(spellDesc)
+
+    -- 8b: Tooltip scan via C_TooltipInfo.GetHyperlink
+    lines[#lines + 1] = "--- 8b: C_TooltipInfo.GetHyperlink('spell:472952') ---"
+    if C_TooltipInfo and C_TooltipInfo.GetHyperlink then
+        local tipData = safe(C_TooltipInfo.GetHyperlink, "spell:472952")
+        if tipData then
+            lines[#lines + 1] = "  type(result) = " .. type(tipData)
+            if type(tipData) == "table" then
+                for k, v in pairs(tipData) do
+                    local t = type(v)
+                    if t == "string" or t == "number" or t == "boolean" then
+                        lines[#lines + 1] = "  " .. tostring(k) .. " = " .. tostring(v)
+                    end
+                end
+                -- Scan lines sub-table if present
+                if tipData.lines then
+                    lines[#lines + 1] = "  lines count = " .. tostring(#tipData.lines)
+                    for i, ln in ipairs(tipData.lines) do
+                        if type(ln) == "table" then
+                            local leftText  = tostring(ln.leftText  or "")
+                            local rightText = tostring(ln.rightText or "")
+                            lines[#lines + 1] = ("  line[%d]: left=%q right=%q"):format(i, leftText, rightText)
+                        end
+                    end
+                end
+            end
+        else
+            lines[#lines + 1] = "  result = nil"
+        end
+    else
+        lines[#lines + 1] = "  C_TooltipInfo.GetHyperlink not available"
+    end
+
+    -- 8c: Player buff scan for spell 472952 (Nemesis Strongbox aura)
+    lines[#lines + 1] = "--- 8c: Player buff scan for spellID 472952 ---"
+    local foundBuff = false
+    if C_UnitAuras then
+        for i = 1, 40 do
+            local aura = safe(C_UnitAuras.GetBuffDataByIndex, "player", i)
+            if not aura then break end
+            if aura.spellId == 472952 then
+                lines[#lines + 1] = ("  FOUND buff index=%d name=%q spellId=%d"):format(
+                    i, tostring(aura.name), tostring(aura.spellId))
+                foundBuff = true
+            end
+        end
+        if not foundBuff then
+            lines[#lines + 1] = "  Not found in player buffs (checked up to 40)"
+        end
+    else
+        lines[#lines + 1] = "  C_UnitAuras not available"
+    end
+
+    -- 8d: C_TaskQuest scan for quest objectives
+    lines[#lines + 1] = "--- 8d: C_TaskQuest.GetQuestsForPlayerByMapID (current zone) ---"
+    if C_TaskQuest and C_TaskQuest.GetQuestsForPlayerByMapID then
+        local mapID = safe(C_Map and C_Map.GetBestMapForUnit, "player")
+        lines[#lines + 1] = "  player mapID = " .. tostring(mapID)
+        if mapID then
+            local taskQuests = safe(C_TaskQuest.GetQuestsForPlayerByMapID, mapID)
+            if taskQuests then
+                lines[#lines + 1] = "  task quests count = " .. tostring(#taskQuests)
+                for _, qid in ipairs(taskQuests) do
+                    local title = safe(C_QuestLog and C_QuestLog.GetTitleForQuestID, qid)
+                    lines[#lines + 1] = ("  questID=%d title=%s"):format(qid, tostring(title))
+                end
+            else
+                lines[#lines + 1] = "  result = nil"
+            end
+        end
+    else
+        lines[#lines + 1] = "  C_TaskQuest.GetQuestsForPlayerByMapID not available"
+    end
+
+    -- 8e: GetQuestObjectiveInfo for common Nemesis Strongbox quest IDs (guesses)
+    lines[#lines + 1] = "--- 8e: GetQuestObjectiveInfo probe (common delve quest IDs) ---"
+    local probeQuestIDs = { 78631, 78632, 78633, 78634, 78635, 78636, 78637 }
+    if GetQuestObjectiveInfo then
+        for _, qid in ipairs(probeQuestIDs) do
+            for oi = 1, 5 do
+                local text, objType, finished, numFulfilled, numRequired =
+                    safe(GetQuestObjectiveInfo, qid, oi, false)
+                if text then
+                    lines[#lines + 1] = ("  quest=%d obj=%d text=%q type=%s %s/%s finished=%s"):format(
+                        qid, oi,
+                        tostring(text), tostring(objType),
+                        tostring(numFulfilled), tostring(numRequired),
+                        tostring(finished))
+                end
+            end
+        end
+    else
+        lines[#lines + 1] = "  GetQuestObjectiveInfo not available"
+    end
+
+    -- 8f: Scan widget sets 1-200 for any that return data (nemesis may be a hidden set)
+    lines[#lines + 1] = "--- 8f: Widget set scan (IDs 1-200, report non-empty sets) ---"
+    local widgetSetsFound = 0
+    for setID = 1, 200 do
+        local widgets = safe(C_UIWidgetManager.GetAllWidgetsBySetID, setID)
+        if widgets and #widgets > 0 then
+            widgetSetsFound = widgetSetsFound + 1
+            lines[#lines + 1] = ("  setID=%d has %d widgets"):format(setID, #widgets)
+            for _, w in ipairs(widgets) do
+                -- Try the delves widget getter — it's the one that showed "Enemy groups" in Blizzard UI
+                local info = safe(C_UIWidgetManager.GetScenarioHeaderDelvesWidgetVisualizationInfo, w.widgetID)
+                if info then
+                    lines[#lines + 1] = ("    widget %d [DelvesViz]: tooltip=%q"):format(
+                        w.widgetID, tostring(info.tooltip or ""))
+                    for k, v in pairs(info) do
+                        local t = type(v)
+                        if t == "string" and v ~= "" then
+                            lines[#lines + 1] = ("      %s = %q"):format(k, v)
+                        elseif t == "number" or t == "boolean" then
+                            lines[#lines + 1] = ("      %s = %s"):format(k, tostring(v))
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if widgetSetsFound == 0 then
+        lines[#lines + 1] = "  No non-empty widget sets found in range 1-200"
+    end
+
+    lines[#lines + 1] = ""
+
     lines[#lines + 1] = "=== Dump complete ==="
 
     return table.concat(lines, "\n")
