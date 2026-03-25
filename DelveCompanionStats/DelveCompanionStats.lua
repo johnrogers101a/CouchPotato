@@ -610,7 +610,7 @@ local function AnchorFrame()
     local anchor = GetTrackerAnchor()
     if anchor then
         ns.frame:ClearAllPoints()
-        ns.frame:SetPoint("TOP", anchor, "BOTTOM", 0, -4)
+        ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -4)
         ns.isDraggable = false
     else
         -- Fall back to saved position; allow dragging when unanchored
@@ -847,7 +847,7 @@ function ns:OnLoad()
         ns.frame:ClearAllPoints()
         local trackerAnchor = GetTrackerAnchor()
         if trackerAnchor then
-            ns.frame:SetPoint("TOP", trackerAnchor, "BOTTOM", 0, -4)
+            ns.frame:SetPoint("TOPRIGHT", trackerAnchor, "BOTTOMRIGHT", 0, -4)
             dcslog("Info", "ApplyPinnedState: anchored below ObjectiveTrackerFrame")
         else
             -- Tracker not visible yet — park on right side of screen until
