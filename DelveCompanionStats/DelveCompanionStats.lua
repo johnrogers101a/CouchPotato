@@ -905,8 +905,8 @@ function ns:OnLoad()
     else
         contentFrame = CreateFrame("Frame", nil, ns.frame)
     end
-    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",   0,  0)
-    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT",  0,  0)
+    contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",   0, -2)
+    contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT",  0, -2)
     -- Plain dark translucent content background — no border, matching the Blizzard
     -- ObjectiveTracker content area which uses a simple dark panel without any outline.
     contentFrame:SetBackdrop({
@@ -1497,8 +1497,8 @@ function ns:UpdateCompanionData(event)
 
     -- Dynamic frame height based on visible content
     if ns.frame then
-        -- Content frame: 8px top + nameLabel(16) + 8px bottom = 32px base
-        local contentHeight = 32
+        -- Content frame: 8px top + nameLabel(16) + 4px bottom = 28px base
+        local contentHeight = 28
         -- Boon section: 6px gap + header(16) + 4px gap + value(16)
         if ns.boonHeaderLabel and ns.boonHeaderLabel:IsShown() then
             contentHeight = contentHeight + 6 + 16
