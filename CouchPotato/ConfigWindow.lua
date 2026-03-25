@@ -147,7 +147,7 @@ local _entryFrames = {}
 -- Debug log tab state
 local _debugScrollContent = nil
 local _debugEntryFrames = {}
-local _activeTab = "error"  -- "error", "debug", or "settings"
+local _activeTab = "settings"  -- "error", "debug", or "settings"
 local _errorTabContent = nil
 local _debugTabContent = nil
 local _settingsTabContent = nil
@@ -415,6 +415,7 @@ local function _build()
     local errorPanel = CreateFrame("Frame", nil, f)
     errorPanel:SetPoint("TOPLEFT",     f, "TOPLEFT",   0, -64)
     errorPanel:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
+    errorPanel:Hide()
     _errorTabContent = errorPanel
 
     local scrollFrame = CreateFrame("ScrollFrame", nil, errorPanel, "UIPanelScrollFrameTemplate")
@@ -452,7 +453,6 @@ local function _build()
     local settingsPanel = CreateFrame("Frame", nil, f)
     settingsPanel:SetPoint("TOPLEFT",     f, "TOPLEFT",   0, -64)
     settingsPanel:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
-    settingsPanel:Hide()
     _settingsTabContent = settingsPanel
 
     ---------------------------------------------------------------------------
@@ -471,9 +471,9 @@ local function _build()
 
     -- Addons that get checkboxes (order matters for layout)
     local ADDON_CHECKBOX_LIST = {
-        { key = "DelveCompanionStats",  label = "DelveCompanionStats"  },
-        { key = "StatPriority",         label = "StatPriority"         },
-        { key = "ControllerCompanion",  label = "ControllerCompanion"  },
+        { key = "DelveCompanionStats",  label = "Delve Companion Stats"  },
+        { key = "StatPriority",         label = "Stat Priority"          },
+        { key = "ControllerCompanion",  label = "Controller Companion"   },
     }
 
     local checkboxes = {}   -- keyed by addon canonical name
@@ -665,11 +665,12 @@ local function _build()
             RebuildDebugList()
             local log = (CouchPotatoDB and CouchPotatoDB.debugLog) or {}
             self._debugCountFS:SetText(#log .. " entr" .. (#log == 1 and "y" or "ies"))
-        else
+        elseif _activeTab == "error" then
             RebuildErrorList()
             local log = (CouchPotatoDB and CouchPotatoDB.errorLog) or {}
             self._errorCountFS:SetText(#log .. " entr" .. (#log == 1 and "y" or "ies"))
         end
+        -- settings tab: RefreshAddonCheckboxes() above already handles it
     end)
 
     if _G.CouchPotatoLog then
