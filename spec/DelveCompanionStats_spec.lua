@@ -1171,22 +1171,23 @@ describe("DelveCompanionStats", function()
                 assert.is_true(math.abs(b - 1) < 0.001)
             end)
 
-            it("header border line colour is {1, 0.78, 0.1} (bright gold)", function()
-                -- Manual header always has top+bottom gold border lines
+            it("header underline colour is {0.9, 0.75, 0.1} (Blizzard tracker gold)", function()
+                -- Underline texture runs from right of title text to right of header frame.
+                -- Colour matches Blizzard ObjectiveTracker section header gold.
                 local hf = ns.headerFrame
                 assert.is_not_nil(hf)
-                -- Find the border line texture by looking for one with r≈1, g≈0.78, b≈0.1
+                -- Find the gold underline texture by its colour {0.9, 0.75, 0.1}
                 local found = false
                 for _, tex in ipairs(hf._textures or {}) do
                     local c = tex._color
-                    if c and math.abs(c[1] - 1) < 0.001
-                          and math.abs(c[2] - 0.78) < 0.001
+                    if c and math.abs(c[1] - 0.9) < 0.001
+                          and math.abs(c[2] - 0.75) < 0.001
                           and math.abs(c[3] - 0.1) < 0.001 then
                         found = true
                         break
                     end
                 end
-                assert.is_true(found, "expected header border texture with colour {1, 0.78, 0.1}")
+                assert.is_true(found, "expected header underline texture with colour {0.9, 0.75, 0.1}")
             end)
 
         end)
