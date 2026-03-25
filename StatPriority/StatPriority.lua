@@ -527,7 +527,8 @@ function ns:OnLoad()
     ns.frame:SetSize(frameWidth, 60)
 
     -- -----------------------------------------------------------------------
-    -- 3. Header frame — matches DCS exactly
+    -- 3. Header frame — matches Blizzard ObjectiveTracker section header precisely.
+    -- Transparent/minimal background, gold text, single thin gold underline below the title.
     -- -----------------------------------------------------------------------
     local header = CreateFrame("Button", nil, ns.frame)
     ns.headerFrame = header
@@ -557,19 +558,13 @@ function ns:OnLoad()
         end
     end)
 
-    -- Background: dark olive
+    -- Background: very subtle dark tint (alpha 0.45) — just enough for readability,
+    -- no visible box. Matches Blizzard tracker section header appearance.
     local headerBg = header:CreateTexture(nil, "BACKGROUND")
     headerBg:SetAllPoints(header)
-    headerBg:SetColorTexture(0.15, 0.12, 0.03, 0.95)
+    headerBg:SetColorTexture(0, 0, 0, 0.45)
 
-    -- Top gold border
-    local headerTopLine = header:CreateTexture(nil, "BORDER")
-    headerTopLine:SetHeight(1)
-    headerTopLine:SetPoint("TOPLEFT",  header, "TOPLEFT",  0, 0)
-    headerTopLine:SetPoint("TOPRIGHT", header, "TOPRIGHT", 0, 0)
-    headerTopLine:SetColorTexture(1, 0.78, 0.1, 1)
-
-    -- Bottom gold border
+    -- Underline: single thin gold line below the header text (Blizzard-style section divider)
     local headerBottomLine = header:CreateTexture(nil, "BORDER")
     headerBottomLine:SetHeight(1)
     headerBottomLine:SetPoint("BOTTOMLEFT",  header, "BOTTOMLEFT",  0, 0)
@@ -712,21 +707,11 @@ function ns:OnLoad()
     else
         contentFrame = CreateFrame("Frame", nil, ns.frame)
     end
-    contentFrame:SetPoint("TOPLEFT",  header, "BOTTOMLEFT",  0, -4)
-    contentFrame:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, -4)
+    contentFrame:SetPoint("TOPLEFT",  header, "BOTTOMLEFT",  0, -2)
+    contentFrame:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, -2)
     contentFrame:SetHeight(36)
-
-    -- Apply backdrop (pcall guards missing API in test env)
-    pcall(function()
-        contentFrame:SetBackdrop({
-            bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            tile = true, tileSize = 16, edgeSize = 12,
-            insets = { left = 2, right = 2, top = 2, bottom = 2 },
-        })
-        contentFrame:SetBackdropColor(0.05, 0.04, 0.01, 0.95)
-        contentFrame:SetBackdropBorderColor(1, 0.78, 0.1, 0.8)
-    end)
+    -- No visible backdrop — content text floats on transparent background matching
+    -- Blizzard's ObjectiveTracker content area (no box, no border, no background panel).
     ns.contentFrame = contentFrame
 
     -- -----------------------------------------------------------------------

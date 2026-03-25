@@ -1109,21 +1109,20 @@ describe("DelveCompanionStats", function()
         -- ── Content frame background ──────────────────────────────────────────
         describe("content frame background", function()
 
-            it("contentFrame has no border edge file (borderless, matching tracker content area)", function()
-                -- Blizzard ObjectiveTracker content area has no visible border — we match that.
-                assert.is_not_nil(ns.contentFrame._backdrop)
-                -- edgeFile should be nil or absent (borderless)
-                local ef = ns.contentFrame._backdrop.edgeFile
-                assert.is_true(ef == nil or ef == "", "expected no edgeFile, got: " .. tostring(ef))
+            it("contentFrame has no backdrop (fully transparent, matching Blizzard tracker content area)", function()
+                -- Blizzard ObjectiveTracker content floats with no background box or border.
+                -- We removed SetBackdrop entirely so _backdrop should be nil.
+                assert.is_nil(ns.contentFrame._backdrop)
             end)
 
-            it("contentFrame has dark translucent backdrop background", function()
-                local bc = ns.contentFrame._backdropColor
-                assert.is_not_nil(bc)
-                -- Dark olive/near-black background matching tracker content panel
-                assert.near(0.06, bc[1], 0.02)
-                assert.near(0.05, bc[2], 0.02)
-                assert.near(0.02, bc[3], 0.02)
+            it("contentFrame has no border edge file (borderless, matching tracker content area)", function()
+                -- Either no backdrop at all, or if present, no edgeFile.
+                if ns.contentFrame._backdrop then
+                    local ef = ns.contentFrame._backdrop.edgeFile
+                    assert.is_true(ef == nil or ef == "", "expected no edgeFile, got: " .. tostring(ef))
+                else
+                    assert.is_nil(ns.contentFrame._backdrop)
+                end
             end)
 
         end)

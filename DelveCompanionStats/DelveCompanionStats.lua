@@ -732,9 +732,9 @@ function ns:OnLoad()
         ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 130)
     end
 
-    -- 4a. Header frame — manual recreation of Blizzard ObjectiveTracker section header.
-    -- Dark olive background, bright gold top+bottom border lines, ObjectiveTitleFont title
-    -- left-aligned, gold en-dash collapse button far right. Matches Blizzard "Delves" header.
+    -- 4a. Header frame — matches Blizzard ObjectiveTracker section header precisely.
+    -- Transparent/minimal background, gold text, single thin gold underline below the title,
+    -- collapse button far right. No full box border — text floats like native tracker headers.
     local header = CreateFrame("Button", nil, ns.frame)
     ns.header = header
     ns.headerFrame = header
@@ -756,19 +756,13 @@ function ns:OnLoad()
         end
     end)
 
-    -- Background: dark olive/brown gradient
+    -- Background: very subtle dark tint (alpha 0.45) — just enough for readability,
+    -- no visible box. Matches Blizzard tracker section header appearance.
     local headerBg = header:CreateTexture(nil, "BACKGROUND")
     headerBg:SetAllPoints(header)
-    headerBg:SetColorTexture(0.15, 0.12, 0.03, 0.95)
+    headerBg:SetColorTexture(0, 0, 0, 0.45)
 
-    -- Top border: bright gold line
-    local headerTopLine = header:CreateTexture(nil, "BORDER")
-    headerTopLine:SetHeight(1)
-    headerTopLine:SetPoint("TOPLEFT",  header, "TOPLEFT",  0, 0)
-    headerTopLine:SetPoint("TOPRIGHT", header, "TOPRIGHT", 0, 0)
-    headerTopLine:SetColorTexture(1, 0.78, 0.1, 1)
-
-    -- Bottom border: bright gold line
+    -- Underline: single thin gold line below the header text (Blizzard-style section divider)
     local headerBottomLine = header:CreateTexture(nil, "BORDER")
     headerBottomLine:SetHeight(1)
     headerBottomLine:SetPoint("BOTTOMLEFT",  header, "BOTTOMLEFT",  0, 0)
@@ -907,14 +901,8 @@ function ns:OnLoad()
     end
     contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",   0, -2)
     contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT",  0, -2)
-    -- Plain dark translucent content background — no border, matching the Blizzard
-    -- ObjectiveTracker content area which uses a simple dark panel without any outline.
-    contentFrame:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        tile = true, tileSize = 16, edgeSize = 0,
-        insets = { left = 0, right = 0, top = 0, bottom = 0 },
-    })
-    contentFrame:SetBackdropColor(0.06, 0.05, 0.02, 0.88)
+    -- No visible backdrop — content text floats on transparent background matching
+    -- Blizzard's ObjectiveTracker content area (no box, no border, no background panel).
     -- Store on ns so UpdateCompanionData can resize it
     ns.contentFrame = contentFrame
 
