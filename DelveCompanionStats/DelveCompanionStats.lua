@@ -615,6 +615,12 @@ local function AnchorFrame()
     if anchor then
         ns.frame:ClearAllPoints()
         ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -4)
+        if ObjectiveTrackerFrame and ObjectiveTrackerFrame.GetWidth then
+            local tw = ObjectiveTrackerFrame:GetWidth()
+            if tw and tw >= 100 and tw <= 400 then
+                ns.frame:SetWidth(tw)
+            end
+        end
         ns.isDraggable = false
     else
         -- Fall back to saved position; allow dragging when unanchored
@@ -737,12 +743,12 @@ function ns:OnLoad()
     -- minus 16 px to account for the 8px left/right padding on the content frame anchors.
     local contentWidth = frameWidth - 12 - 16
 
-    -- Set size and default anchor (above ChatFrame1 when available)
+    -- Set size and default anchor (below ObjectiveTrackerFrame on the right side)
     ns.frame:SetSize(frameWidth, 160)
-    if ChatFrame1 then
-        ns.frame:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 10)
+    if ObjectiveTrackerFrame then
+        ns.frame:SetPoint("TOPRIGHT", ObjectiveTrackerFrame, "BOTTOMRIGHT", 0, -4)
     else
-        ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 130)
+        ns.frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -200)
     end
 
     -- 4a. Header frame — matches Blizzard ObjectiveTracker section header precisely.
@@ -784,18 +790,21 @@ function ns:OnLoad()
     headerTitle:SetTextColor(1, 0.82, 0.0, 1)
 
     -- Underline: thin 1px gold line from RIGHT of title text to RIGHT of header frame.
-    -- Blizzard's tracker headers have NO line under the text itself — line starts after text.
-    local headerBottomLine = header:CreateTexture(nil, "ARTWORK")
-    headerBottomLine:SetHeight(1)
-    headerBottomLine:SetPoint("LEFT",  headerTitle, "RIGHT", 4, 0)
-    headerBottomLine:SetPoint("RIGHT", header,      "RIGHT", 0, 0)
-    headerBottomLine:SetColorTexture(0.9, 0.75, 0.1, 0.8)
-
     -- Collapse button: gold en-dash, far right, vertically centred
     -- Sized at 26x26 (at least 10px larger than old 16px variants) for easy clicking.
+    -- Created BEFORE the gold line so the line can anchor its RIGHT to the button's LEFT.
     local collapseBtn = CreateFrame("Button", nil, header)
     collapseBtn:SetSize(26, 26)
     collapseBtn:SetPoint("RIGHT", header, "RIGHT", -4, 0)
+
+    -- Gold line: starts right of the title text, ends at the LEFT edge of the collapse
+    -- button. This makes the button sit at the right terminus of the line with no gap.
+    -- Blizzard's tracker headers have NO line to the left of the text.
+    local headerBottomLine = header:CreateTexture(nil, "ARTWORK")
+    headerBottomLine:SetHeight(1)
+    headerBottomLine:SetPoint("LEFT",  headerTitle, "RIGHT", 4, 0)
+    headerBottomLine:SetPoint("RIGHT", collapseBtn,  "LEFT",  0, 0)
+    headerBottomLine:SetColorTexture(0.9, 0.75, 0.1, 0.8)
     -- Font set explicitly (not as 3rd arg) so text renders even before font objects load
     local collapseBtnText = collapseBtn:CreateFontString(nil, "OVERLAY")
     collapseBtnText:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
@@ -855,6 +864,12 @@ function ns:OnLoad()
         local trackerAnchor = GetTrackerAnchor()
         if trackerAnchor then
             ns.frame:SetPoint("TOPRIGHT", trackerAnchor, "BOTTOMRIGHT", 0, -4)
+            if ObjectiveTrackerFrame and ObjectiveTrackerFrame.GetWidth then
+                local tw = ObjectiveTrackerFrame:GetWidth()
+                if tw and tw >= 100 and tw <= 400 then
+                    ns.frame:SetWidth(tw)
+                end
+            end
             dcslog("Info", "ApplyPinnedState: anchored below ObjectiveTrackerFrame")
         else
             -- Tracker not visible yet — park on right side of screen until
@@ -1040,7 +1055,11 @@ function ns:OnLoad()
     -- ResizeToTracker: re-measure ScenarioObjectiveTracker width and apply to all labels.
     -- Called on PLAYER_ENTERING_WORLD so the tracker is fully sized before we read it.
     local function ResizeToTracker()
-        local w = 248  -- Fixed width for Delves section content box
+        local w = 248  -- fallback width
+        if ObjectiveTrackerFrame and ObjectiveTrackerFrame.GetWidth then
+            local tw = ObjectiveTrackerFrame:GetWidth()
+            if tw and tw >= 100 and tw <= 400 then w = tw end
+        end
         if ns.frame then ns.frame:SetWidth(w) end
         if ns.header then ns.header:SetWidth(w) end
         if ns.headerFrame then ns.headerFrame:SetWidth(w) end

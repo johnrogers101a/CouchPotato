@@ -699,13 +699,13 @@ describe("StatPriority", function()
             _G.BonusObjectiveTracker     = nil
         end)
 
-        it("ApplyPinnedState falls back to UIParent CENTER when no tracker is present", function()
+        it("ApplyPinnedState falls back to UIParent TOPRIGHT when no tracker is present", function()
             _G.ObjectiveTrackerFrame = nil
             ns.ApplyPinnedState()
-            -- Should have a CENTER anchor on UIParent
+            -- Should have a TOPRIGHT anchor on UIParent (right-side parking position)
             local found = false
             for _, p in ipairs(ns.frame._points) do
-                if p[1] == "CENTER" then found = true; break end
+                if p[1] == "TOPRIGHT" then found = true; break end
             end
             assert.is_true(found)
         end)
@@ -762,7 +762,7 @@ describe("StatPriority", function()
             assert.is_false(anchoredToModule, "SP must NOT anchor to QuestObjectiveTracker sub-frame")
         end)
 
-        it("ApplyPinnedState falls back to UIParent CENTER when ObjectiveTrackerFrame is hidden", function()
+        it("ApplyPinnedState falls back to UIParent TOPRIGHT when ObjectiveTrackerFrame is hidden", function()
             _G.ObjectiveTrackerFrame = {
                 _shown  = false,
                 _points = {},
@@ -776,9 +776,9 @@ describe("StatPriority", function()
 
             local found = false
             for _, p in ipairs(ns.frame._points) do
-                if p[1] == "CENTER" then found = true; break end
+                if p[1] == "TOPRIGHT" then found = true; break end
             end
-            assert.is_true(found, "expected CENTER fallback when ObjectiveTrackerFrame is hidden")
+            assert.is_true(found, "expected TOPRIGHT fallback when ObjectiveTrackerFrame is hidden")
         end)
     end)
 

@@ -714,19 +714,21 @@ function ns:OnLoad()
     ns.headerTitle = headerTitle
     ns.headerLabel = headerTitle  -- alias
 
-    -- Underline: thin 1px gold line from RIGHT of title text to RIGHT of header frame.
-    -- Blizzard's tracker headers have NO line under the text itself — line starts after text.
-    local headerBottomLine = header:CreateTexture(nil, "ARTWORK")
-    headerBottomLine:SetHeight(1)
-    headerBottomLine:SetPoint("LEFT",  headerTitle, "RIGHT", 4, 0)
-    headerBottomLine:SetPoint("RIGHT", header,      "RIGHT", 0, 0)
-    headerBottomLine:SetColorTexture(0.9, 0.75, 0.1, 0.8)
-
-    -- Collapse button: gold en-dash, far right
-    -- Sized at 26x26 to match the lock button and be comfortably clickable
+    -- Collapse button: gold en-dash, far right.
+    -- Created BEFORE the gold line so the line can anchor its RIGHT to the button's LEFT.
+    -- Sized at 26x26 to match the lock button and be comfortably clickable.
     local collapseBtn = CreateFrame("Button", nil, header)
     collapseBtn:SetSize(26, 26)
     collapseBtn:SetPoint("RIGHT", header, "RIGHT", -4, 0)
+
+    -- Gold line: starts right of the title text, ends at LEFT edge of the collapse button.
+    -- The button sits at the right terminus of the line — no gap, no overlap.
+    -- Blizzard's tracker headers have NO line to the left of the text.
+    local headerBottomLine = header:CreateTexture(nil, "ARTWORK")
+    headerBottomLine:SetHeight(1)
+    headerBottomLine:SetPoint("LEFT",  headerTitle, "RIGHT", 4, 0)
+    headerBottomLine:SetPoint("RIGHT", collapseBtn,  "LEFT",  0, 0)
+    headerBottomLine:SetColorTexture(0.9, 0.75, 0.1, 0.8)
     local collapseBtnText = collapseBtn:CreateFontString(nil, "OVERLAY")
     collapseBtnText:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
     collapseBtnText:SetAllPoints(collapseBtn)
@@ -777,11 +779,19 @@ function ns:OnLoad()
         ns.frame:ClearAllPoints()
         if anchor then
             ns.frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -8)
+            -- Match width to the anchor: DCS width, or ObjectiveTrackerFrame width
+            local widthSource = (anchor == _G.DelveCompanionStatsFrame) and _G.DelveCompanionStatsFrame or ObjectiveTrackerFrame
+            if widthSource and widthSource.GetWidth then
+                local tw = widthSource:GetWidth()
+                if tw and tw >= 100 and tw <= 400 then
+                    ns.frame:SetWidth(tw)
+                end
+            end
             local anchorName = (anchor.GetName and anchor:GetName()) or tostring(anchor)
             splog("Info", "ApplyPinnedState: anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ") with -8px gap")
         else
-            ns.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-            splog("Info", "ApplyPinnedState: no tracker visible — anchored to UIParent CENTER fallback")
+            ns.frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -200)
+            splog("Info", "ApplyPinnedState: no tracker visible — parked TOPRIGHT fallback")
         end
         ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")
         ns.pinBtn:SetPushedTexture("Interface\\Buttons\\LockButton-Locked-Down")
@@ -1156,14 +1166,10 @@ function ns:OnLoad()
             local anchorName = (anchor.GetName and anchor:GetName()) or tostring(anchor)
             splog("Info", "Pin restore: pinned — anchored to tracker visible-content bottom (anchor=" .. tostring(anchorName) .. ")")
         else
-            -- Default fallback: above ChatFrame1 or UIParent (same as old default)
-            if ChatFrame1 then
-                ns.frame:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 40)
-                splog("Info", "Pin restore: pinned but no tracker — anchored above ChatFrame1")
-            else
-                ns.frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 5, 160)
-                splog("Info", "Pin restore: pinned but no tracker — anchored UIParent fallback")
-            end
+            -- Tracker not visible yet — park on right side of screen until
+            -- PLAYER_ENTERING_WORLD fires and re-anchors properly.
+            ns.frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -200)
+            splog("Info", "Pin restore: pinned but no tracker — parked TOPRIGHT fallback")
         end
         if ns.pinBtn then
             ns.pinBtn:SetNormalTexture("Interface\\Buttons\\LockButton-Locked-Up")

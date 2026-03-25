@@ -577,10 +577,14 @@ local function buildDiagText()
         local csStepInfo = safe(C_Scenario.GetStepInfo)
         if csStepInfo then
             lines[#lines + 1] = "  C_Scenario.GetStepInfo():"
-            for k, v in pairs(csStepInfo) do
-                local t = type(v)
-                if t == "string" or t == "number" or t == "boolean" then
-                    lines[#lines + 1] = ("    %s = %s"):format(tostring(k), tostring(v))
+            if type(csStepInfo) ~= "table" then
+                lines[#lines + 1] = ("    (non-table result: %s)"):format(tostring(csStepInfo))
+            else
+                for k, v in pairs(csStepInfo) do
+                    local t = type(v)
+                    if t == "string" or t == "number" or t == "boolean" then
+                        lines[#lines + 1] = ("    %s = %s"):format(tostring(k), tostring(v))
+                    end
                 end
             end
         else
