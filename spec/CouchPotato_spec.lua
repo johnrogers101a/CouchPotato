@@ -543,6 +543,92 @@ describe("ControllerCompanion_Loader slash commands", function()
     end)
 end)
 
+describe("CouchPotatoShared.GetBaseTrackerAnchor", function()
+    local cp
+
+    before_each(function()
+        cp = LoadCouchPotato()
+        -- Clean slate for tracker globals
+        _G.ObjectiveTrackerFrame     = nil
+        _G.QuestObjectiveTracker     = nil
+        _G.ScenarioObjectiveTracker  = nil
+    end)
+
+    after_each(function()
+        _G.ObjectiveTrackerFrame    = nil
+        _G.QuestObjectiveTracker    = nil
+        _G.ScenarioObjectiveTracker = nil
+    end)
+
+    it("returns nil when ObjectiveTrackerFrame does not exist", function()
+        _G.ObjectiveTrackerFrame = nil
+        assert.is_nil(cp.GetBaseTrackerAnchor())
+    end)
+
+    it("returns ObjectiveTrackerFrame when it exists and IsShown() is true (no modules)", function()
+        local otf = {
+            _shown = true,
+            IsShown = function(self) return self._shown end,
+            GetName = function(self) return "ObjectiveTrackerFrame" end,
+        }
+        _G.ObjectiveTrackerFrame = otf
+        local result = cp.GetBaseTrackerAnchor()
+        assert.equals(otf, result)
+    end)
+
+    -- Regression: no quests tracked → IsShown() returns false, but frame exists at correct position.
+    -- Frames must anchor to ObjectiveTrackerFrame rather than returning nil and drifting to minimap.
+    it("returns ObjectiveTrackerFrame when it exists but IsShown() is false (no quests tracked)", function()
+        local otf = {
+            _shown = false,
+            IsShown = function(self) return self._shown end,
+            GetName = function(self) return "ObjectiveTrackerFrame" end,
+        }
+        _G.ObjectiveTrackerFrame = otf
+        local result = cp.GetBaseTrackerAnchor()
+        assert.equals(otf, result, "must anchor to ObjectiveTrackerFrame even when empty/hidden")
+    end)
+
+    it("returns the lowest visible module when modules table present", function()
+        local highModule = {
+            _shown = true,
+            IsShown  = function(self) return self._shown end,
+            GetBottom = function(self) return 400 end,
+        }
+        local lowModule = {
+            _shown = true,
+            IsShown  = function(self) return self._shown end,
+            GetBottom = function(self) return 200 end,
+        }
+        local otf = {
+            _shown = true,
+            IsShown  = function(self) return self._shown end,
+            GetName  = function(self) return "ObjectiveTrackerFrame" end,
+            modules  = { highModule, lowModule },
+        }
+        _G.ObjectiveTrackerFrame = otf
+        local result = cp.GetBaseTrackerAnchor()
+        assert.equals(lowModule, result, "should return the module with the lowest screen bottom")
+    end)
+
+    it("falls back to ObjectiveTrackerFrame when all modules are hidden", function()
+        local hiddenModule = {
+            _shown   = false,
+            IsShown  = function(self) return self._shown end,
+            GetBottom = function(self) return 300 end,
+        }
+        local otf = {
+            _shown  = true,
+            IsShown = function(self) return self._shown end,
+            GetName = function(self) return "ObjectiveTrackerFrame" end,
+            modules = { hiddenModule },
+        }
+        _G.ObjectiveTrackerFrame = otf
+        local result = cp.GetBaseTrackerAnchor()
+        assert.equals(otf, result, "must fall back to outer frame when no modules are visible")
+    end)
+end)
+
 describe("DelveCompanionStats dcsprint", function()
     before_each(function()
         _G.DelveCompanionStatsDB  = nil

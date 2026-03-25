@@ -1407,6 +1407,56 @@ describe("DelveCompanionStats", function()
     end)
 
     -- -------------------------------------------------------------------------
+    -- AnchorFrame / ApplyPinnedState tracker anchor regression tests
+    -- Bug: when no quests tracked, ObjectiveTrackerFrame:IsShown() returns false,
+    -- causing anchor fallback to saved position or UIParent, which drifts to minimap.
+    -- Fix: always anchor to ObjectiveTrackerFrame when it exists, even when hidden.
+    -- -------------------------------------------------------------------------
+    describe("AnchorFrame anchors to ObjectiveTrackerFrame even when IsShown() is false", function()
+        after_each(function()
+            _G.ObjectiveTrackerFrame = nil
+        end)
+
+        it("ApplyPinnedState anchors to ObjectiveTrackerFrame when IsShown() is false (no quests tracked)", function()
+            local otf = {
+                _shown  = false,
+                _points = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return "ObjectiveTrackerFrame" end,
+                GetWidth       = function(self) return 200 end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
+                ClearAllPoints = function(self) self._points = {} end,
+            }
+            _G.ObjectiveTrackerFrame = otf
+
+            -- Re-pin to trigger ApplyPinnedState
+            ns.pinBtn._scripts["OnClick"]()  -- unpin
+            ns.pinBtn._scripts["OnClick"]()  -- re-pin (calls ApplyPinnedState)
+
+            local anchoredToOtf = false
+            for _, p in ipairs(ns.frame._points) do
+                if p[2] == otf then anchoredToOtf = true; break end
+            end
+            assert.is_true(anchoredToOtf, "DCS must anchor to ObjectiveTrackerFrame even when IsShown()==false")
+        end)
+
+        it("ApplyPinnedState falls back to UIParent TOPRIGHT only when ObjectiveTrackerFrame is nil", function()
+            _G.ObjectiveTrackerFrame = nil
+
+            ns.pinBtn._scripts["OnClick"]()  -- unpin
+            ns.pinBtn._scripts["OnClick"]()  -- re-pin
+
+            local foundTopRight = false
+            for _, p in ipairs(ns.frame._points) do
+                if p[1] == "TOPRIGHT" and p[2] == UIParent then
+                    foundTopRight = true; break
+                end
+            end
+            assert.is_true(foundTopRight, "DCS should use UIParent TOPRIGHT only when OTF is completely absent")
+        end)
+    end)
+
+    -- -------------------------------------------------------------------------
     -- Boon spell description parsing — resilient pattern tests
     -- -------------------------------------------------------------------------
     describe("GetBoonsDisplayText boon parsing", function()

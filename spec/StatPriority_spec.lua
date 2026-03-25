@@ -762,8 +762,12 @@ describe("StatPriority", function()
             assert.is_false(anchoredToModule, "SP must NOT anchor to QuestObjectiveTracker sub-frame")
         end)
 
-        it("ApplyPinnedState falls back to UIParent TOPRIGHT when ObjectiveTrackerFrame is hidden", function()
-            _G.ObjectiveTrackerFrame = {
+        it("ApplyPinnedState anchors to ObjectiveTrackerFrame even when IsShown() is false (no quests tracked)", function()
+            -- Regression: when no quests are tracked, WoW returns IsShown()=false on
+            -- ObjectiveTrackerFrame, but the frame still exists at the correct screen
+            -- position.  We must anchor to it rather than falling through to the
+            -- UIParent TOPRIGHT parking position which caused frames to drift near the minimap.
+            local outerFrame = {
                 _shown  = false,
                 _points = {},
                 IsShown        = function(self) return self._shown end,
@@ -771,14 +775,15 @@ describe("StatPriority", function()
                 SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
                 ClearAllPoints = function(self) self._points = {} end,
             }
+            _G.ObjectiveTrackerFrame = outerFrame
 
             ns.ApplyPinnedState()
 
-            local found = false
+            local anchoredToOuter = false
             for _, p in ipairs(ns.frame._points) do
-                if p[1] == "TOPRIGHT" then found = true; break end
+                if p[2] == outerFrame then anchoredToOuter = true; break end
             end
-            assert.is_true(found, "expected TOPRIGHT fallback when ObjectiveTrackerFrame is hidden")
+            assert.is_true(anchoredToOuter, "expected anchor to ObjectiveTrackerFrame even when IsShown()==false")
         end)
     end)
 
