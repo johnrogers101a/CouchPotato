@@ -647,9 +647,9 @@ function ns:OnLoad()
 
     ns.frame = frameResult
 
-    -- Set frame strata and level to ensure visibility above other UI
-    ns.frame:SetFrameStrata("DIALOG")
-    ns.frame:SetFrameLevel(100)
+    -- Use LOW strata so bags/panels (MEDIUM) and dialogs always render in front.
+    ns.frame:SetFrameStrata("LOW")
+    ns.frame:SetFrameLevel(2)
 
     -- 3. Determine frame width — match ScenarioObjectiveTracker when available,
     -- otherwise fall back to 260 px (a reasonable tracker-column width).
