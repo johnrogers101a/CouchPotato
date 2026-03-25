@@ -631,22 +631,16 @@ describe("StatPriority", function()
     end)
 
     -- =========================================================================
-    -- Test 12a: tracker anchor resolution — docks to visible content bottom
+    -- Test 12a: tracker anchor resolution — docks below ObjectiveTrackerFrame
+    -- =========================================================================
+    -- GetTrackerAnchor anchors to ObjectiveTrackerFrame (the outer container)
+    -- rather than individual module sub-frames.  The outer container auto-sizes
+    -- its height to fit visible content, so its BOTTOM is always the actual
+    -- rendered content bottom.  Individual module frames (QuestObjectiveTracker
+    -- etc.) carry pre-allocated excess height that does not shrink as quests
+    -- complete or are removed, which caused SP to overlap visible quest content.
     -- =========================================================================
     describe("tracker anchor resolution (GetTrackerAnchor via ApplyPinnedState)", function()
-        -- Helper: make a minimal visible tracker-module stub
-        local function makeVisibleModule(name)
-            return {
-                _name    = name,
-                _shown   = true,
-                _points  = {},
-                IsShown       = function(self) return self._shown end,
-                GetName       = function(self) return self._name end,
-                SetPoint      = function(self, ...) self._points[#self._points + 1] = { ... } end,
-                ClearAllPoints = function(self) self._points = {} end,
-            }
-        end
-
         after_each(function()
             -- Clean up globals injected during tests
             _G.ObjectiveTrackerFrame     = nil
@@ -667,83 +661,10 @@ describe("StatPriority", function()
             assert.is_true(found)
         end)
 
-        it("ApplyPinnedState anchors to last visible MODULES entry, not the container", function()
-            local questMod   = makeVisibleModule("QuestObjectiveTracker")
-            local achievMod  = makeVisibleModule("AchievementObjectiveTracker")
-            achievMod._shown = false  -- achievement module hidden — quest is last visible
-
-            _G.ObjectiveTrackerFrame = {
-                _shown  = true,
-                _points = {},
-                IsShown        = function(self) return self._shown end,
-                GetName        = function(self) return "ObjectiveTrackerFrame" end,
-                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
-                ClearAllPoints = function(self) self._points = {} end,
-                MODULES = { achievMod, questMod },  -- quest is last
-            }
-
-            ns.ApplyPinnedState()
-
-            -- Frame should anchor to questMod (last visible MODULES entry), not ObjectiveTrackerFrame
-            local foundAnchor = false
-            for _, p in ipairs(ns.frame._points) do
-                -- p is {point, relativeFrame, relativePoint, x, y}
-                if p[2] == questMod then foundAnchor = true; break end
-            end
-            assert.is_true(foundAnchor, "expected anchor to last visible MODULES entry (questMod)")
-        end)
-
-        it("ApplyPinnedState skips hidden MODULES entries", function()
-            local mod1 = makeVisibleModule("ModOne")
-            local mod2 = makeVisibleModule("ModTwo")
-            mod2._shown = false  -- mod2 hidden, mod1 is last visible
-
-            _G.ObjectiveTrackerFrame = {
-                _shown  = true,
-                _points = {},
-                IsShown        = function(self) return self._shown end,
-                GetName        = function(self) return "ObjectiveTrackerFrame" end,
-                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
-                ClearAllPoints = function(self) self._points = {} end,
-                MODULES = { mod1, mod2 },
-            }
-
-            ns.ApplyPinnedState()
-
-            local anchoredTo = nil
-            for _, p in ipairs(ns.frame._points) do
-                if p[2] == mod1 or p[2] == mod2 then anchoredTo = p[2]; break end
-            end
-            assert.equals(mod1, anchoredTo, "expected anchor to mod1 (last visible), not hidden mod2")
-        end)
-
-        it("ApplyPinnedState falls back to named module globals when MODULES is absent", function()
-            local questMod = makeVisibleModule("QuestObjectiveTracker")
-            _G.QuestObjectiveTracker = questMod
-
-            _G.ObjectiveTrackerFrame = {
-                _shown  = true,
-                _points = {},
-                IsShown        = function(self) return self._shown end,
-                GetName        = function(self) return "ObjectiveTrackerFrame" end,
-                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
-                ClearAllPoints = function(self) self._points = {} end,
-                -- MODULES deliberately absent
-            }
-
-            ns.ApplyPinnedState()
-
-            local foundAnchor = false
-            for _, p in ipairs(ns.frame._points) do
-                if p[2] == questMod then foundAnchor = true; break end
-            end
-            assert.is_true(foundAnchor, "expected anchor to QuestObjectiveTracker named global")
-        end)
-
-        it("ApplyPinnedState falls back to ObjectiveTrackerFrame when no module is visible", function()
-            local hiddenMod = makeVisibleModule("HiddenMod")
-            hiddenMod._shown = false
-
+        it("ApplyPinnedState anchors to ObjectiveTrackerFrame (outer container), not module sub-frames", function()
+            -- The outer frame auto-sizes to content; its BOTTOM is the true content bottom.
+            -- Anchoring to sub-frames (QuestObjectiveTracker etc.) causes overlap because
+            -- those frames have excess pre-allocated height that doesn't shrink with content.
             local outerFrame = {
                 _shown  = true,
                 _points = {},
@@ -751,7 +672,6 @@ describe("StatPriority", function()
                 GetName        = function(self) return "ObjectiveTrackerFrame" end,
                 SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
                 ClearAllPoints = function(self) self._points = {} end,
-                MODULES = { hiddenMod },
             }
             _G.ObjectiveTrackerFrame = outerFrame
 
@@ -761,7 +681,55 @@ describe("StatPriority", function()
             for _, p in ipairs(ns.frame._points) do
                 if p[2] == outerFrame then foundAnchor = true; break end
             end
-            assert.is_true(foundAnchor, "expected fallback anchor to ObjectiveTrackerFrame itself")
+            assert.is_true(foundAnchor, "expected anchor to ObjectiveTrackerFrame outer container")
+        end)
+
+        it("ApplyPinnedState uses ObjectiveTrackerFrame even when module sub-frames are present", function()
+            -- Populate named module globals — SP must still anchor to the outer frame.
+            _G.QuestObjectiveTracker = {
+                _shown = true,
+                IsShown = function(self) return self._shown end,
+                GetName = function(self) return "QuestObjectiveTracker" end,
+            }
+            local outerFrame = {
+                _shown  = true,
+                _points = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return "ObjectiveTrackerFrame" end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
+                ClearAllPoints = function(self) self._points = {} end,
+            }
+            _G.ObjectiveTrackerFrame = outerFrame
+
+            ns.ApplyPinnedState()
+
+            local anchoredToOuter = false
+            local anchoredToModule = false
+            for _, p in ipairs(ns.frame._points) do
+                if p[2] == outerFrame then anchoredToOuter = true end
+                if p[2] == _G.QuestObjectiveTracker then anchoredToModule = true end
+            end
+            assert.is_true(anchoredToOuter,  "SP must anchor to ObjectiveTrackerFrame outer container")
+            assert.is_false(anchoredToModule, "SP must NOT anchor to QuestObjectiveTracker sub-frame")
+        end)
+
+        it("ApplyPinnedState falls back to UIParent CENTER when ObjectiveTrackerFrame is hidden", function()
+            _G.ObjectiveTrackerFrame = {
+                _shown  = false,
+                _points = {},
+                IsShown        = function(self) return self._shown end,
+                GetName        = function(self) return "ObjectiveTrackerFrame" end,
+                SetPoint       = function(self, ...) self._points[#self._points + 1] = { ... } end,
+                ClearAllPoints = function(self) self._points = {} end,
+            }
+
+            ns.ApplyPinnedState()
+
+            local found = false
+            for _, p in ipairs(ns.frame._points) do
+                if p[1] == "CENTER" then found = true; break end
+            end
+            assert.is_true(found, "expected CENTER fallback when ObjectiveTrackerFrame is hidden")
         end)
     end)
 
@@ -1135,34 +1103,26 @@ describe("StatPriority", function()
             assert.is_false(anchoredToDCS, "SP should NOT anchor below hidden DCS")
         end)
 
-        it("ApplyPinnedState falls back to tracker modules when DCS is absent", function()
+        it("ApplyPinnedState falls back to ObjectiveTrackerFrame when DCS is absent", function()
             _G.DelveCompanionStatsFrame = nil
 
-            local questMod = {
-                _shown   = true,
-                _points  = {},
-                IsShown        = function(self) return self._shown end,
-                GetName        = function(self) return "QuestObjectiveTracker" end,
-                SetPoint       = function(self, ...) self._points[#self._points + 1] = {...} end,
-                ClearAllPoints = function(self) self._points = {} end,
-            }
-            _G.ObjectiveTrackerFrame = {
+            local outerFrame = {
                 _shown  = true,
                 _points = {},
                 IsShown        = function(self) return self._shown end,
                 GetName        = function(self) return "ObjectiveTrackerFrame" end,
                 SetPoint       = function(self, ...) self._points[#self._points + 1] = {...} end,
                 ClearAllPoints = function(self) self._points = {} end,
-                MODULES        = { questMod },
             }
+            _G.ObjectiveTrackerFrame = outerFrame
 
             ns.ApplyPinnedState()
 
-            local anchoredToMod = false
+            local anchoredToOuter = false
             for _, p in ipairs(ns.frame._points) do
-                if p[2] == questMod then anchoredToMod = true; break end
+                if p[2] == outerFrame then anchoredToOuter = true; break end
             end
-            assert.is_true(anchoredToMod, "SP should anchor to tracker module when DCS is absent")
+            assert.is_true(anchoredToOuter, "SP should anchor to ObjectiveTrackerFrame when DCS is absent")
         end)
     end)
 
