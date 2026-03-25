@@ -775,13 +775,16 @@ function ns:OnLoad()
     headerBottomLine:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
     headerBottomLine:SetColorTexture(1, 0.78, 0.1, 1)
 
-    -- Title: large bright gold, left-aligned; font set explicitly (not as CreateFontString
-    -- 3rd-arg) to guarantee it renders even if ObjectiveTitleFont is not yet loaded.
-    local headerTitle = header:CreateFontString(nil, "OVERLAY")
-    headerTitle:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+    -- Title: large bright gold, left-aligned; matches Blizzard ObjectiveTracker section
+    -- header style ("Delves", "Quests" etc).  Use ObjectiveTitleFont when available,
+    -- fall back to GameFontNormal, then explicit FRIZQT so it always renders.
+    local headerTitle = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    -- Try the exact Blizzard tracker header font first; fall back silently.
+    pcall(function() headerTitle:SetFontObject(ObjectiveTitleFont) end)
     headerTitle:SetPoint("LEFT", header, "LEFT", 8, 0)
     headerTitle:SetJustifyV("MIDDLE")
     headerTitle:SetText("Companion")
+    -- Gold matching Blizzard section headers: R=1 G=0.82 B=0 (same as tracker "Delves" text)
     headerTitle:SetTextColor(1, 0.82, 0.0, 1)
 
     -- Collapse button: gold en-dash, far right, vertically centred
@@ -904,40 +907,40 @@ function ns:OnLoad()
     end
     contentFrame:SetPoint("TOPLEFT",  ns.headerFrame, "BOTTOMLEFT",   0,  0)
     contentFrame:SetPoint("TOPRIGHT", ns.headerFrame, "BOTTOMRIGHT",  0,  0)
-    -- Subtle dark content background with rounded gold border
+    -- Plain dark translucent content background — no border, matching the Blizzard
+    -- ObjectiveTracker content area which uses a simple dark panel without any outline.
     contentFrame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 12,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+        tile = true, tileSize = 16, edgeSize = 0,
+        insets = { left = 0, right = 0, top = 0, bottom = 0 },
     })
-    contentFrame:SetBackdropColor(0.05, 0.04, 0.01, 0.95)
-    contentFrame:SetBackdropBorderColor(1, 0.78, 0.1, 0.8)
+    contentFrame:SetBackdropColor(0.06, 0.05, 0.02, 0.88)
     -- Store on ns so UpdateCompanionData can resize it
     ns.contentFrame = contentFrame
 
-    -- 5. Name label — GameFontHighlightSmall (11pt) white text, matching tracker body style
-    -- 8px left padding, 8px top padding for proper content inset
+    -- 5. Name label — objective body text style (white, ~11pt), matching tracker objective
+    -- lines ("- 1/3 Elementary Voidcore Shard" etc).  8px left padding, 8px top padding.
     ns.nameLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ns.nameLabel:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 8, -8)
     ns.nameLabel:SetWidth(contentWidth)
     ns.nameLabel:SetJustifyH("LEFT")
-    ns.nameLabel:SetFontObject("GameFontHighlightSmall")
+    -- Apply font object then override color so ObjectiveFont default color is not kept.
     pcall(function() ns.nameLabel:SetFontObject(ObjectiveFont) end)
-    ns.nameLabel:SetTextColor(1, 1, 1, 1)
+    ns.nameLabel:SetTextColor(1, 1, 1, 1)  -- pure white, set AFTER font object
     ns.nameLabel:SetText("No companion data")
     ns.nameLabel:SetShadowOffset(1, -1)
     ns.nameLabel:SetShadowColor(0, 0, 0, 1)
     ns.nameLabel:SetWordWrap(false)
 
-    -- 6c. Boon header label — "Boons" section header in muted gold (GameFontNormalSmall).
+    -- 6c. Boon header label — "Boons" section header, styled like Blizzard quest/objective
+    -- titles (e.g. "An Elementary Voidcore"): muted gold, GameFontNormalSmall.
     -- Shown whenever a companion is active; positioned 6px below the level line.
     ns.boonHeaderLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     ns.boonHeaderLabel:SetPoint("TOPLEFT", ns.nameLabel, "BOTTOMLEFT", 0, -6)
-    ns.boonHeaderLabel:SetFontObject("GameFontNormalSmall")
-    pcall(function() ns.boonHeaderLabel:SetFontObject(ObjectiveFont) end)
     ns.boonHeaderLabel:SetWidth(contentWidth)
     ns.boonHeaderLabel:SetJustifyH("LEFT")
+    -- Use ObjectiveFont when available; set color AFTER so muted gold is preserved.
+    pcall(function() ns.boonHeaderLabel:SetFontObject(ObjectiveFont) end)
     ns.boonHeaderLabel:SetTextColor(0.9, 0.75, 0.3, 1)
     ns.boonHeaderLabel:SetShadowOffset(1, -1)
     ns.boonHeaderLabel:SetShadowColor(0, 0, 0, 1)
@@ -945,13 +948,14 @@ function ns:OnLoad()
     ns.boonHeaderLabel:Hide()
 
     -- 6d. Boon value label — stat values "Max HP: 6%, Move Spd: 10%" or "None".
-    -- Anchored 4px below the Boons header; white for stats, grey for "None".
+    -- Matches Blizzard objective text style: white for active values, grey for "None".
+    -- Anchored 4px below the Boons header.
     ns.boonLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ns.boonLabel:SetPoint("TOPLEFT", ns.boonHeaderLabel, "BOTTOMLEFT", 0, -4)
-    ns.boonLabel:SetFontObject("GameFontHighlightSmall")
-    pcall(function() ns.boonLabel:SetFontObject(ObjectiveFont) end)
     ns.boonLabel:SetWidth(contentWidth)
     ns.boonLabel:SetJustifyH("LEFT")
+    -- Apply font then set color to ensure white is not overridden by font defaults.
+    pcall(function() ns.boonLabel:SetFontObject(ObjectiveFont) end)
     ns.boonLabel:SetTextColor(1, 1, 1, 1)
     ns.boonLabel:SetShadowOffset(1, -1)
     ns.boonLabel:SetShadowColor(0, 0, 0, 1)
@@ -967,27 +971,28 @@ function ns:OnLoad()
     ns.xpLabel:SetText("")
     ns.xpLabel:Hide()
 
-    -- 6e. Nemesis header label — "Enemy Groups Remaining" section header in muted gold.
+    -- 6e. Nemesis header label — "Enemy Groups Remaining" section sub-header, styled like
+    -- Blizzard objective/quest title text: muted gold, GameFontNormalSmall.
     -- Anchored 6px below the boon value label; shown only when nemesis data is present.
     ns.nemesisLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     ns.nemesisLabel:SetPoint("TOPLEFT", ns.boonLabel, "BOTTOMLEFT", 0, -6)
-    ns.nemesisLabel:SetFontObject("GameFontNormalSmall")
-    pcall(function() ns.nemesisLabel:SetFontObject(ObjectiveFont) end)
     ns.nemesisLabel:SetWidth(contentWidth)
     ns.nemesisLabel:SetJustifyH("LEFT")
+    -- Use ObjectiveFont when available; set color AFTER so muted gold is preserved.
+    pcall(function() ns.nemesisLabel:SetFontObject(ObjectiveFont) end)
     ns.nemesisLabel:SetTextColor(0.9, 0.75, 0.3, 1)
     ns.nemesisLabel:SetShadowOffset(1, -1)
     ns.nemesisLabel:SetShadowColor(0, 0, 0, 1)
     ns.nemesisLabel:SetText("")
     ns.nemesisLabel:Hide()
 
-    -- 6f. Nemesis value label — "X / Y" count below the header; GameFontHighlightSmall white.
+    -- 6f. Nemesis value label — "X / Y" count below the header; white objective text.
     ns.nemesisDetailLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ns.nemesisDetailLabel:SetPoint("TOPLEFT", ns.nemesisLabel, "BOTTOMLEFT", 0, -4)
-    ns.nemesisDetailLabel:SetFontObject("GameFontHighlightSmall")
-    pcall(function() ns.nemesisDetailLabel:SetFontObject(ObjectiveFont) end)
     ns.nemesisDetailLabel:SetWidth(contentWidth)
     ns.nemesisDetailLabel:SetJustifyH("LEFT")
+    -- Apply font then set white so font default color is not kept.
+    pcall(function() ns.nemesisDetailLabel:SetFontObject(ObjectiveFont) end)
     ns.nemesisDetailLabel:SetTextColor(1, 1, 1, 1)
     ns.nemesisDetailLabel:SetShadowOffset(1, -1)
     ns.nemesisDetailLabel:SetShadowColor(0, 0, 0, 1)

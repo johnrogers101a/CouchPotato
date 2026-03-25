@@ -971,13 +971,13 @@ describe("DelveCompanionStats", function()
         -- ── Fonts ─────────────────────────────────────────────────────────────
         describe("fonts", function()
 
-            it("header label uses Frizqt font (explicit SetFont, not ObjectiveTitleFont arg)", function()
+            it("header label uses ObjectiveTitleFont (matching Blizzard section header style)", function()
                 -- ns.headerLabel is aliased to ns.headerTitle on the manual header.
-                -- Font is set explicitly via SetFont() so it renders even before
-                -- font objects finish loading in-game.
+                -- GameFontNormal is the base; ObjectiveTitleFont is applied via pcall and
+                -- succeeds in the mock (ObjectiveTitleFont is a table with _name set).
                 assert.is_not_nil(ns.headerLabel)
                 local fontPath = ns.headerLabel:GetFont()
-                assert.equals("Fonts\\FRIZQT__.TTF", fontPath)
+                assert.equals("ObjectiveTitleFont", fontPath)
             end)
 
             it("nameLabel uses ObjectiveFont", function()
@@ -1005,11 +1005,12 @@ describe("DelveCompanionStats", function()
                 assert.equals("ObjectiveFont", fontPath)
             end)
 
-            it("header always uses Frizqt font (manual header, explicit SetFont)", function()
-                -- Header is always built manually with explicit SetFont() — no template dependency.
+            it("header always uses ObjectiveTitleFont when available (manual header)", function()
+                -- Header uses GameFontNormal as base then applies ObjectiveTitleFont via pcall.
+                -- In the mock ObjectiveTitleFont resolves to its _name string.
                 assert.is_not_nil(ns.headerLabel)
                 local fontPath = ns.headerLabel:GetFont()
-                assert.equals("Fonts\\FRIZQT__.TTF", fontPath)
+                assert.equals("ObjectiveTitleFont", fontPath)
             end)
 
         end)
@@ -1108,22 +1109,21 @@ describe("DelveCompanionStats", function()
         -- ── Content frame background ──────────────────────────────────────────
         describe("content frame background", function()
 
-            it("contentFrame has rounded gold backdrop border", function()
+            it("contentFrame has no border edge file (borderless, matching tracker content area)", function()
+                -- Blizzard ObjectiveTracker content area has no visible border — we match that.
                 assert.is_not_nil(ns.contentFrame._backdrop)
-                assert.are.equal("Interface\\Tooltips\\UI-Tooltip-Border", ns.contentFrame._backdrop.edgeFile)
-                local bc = ns.contentFrame._backdropBorderColor
-                assert.is_not_nil(bc)
-                assert.near(1, bc[1], 0.01)
-                assert.near(0.78, bc[2], 0.01)
-                assert.near(0.1, bc[3], 0.01)
+                -- edgeFile should be nil or absent (borderless)
+                local ef = ns.contentFrame._backdrop.edgeFile
+                assert.is_true(ef == nil or ef == "", "expected no edgeFile, got: " .. tostring(ef))
             end)
 
-            it("contentFrame has dark brown backdrop background", function()
+            it("contentFrame has dark translucent backdrop background", function()
                 local bc = ns.contentFrame._backdropColor
                 assert.is_not_nil(bc)
-                assert.near(0.05, bc[1], 0.01)
-                assert.near(0.04, bc[2], 0.01)
-                assert.near(0.01, bc[3], 0.01)
+                -- Dark olive/near-black background matching tracker content panel
+                assert.near(0.06, bc[1], 0.02)
+                assert.near(0.05, bc[2], 0.02)
+                assert.near(0.02, bc[3], 0.02)
             end)
 
         end)
