@@ -871,10 +871,10 @@ function ns:OnLoad()
     -- 5a-ii. Circle pool for unified stat display (7 circles + 6 connectors)
     -- Circles are 46px container frames.  Two layered Indicator textures produce
     -- a filled circle with a gold ring border:
-    --   • ring  (BACKGROUND sublayer 0): Indicator-Yellow at 54px — bleeds 4px
+    --   • ring  (BORDER layer): Indicator-Gray tinted gold at 54px — bleeds 4px
     --     outside the container on each side, giving the gold border effect.
-    --   • fill  (BACKGROUND sublayer 1): Indicator-Gray at 42px — sits 2px inside
-    --     the ring edge, creating visible gold rim and inner dark padding for text.
+    --   • fill  (ARTWORK layer): Indicator-Gray at 42px — ARTWORK draws on top of
+    --     BORDER, leaving the 6px gold rim visible around the dark fill.
     -- Both textures are true filled circles so they composite cleanly.
     -- MiniMap-TrackingBorder is intentionally avoided: it has an arrow pointer
     -- and non-standard UV mapping that renders incorrectly at badge sizes.
@@ -896,22 +896,23 @@ function ns:OnLoad()
         circ:SetSize(circleSize, circleSize)
         circ:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", x, circleOffsetY)
 
-        -- Gold ring: oversized Indicator-Yellow behind the dark fill.
-        -- 57px into a 49px frame means it bleeds 4px on each side — the
-        -- exposed rim is the visible gold ring border.
-        local ring = circ:CreateTexture(nil, "BACKGROUND", nil, 0)
+        -- Gold ring: BORDER layer so it renders strictly below ARTWORK.
+        -- Indicator-Gray tinted bright gold gives a clean circle shape.
+        -- 54px into a 46px frame bleeds 4px on each side — the exposed
+        -- rim is the visible gold ring border.
+        local ring = circ:CreateTexture(nil, "BORDER")
         ring:SetSize(54, 54)
         ring:SetPoint("CENTER", circ, "CENTER", 0, 0)
-        ring:SetTexture("Interface\\COMMON\\Indicator-Yellow")
-        ring:SetVertexColor(0.9, 0.72, 0.05, 0.9)
+        ring:SetTexture("Interface\\COMMON\\Indicator-Gray")
+        ring:SetVertexColor(1, 0.82, 0, 1)  -- bright gold, full alpha
 
-        -- Dark fill: Indicator-Gray smaller than the ring so the gold rim
-        -- is visible, and smaller than the frame to add inner text padding.
-        local bg = circ:CreateTexture(nil, "BACKGROUND", nil, 1)
+        -- Dark fill: ARTWORK layer renders on top of BORDER, guaranteeing
+        -- the 6px gold rim (3px each side) stays visible.
+        local bg = circ:CreateTexture(nil, "ARTWORK")
         bg:SetSize(42, 42)
         bg:SetPoint("CENTER", circ, "CENTER", 0, 0)
         bg:SetTexture("Interface\\COMMON\\Indicator-Gray")
-        bg:SetVertexColor(0.07, 0.06, 0.02, 0.92)
+        bg:SetVertexColor(0.08, 0.06, 0.02, 0.95)
 
         -- Stat abbreviation: upper half of circle, anchored to CENTER +8px
         local nameFS = circ:CreateFontString(nil, "OVERLAY")
