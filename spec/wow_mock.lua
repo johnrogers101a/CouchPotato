@@ -303,6 +303,13 @@ local function createMockFrame(frameType, name, parent, template)
         function frame:GetText() return self._text end
     end
 
+    -- UICheckButtonTemplate support
+    if template and template:find("UICheckButtonTemplate") then
+        frame._checked = false
+        function frame:SetChecked(v) self._checked = v and true or false end
+        function frame:GetChecked() return self._checked end
+    end
+
     -- BasicFrameTemplateWithInset support
     -- Provides .TitleBg (texture), .CloseButton (button), .Inset (frame) children
     -- matching the real Blizzard template's child widget names.
