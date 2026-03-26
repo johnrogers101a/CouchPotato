@@ -207,9 +207,17 @@ local function _buildFunctionsTab(parent)
     codeEB:SetMultiLine(true)
     codeEB:SetAutoFocus(false)
     codeEB:SetFontObject("GameFontHighlightSmall")
-    codeEB:SetWidth(400)
+    local codeWidth = math.max(codeScroll:GetWidth() or 0, 250)
+    codeEB:SetWidth(codeWidth)
     codeEB:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     codeScroll:SetScrollChild(codeEB)
+
+    -- Dynamically update EditBox width when container resizes
+    codeScroll:SetScript("OnSizeChanged", function(self, w)
+        if w and w > 0 then
+            codeEB:SetWidth(math.max(w, 250))
+        end
+    end)
     container._funcCodeEB = codeEB
 
     -- Save & Delete buttons
