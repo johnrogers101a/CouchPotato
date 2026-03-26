@@ -1031,7 +1031,7 @@ addSuite("T14: Tab Styling", function()
     local INACTIVE_TEX = "Interface\\CharacterFrame\\UI-CharacterFrame-InActiveTab"
 
     -- Verify selected tab has ActiveTab texture
-    local selectedIdx = f._currentTab or 1
+    local selectedIdx = f._activeTab or 1
     local selTab = tabs[selectedIdx]
     if selTab and selTab.Left and selTab.Left.GetTexture then
         local tex = selTab.Left:GetTexture()
@@ -1083,9 +1083,9 @@ addSuite("T14: Tab Styling", function()
     -- Verify tab click switches content
     if #tabs >= 2 then
         local Editor = ns.Editor
-        if Editor and Editor.SelectTab then
+        if Editor and Editor._selectTab then
             -- Switch to tab 2
-            Editor.SelectTab(2)
+            Editor._selectTab(2)
             local tabFrames = f._tabFrames
             if tabFrames and tabFrames[2] then
                 assertTrue("T14: Tab 2 content visible after click", tabFrames[2]:IsVisible())
@@ -1101,7 +1101,7 @@ addSuite("T14: Tab Styling", function()
                     "texture=" .. tostring(tex))
             end
             -- Switch back to tab 1
-            Editor.SelectTab(1)
+            Editor._selectTab(1)
         end
     end
 
