@@ -72,7 +72,12 @@ local function _rebuildLineEditors()
     end
 
     local entryHeight = 30
-    local entryWidth = scrollChild:GetWidth() or 300
+    local entryWidth = scrollChild:GetWidth()
+    if not entryWidth or entryWidth <= 0 then
+        local parent = scrollChild:GetParent()
+        entryWidth = parent and parent:GetWidth() or 300
+        if entryWidth <= 0 then entryWidth = 300 end
+    end
 
     for i, line in ipairs(_selectedLines) do
         local entry = _lineEntries[i]
@@ -809,10 +814,18 @@ local function BuildEditorFrame()
     linesScroll:SetHeight(linesHeight)
 
     local linesScrollChild = CreateFrame("Frame", nil, linesScroll)
-    linesScrollChild:SetWidth(centerFrame:GetWidth() and centerFrame:GetWidth() - 32 or 300)
+    local initCenterW = centerFrame:GetWidth()
+    linesScrollChild:SetWidth((initCenterW and initCenterW > 0) and (initCenterW - 32) or 300)
     linesScrollChild:SetHeight(1)
     linesScroll:SetScrollChild(linesScrollChild)
     f._linesScrollChild = linesScrollChild
+
+    -- Dynamically update scroll child width when center frame resizes
+    centerFrame:HookScript("OnSizeChanged", function(self, w)
+        if w and w > 0 and linesScrollChild then
+            linesScrollChild:SetWidth(w - 32)
+        end
+    end)
 
     -- Separator between lines and tab content
     local centerSep = centerFrame:CreateTexture(nil, "ARTWORK")
