@@ -1,8 +1,0 @@
-## Interface: 120001
-## Title: CouchPotato Diagnostic
-## Notes: Dumps scenario criteria and widget data for debugging
-## Author: CouchPotato
-## Version: 1.0.0
-## Dependencies: CouchPotato
-
-CouchPotatoDiag.lua

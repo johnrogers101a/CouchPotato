@@ -547,100 +547,59 @@ local function BuildEditorFrame()
     local tabNames = { "Functions", "Properties", "Visibility" }
     local tabs = {}
 
-    -- Helper: build a Blizzard-style tab button with proper tab textures.
-    -- Tries CharacterFrameTabButtonTemplate first; if unavailable, constructs
-    -- the tab manually with explicit texture regions.
-    local ACTIVE_TEX   = "Interface\\CharacterFrame\\UI-CharacterFrame-ActiveTab"
-    local INACTIVE_TEX = "Interface\\CharacterFrame\\UI-CharacterFrame-InActiveTab"
+    -- Custom tab textures: built images stored in InfoPanels/Textures/
+    local ACTIVE_TEX   = "Interface\\AddOns\\InfoPanels\\Textures\\tab-active"
+    local INACTIVE_TEX = "Interface\\AddOns\\InfoPanels\\Textures\\tab-inactive"
     local TAB_HEIGHT   = 32
     local TAB_PADDING  = 15
 
     local function createTabButton(index, labelText, parent)
-        -- Attempt the Blizzard template first
-        local tab
-        local ok, result = pcall(function()
-            return CreateFrame("Button", "IPEditorTab" .. index, parent, "CharacterFrameTabButtonTemplate")
-        end)
-        if ok and result then
-            tab = result
-            tab._isManualTab = false
-        else
-            tab = CreateFrame("Button", "IPEditorTab" .. index, parent)
-            tab._isManualTab = true
-        end
-
+        local tab = CreateFrame("Button", "IPEditorTab" .. index, parent)
         tab:SetID(index)
         tab:SetHeight(TAB_HEIGHT)
 
-        if tab._isManualTab then
-            -- Fallback: manually create Left/Right/Middle textures
-            local left = tab:CreateTexture(nil, "BACKGROUND")
-            left:SetWidth(20)
-            left:SetHeight(TAB_HEIGHT)
-            left:SetPoint("BOTTOMLEFT")
-            tab.Left = left
+        -- Create Left/Middle/Right texture regions for 3-slice tab background
+        local left = tab:CreateTexture(nil, "BACKGROUND")
+        left:SetWidth(20)
+        left:SetHeight(TAB_HEIGHT)
+        left:SetPoint("BOTTOMLEFT")
+        tab.Left = left
 
-            local right = tab:CreateTexture(nil, "BACKGROUND")
-            right:SetWidth(20)
-            right:SetHeight(TAB_HEIGHT)
-            right:SetPoint("BOTTOMRIGHT")
-            tab.Right = right
+        local right = tab:CreateTexture(nil, "BACKGROUND")
+        right:SetWidth(20)
+        right:SetHeight(TAB_HEIGHT)
+        right:SetPoint("BOTTOMRIGHT")
+        tab.Right = right
 
-            local middle = tab:CreateTexture(nil, "BACKGROUND")
-            middle:SetHeight(TAB_HEIGHT)
-            middle:SetPoint("LEFT", tab.Left, "RIGHT")
-            middle:SetPoint("RIGHT", tab.Right, "LEFT")
-            tab.Middle = middle
+        local middle = tab:CreateTexture(nil, "BACKGROUND")
+        middle:SetHeight(TAB_HEIGHT)
+        middle:SetPoint("LEFT", tab.Left, "RIGHT")
+        middle:SetPoint("RIGHT", tab.Right, "LEFT")
+        tab.Middle = middle
 
-            tab.Left:SetTexture(INACTIVE_TEX)
-            tab.Right:SetTexture(INACTIVE_TEX)
-            tab.Middle:SetTexture(INACTIVE_TEX)
-            tab.Left:SetTexCoord(0, 0.15625, 0, 1)
-            tab.Right:SetTexCoord(0.84375, 1, 0, 1)
-            tab.Middle:SetTexCoord(0.15625, 0.84375, 0, 1)
-
-            -- Text label for manual tab
-            local fs = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-            fs:SetPoint("CENTER", 0, 2)
-            tab:SetFontString(fs)
-        else
-            -- Blizzard template tab: use PanelTemplates API
-            -- Initial state: deselected (PanelTemplates manages the built-in textures)
-            if PanelTemplates_DeselectTab then
-                PanelTemplates_DeselectTab(tab)
-            end
-            if PanelTemplates_TabResize then
-                PanelTemplates_TabResize(tab, TAB_PADDING)
-            end
-
-            -- Alias the template's actual texture children to tab.Left/Right/Middle
-            -- so T14 can check tab.Left:GetTexture() and get the correct result.
-            -- The template creates LeftActive/LeftDisabled (or similar) texture children.
-            tab.Left = tab.LeftActive or tab.LeftDisabled or tab.Left
-            tab.Right = tab.RightActive or tab.RightDisabled or tab.Right
-            tab.Middle = tab.MiddleActive or tab.MiddleDisabled or tab.Middle
-        end
+        -- Set initial texture (inactive) with tex coords for 3-slice
+        tab.Left:SetTexture(INACTIVE_TEX)
+        tab.Right:SetTexture(INACTIVE_TEX)
+        tab.Middle:SetTexture(INACTIVE_TEX)
+        tab.Left:SetTexCoord(0, 0.078125, 0, 1)
+        tab.Right:SetTexCoord(0.921875, 1, 0, 1)
+        tab.Middle:SetTexCoord(0.078125, 0.921875, 0, 1)
 
         -- Text label
-        if not tab:GetFontString() then
-            local fs = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-            fs:SetPoint("CENTER", 0, 2)
-            tab:SetFontString(fs)
-        end
+        local fs = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        fs:SetPoint("CENTER", 0, 2)
+        tab:SetFontString(fs)
         tab:SetText(labelText)
-        tab:GetFontString():SetPoint("CENTER", 0, 2)
 
-        -- Size to fit text + padding (for manual tabs; template tabs get resized by PanelTemplates)
-        if tab._isManualTab then
-            local textWidth = tab:GetFontString():GetStringWidth() or 60
-            tab:SetWidth(textWidth + TAB_PADDING * 2)
-        end
+        -- Size to fit text + padding
+        local textWidth = tab:GetFontString():GetStringWidth() or 60
+        tab:SetWidth(textWidth + TAB_PADDING * 2)
 
         -- Highlight texture for mouseover
         local hl = tab:CreateTexture(nil, "HIGHLIGHT")
         hl:SetAllPoints()
         hl:SetTexture(ACTIVE_TEX)
-        hl:SetTexCoord(0.15625, 0.84375, 0, 1)
+        hl:SetTexCoord(0.078125, 0.921875, 0, 1)
         hl:SetAlpha(0.4)
 
         return tab
@@ -978,30 +937,16 @@ function Editor._selectTab(tabIndex)
     end
 
     local tabs = _editorFrame._tabs or {}
-    local activeTex   = _editorFrame._tabActiveTex   or "Interface\\CharacterFrame\\UI-CharacterFrame-ActiveTab"
-    local inactiveTex = _editorFrame._tabInactiveTex or "Interface\\CharacterFrame\\UI-CharacterFrame-InActiveTab"
+    local activeTex   = "Interface\\AddOns\\InfoPanels\\Textures\\tab-active"
+    local inactiveTex = "Interface\\AddOns\\InfoPanels\\Textures\\tab-inactive"
 
     for i, tab in ipairs(tabs) do
         local isSelected = (i == tabIndex)
+        local tex = isSelected and activeTex or inactiveTex
 
-        if tab._isManualTab then
-            -- Manual fallback: set textures directly
-            local tex = isSelected and activeTex or inactiveTex
-            if tab.Left  then tab.Left:SetTexture(tex) end
-            if tab.Right then tab.Right:SetTexture(tex) end
-            if tab.Middle then tab.Middle:SetTexture(tex) end
-        else
-            -- Blizzard template: use PanelTemplates API
-            if isSelected then
-                if PanelTemplates_SelectTab then PanelTemplates_SelectTab(tab) end
-            else
-                if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(tab) end
-            end
-            -- Re-alias after state change so tab.Left points to the currently visible texture
-            tab.Left = tab.LeftActive or tab.LeftDisabled or tab.Left
-            tab.Right = tab.RightActive or tab.RightDisabled or tab.Right
-            tab.Middle = tab.MiddleActive or tab.MiddleDisabled or tab.Middle
-        end
+        if tab.Left  then tab.Left:SetTexture(tex) end
+        if tab.Right then tab.Right:SetTexture(tex) end
+        if tab.Middle then tab.Middle:SetTexture(tex) end
 
         -- Text color: gold for selected, dim for inactive
         local fs = tab:GetFontString()

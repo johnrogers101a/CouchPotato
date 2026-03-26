@@ -16,12 +16,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ADDON_NAMES=(
     CouchPotato
-    CouchPotatoDiag
     ControllerCompanion
     ControllerCompanion_Loader
-    DelveCompanionStats
-    DelversJourney
-    StatPriority
+    InfoPanels
 )
 
 # ---------------------------------------------------------------------------
@@ -101,6 +98,7 @@ done
 KNOWN_ADDONS=("${ADDON_NAMES[@]}")
 
 for INSTALLED_DIR in "$ADDONS_PATH"/CouchPotato* "$ADDONS_PATH"/ControllerCompanion* \
+                     "$ADDONS_PATH"/InfoPanels* \
                      "$ADDONS_PATH"/DelveCompanion* "$ADDONS_PATH"/DelversJourney* \
                      "$ADDONS_PATH"/StatPriority*; do
     [[ -d "$INSTALLED_DIR" ]] || continue

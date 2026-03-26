@@ -1027,26 +1027,38 @@ addSuite("T14: Tab Styling", function()
     end
 
     -- Identify selected tab (tab 1 should be selected by default after Show)
-    local ACTIVE_TEX   = "Interface\\CharacterFrame\\UI-CharacterFrame-ActiveTab"
-    local INACTIVE_TEX = "Interface\\CharacterFrame\\UI-CharacterFrame-InActiveTab"
+    -- Custom tab textures: tab-active / tab-inactive in InfoPanels/Textures/
+    -- GetTexture() may return the path string or a numeric FileDataID, so we
+    -- check for non-nil and optionally match the path if it is a string.
 
-    -- Verify selected tab has ActiveTab texture
+    -- Verify selected tab has a texture set
     local selectedIdx = f._activeTab or 1
     local selTab = tabs[selectedIdx]
     if selTab and selTab.Left and selTab.Left.GetTexture then
         local tex = selTab.Left:GetTexture()
-        assertTrue("T14: Selected tab has ActiveTab texture",
-            tex and tex:find("ActiveTab"),
+        assertTrue("T14: Selected tab has active texture",
+            tex ~= nil,
             "texture=" .. tostring(tex))
+        -- If string, verify it contains "tab-active" (custom) or "ActiveTab" (Blizzard)
+        if type(tex) == "string" then
+            assertTrue("T14: Selected tab texture is active variant",
+                tex:find("tab%-active") or tex:find("ActiveTab"),
+                "texture=" .. tostring(tex))
+        end
     end
 
-    -- Verify inactive tabs have InActiveTab texture
+    -- Verify inactive tabs have inactive texture
     for i, tab in ipairs(tabs) do
         if i ~= selectedIdx and tab.Left and tab.Left.GetTexture then
             local tex = tab.Left:GetTexture()
-            assertTrue("T14: Inactive tab " .. i .. " has InActiveTab texture",
-                tex and tex:find("InActiveTab"),
+            assertTrue("T14: Inactive tab " .. i .. " has texture set",
+                tex ~= nil,
                 "texture=" .. tostring(tex))
+            if type(tex) == "string" then
+                assertTrue("T14: Inactive tab " .. i .. " has inactive texture",
+                    tex:find("tab%-inactive") or tex:find("InActiveTab"),
+                    "texture=" .. tostring(tex))
+            end
         end
     end
 
@@ -1096,9 +1108,14 @@ addSuite("T14: Tab Styling", function()
             -- Verify tab 2 now has active texture
             if tabs[2] and tabs[2].Left and tabs[2].Left.GetTexture then
                 local tex = tabs[2].Left:GetTexture()
-                assertTrue("T14: Tab 2 has ActiveTab texture after click",
-                    tex and tex:find("ActiveTab"),
+                assertTrue("T14: Tab 2 has active texture after click",
+                    tex ~= nil,
                     "texture=" .. tostring(tex))
+                if type(tex) == "string" then
+                    assertTrue("T14: Tab 2 texture is active variant after click",
+                        tex:find("tab%-active") or tex:find("ActiveTab"),
+                        "texture=" .. tostring(tex))
+                end
             end
             -- Switch back to tab 1
             Editor._selectTab(1)

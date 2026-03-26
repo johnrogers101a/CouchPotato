@@ -1,0 +1,34 @@
+## Interface: 120001
+## Title: Info Panels
+## Notes: Data-driven information panels with graphical editor and profile sharing
+## Author: CouchPotato Addons
+## Version: 2.0.0
+## SavedVariables: InfoPanelsDB
+## Dependencies: CouchPotato
+## X-Category: Interface Enhancements
+
+Libs/LibDeflate.lua
+Core/Utils.lua
+Core/Registry.lua
+Core/UIFramework.lua
+Core/DataSources.lua
+Core/Functions.lua
+Core/LayoutTypes.lua
+Core/PanelTypes.lua
+Core/PanelEngine.lua
+Core/ProfileCodec.lua
+Core/APIValidation.lua
+Core/InGameTests.lua
+BuiltIn/StatPriorityData.lua
+BuiltIn/StatPriority.lua
+BuiltIn/DelveCompanionStats.lua
+BuiltIn/DelversJourney.lua
+Editor/EditorConstants.lua
+Editor/PanelList.lua
+Editor/DataSourceBrowser.lua
+Editor/LivePreview.lua
+Editor/PropertiesPanel.lua
+Editor/TextureBrowser.lua
+Editor/ImportExport.lua
+Editor/Editor.lua
+InfoPanels.lua

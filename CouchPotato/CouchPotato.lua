@@ -133,9 +133,7 @@ local DB_DEFAULTS = {
     windowState   = { shown = false },
     addonStates   = {
         ControllerCompanion  = true,
-        DelveCompanionStats  = true,
-        DelversJourney       = true,
-        StatPriority         = true,
+        InfoPanels           = true,
     },
 }
 
@@ -180,9 +178,7 @@ end
 local SUITE_PATTERNS = {
     "CouchPotato",
     "ControllerCompanion",
-    "DelveCompanionStats",
-    "DelversJourney",
-    "StatPriority",
+    "InfoPanels",
 }
 
 local MAX_ERROR_LOG = 500
@@ -278,9 +274,7 @@ end)
 -- Canonical addon key → human-readable display name.
 local ADDON_DISPLAY_NAMES = {
     ControllerCompanion  = "Controller Companion",
-    DelveCompanionStats  = "Delve Companion Stats",
-    DelversJourney       = "Delver's Journey",
-    StatPriority         = "Stat Priority",
+    InfoPanels           = "Info Panels",
 }
 
 -- Canonical addon name → display name mapping.
@@ -288,12 +282,8 @@ local ADDON_DISPLAY_NAMES = {
 local ADDON_ALIASES = {
     controllercompanion  = "ControllerCompanion",
     cc                   = "ControllerCompanion",
-    delvecompanionstats  = "DelveCompanionStats",
-    dcs                  = "DelveCompanionStats",
-    delversjourney       = "DelversJourney",
-    dj                   = "DelversJourney",
-    statpriority         = "StatPriority",
-    sp                   = "StatPriority",
+    infopanels           = "InfoPanels",
+    ip                   = "InfoPanels",
 }
 
 -- cpprint: write a coloured [CP] message to the chat frame.
@@ -328,7 +318,7 @@ end
 local function PrintAddonStatus()
     EnsureAddonStates()
     cpprint("Suite addon states:")
-    local order = { "ControllerCompanion", "DelveCompanionStats", "DelversJourney", "StatPriority" }
+    local order = { "ControllerCompanion", "InfoPanels" }
     for _, name in ipairs(order) do
         local state = CouchPotatoDB.addonStates[name]
         local label = (state == false) and "|cffff4444disabled|r" or "|cff44ff44enabled|r"
@@ -361,17 +351,15 @@ local function DoDisableAddon(name)
         if _G.ControllerCompanion and _G.ControllerCompanion._mainFrame then
             _G.ControllerCompanion._mainFrame:Hide()
         end
-    elseif name == "DelveCompanionStats" then
-        local ns = _G.DelveCompanionStatsNS
-        if ns then
-            ns._cpDisabled = true
-            if ns.frame then ns.frame:Hide() end
-        end
-    elseif name == "StatPriority" then
-        local ns = _G.StatPriorityNS
-        if ns then
-            ns._cpDisabled = true
-            if ns.frame then ns.frame:Hide() end
+    elseif name == "InfoPanels" then
+        local ipns = _G.InfoPanelsNS
+        if ipns then
+            ipns._cpDisabled = true
+            if ipns.PanelEngine then
+                for id in pairs(ipns.PanelEngine.GetAllPanels()) do
+                    ipns.PanelEngine.HidePanel(id)
+                end
+            end
         end
     end
 end
@@ -382,18 +370,15 @@ local function DoEnableAddon(name)
         if _G.ControllerCompanion and _G.ControllerCompanion.OnControllerActivated then
             _G.ControllerCompanion:OnControllerActivated()
         end
-    elseif name == "DelveCompanionStats" then
-        local ns = _G.DelveCompanionStatsNS
-        if ns then
-            ns._cpDisabled = false
-            if ns.frame then ns.frame:Show() end
-        end
-    elseif name == "StatPriority" then
-        local ns = _G.StatPriorityNS
-        if ns then
-            ns._cpDisabled = false
-            if ns.frame then ns.frame:Show() end
-            if ns.UpdateStatPriority then ns:UpdateStatPriority() end
+    elseif name == "InfoPanels" then
+        local ipns = _G.InfoPanelsNS
+        if ipns then
+            ipns._cpDisabled = false
+            if ipns.PanelEngine then
+                for id in pairs(ipns.PanelEngine.GetAllPanels()) do
+                    ipns.PanelEngine.ShowPanel(id)
+                end
+            end
         end
     end
 end
@@ -410,7 +395,7 @@ local function HandleEnableDisable(action, rawName)
     local alias = strlower(rawName)
     local canonical = ADDON_ALIASES[alias]
     if not canonical then
-        cpprint("Unknown addon '" .. rawName .. "'. Valid names: controllercompanion (cc), delvecompanionstats (dcs), statpriority (sp)")
+        cpprint("Unknown addon '" .. rawName .. "'. Valid names: controllercompanion (cc), infopanels (ip)")
         return
     end
 

@@ -70,7 +70,8 @@ globals = {
     "WorldMapFrame", "HideUIPanel", "ShowUIPanel", "CloseAllWindows",
 
     -- UI utility
-    "tinsert", "UISpecialFrames", "strtrim", "strlower",
+    "tinsert", "tremove", "wipe", "UISpecialFrames", "strtrim", "strlower",
+    "strsplit", "strjoin", "date",
 
     -- Binding
     "SetBindingClick",
@@ -86,9 +87,10 @@ globals = {
     -- Time
     "time",
 
-    -- Slash command globals (set by Loader.lua)
+    -- Slash command globals (set by Loader.lua and addons)
     "SLASH_CP1", "SLASH_CP2", "SLASH_CPLOAD1",
-    "SLASH_DCS1", "SLASH_DCS2",
+    "SLASH_INFOPANELS1", "SLASH_INFOPANELS2",
+    "SLASH_IPVALIDATE1", "SLASH_IPVALIDATE2",
 
     -- Ace3 (embedded)
     "LibStub",
@@ -96,13 +98,31 @@ globals = {
     -- Delves
     "C_DelvesUI", "ChatFrame1", "C_Reputation", "IsInInstance",
     "ScenarioObjectiveTracker", "ObjectiveTrackerFrame",
+    "C_MajorFactions", "C_CurrencyInfo", "C_PartyInfo",
+    "QuestObjectiveTracker",
+
+    -- Dropdown menus (legacy API)
+    "UIDropDownMenu_Initialize", "UIDropDownMenu_CreateInfo",
+    "UIDropDownMenu_AddButton", "UIDropDownMenu_SetSelectedValue",
+    "UIDropDownMenu_SetWidth", "UIDropDownMenu_SetText",
+    "MenuUtil",
+
+    -- Combat rating
+    "GetCombatRating",
+
+    -- Stats
+    "UnitStat", "GetHaste", "GetCritChance", "GetMasteryEffect",
+    "GetCombatRatingBonus", "CR_VERSATILITY_DAMAGE_DONE",
+    "GetNumSpecializations", "GetSpecializationInfoByID",
+    "GetLootSpecialization",
 
     -- Unit Auras and Scenario APIs
     "C_UnitAuras", "C_ScenarioInfo", "UnitAura",
 
     -- Addon globals
     "ControllerCompanion", "ControllerCompanionDB", "ControllerCompanionLoaderDB",
-    "DelveCompanionStatsDB", "DelveCompanionStatsNS",
+    "InfoPanelsDB", "InfoPanelsNS", "StatPriorityData", "StatPriorityGetStatValue",
+    "LibDeflate",
 
     -- bit library
     "bit",
@@ -114,6 +134,10 @@ ignore = {
     "212",  -- unused argument (common in WoW event handlers)
     "213",  -- unused loop variable
     "231",  -- variable never accessed
+    "241",  -- variable mutated but never accessed
+    "311",  -- value of variable not mutated
+    "331",  -- value assigned to variable is mutated but never accessed
+    "542",  -- empty if branch
     "432",  -- shadowing upvalue argument (common in WoW frame callbacks)
     "611",  -- line contains only whitespace
     "612",  -- line contains trailing whitespace
@@ -125,7 +149,8 @@ files = {
     ["spec/**"] = {
         globals = { "_MockPlayer", "_SetCombatState", "_GetOverrideBindings", "_ResetBindings",
                     "_SetMockAura", "_ClearMockAuras", "_SetMockNemesis", "_ClearMockNemesis",
-                    "_SetMockBoonTooltip", "_ClearMockBoonTooltip" },
+                    "_SetMockBoonTooltip", "_ClearMockBoonTooltip",
+                    "StatPriorityData", "StatPriorityGetStatValue" },
         ignore = { "143" },  -- accessing undefined fields (busted assertions, table.unpack compat)
     }
 }

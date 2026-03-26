@@ -6,6 +6,20 @@ This file provides guidance to Claude Code, Copilot, and other agents when worki
 
 ## Critical Rules
 
+### MANDATORY: NEVER Commit to Main
+**YOU NEVER COMMIT TO MAIN. ALWAYS create a feature branch. Only merge to main when the user explicitly confirms they are happy with the feature.**
+
+This rule has been violated multiple times and has broken code. It is now a mandatory, non-negotiable rule:
+
+1. **NEVER commit directly to main.** Create a feature branch for every piece of work.
+2. Only merge to main when the user explicitly says: "I'm happy with this" or equivalent approval.
+3. Merging to main before the user approves breaks code. This is unacceptable.
+4. If you create a feature branch and a PR opens, keep working on that branch until approval. Do not create additional branches for the same task.
+
+**Enforcement:** Agents who violate this rule will be demoted and lose trust. This has happened.
+
+---
+
 ### Incremental Approach Rule (MANDATORY FOR ALL WORK)
 **ALWAYS use an incremental approach — break work into small chunks/phases. ALWAYS check for user buy-in and agreement at each step before proceeding to the next.**
 
@@ -38,6 +52,16 @@ bash /Users/john/code/4JS/CouchPotato/install.sh
 - Running the install script validates the addon structure and copies files to WoW's AddOns folder.
 - **Never tell the user a fix is done without installing it first.**
 - Only after successful install completion should you report the task as finished.
+
+---
+
+### Testing Validation Rule
+**Local unit/spec tests are meaningless. The ONLY valid tests are in-game UX tests run via `/ip test` in the game.**
+
+- Agents must NOT claim completion or success based on local test results alone.
+- Do not claim "all tests pass" unless you have actually run the feature in-game via `/ip test`.
+- Do not claim features work without in-game validation.
+- False completion claims delay real feedback and waste time. This has happened multiple times and is unacceptable.
 
 ---
 

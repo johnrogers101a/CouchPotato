@@ -6,9 +6,7 @@ _G.CouchPotatoLog = CouchPotatoLog
 local ADDON_COLORS = {
     ["ControllerCompanion"] = "|cff69ccf0",
     ["Loader"]              = "|cffff6600",
-    ["DCS"]                 = "|cff00ccff",
-    ["DJ"]                  = "|cff33ccff",
-    ["SP"]                  = "|cffff99cc",
+    ["IP"]                  = "|cff00ccff",
     ["CP"]                  = "|cffaaddff",
     ["CPQ"]                 = "|cffffff00",
 }

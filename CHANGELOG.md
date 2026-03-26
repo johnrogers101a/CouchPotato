@@ -7,8 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **InfoPanels** — New data-driven information panel engine replacing StatPriority, DelveCompanionStats, and DelversJourney
+- In-game graphical editor (`/ip editor`) for creating custom panels with searchable data sources and live preview
+- Profile string import/export for sharing panel configurations between players
+- Discord bot (`discord-bot/`) for generating InfoPanels import strings from natural-language descriptions via Claude Sonnet 4.6
+- Shared UI framework (UIFramework.lua) eliminating duplicated scaffolding code across panels
+
 ### Changed
-- Remove frame backdrop from DelveCompanionStats — companion info now displays as floating text only
+- CouchPotato config window updated: replaced per-addon checkboxes with unified InfoPanels management
+- Install scripts updated for new addon structure (CouchPotato, ControllerCompanion, ControllerCompanion_Loader, InfoPanels)
+
+### Removed
+- **StatPriority** addon — functionality now built into InfoPanels
+- **DelveCompanionStats** addon — functionality now built into InfoPanels
+- **DelversJourney** addon — functionality now built into InfoPanels
+- **CouchPotatoDiag** addon — diagnostic data capture folded into CouchPotatoLog debug logging
+- `/cpdiag` slash command removed entirely
 
 ## [1.0.1] - 2026-03-18
 
