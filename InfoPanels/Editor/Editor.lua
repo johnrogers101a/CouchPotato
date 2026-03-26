@@ -533,27 +533,101 @@ local function BuildEditorFrame()
     ---------------------------------------------------------------------------
     local tabNames = { "Functions", "Properties", "Visibility" }
     local tabs = {}
-    for i, name in ipairs(tabNames) do
+
+    -- Helper: build a Blizzard-style tab button with proper tab textures.
+    -- Tries CharacterFrameTabButtonTemplate first; if unavailable, constructs
+    -- the tab manually with explicit texture regions.
+    local ACTIVE_TEX   = "Interface\\CharacterFrame\\UI-CharacterFrame-ActiveTab"
+    local INACTIVE_TEX = "Interface\\CharacterFrame\\UI-CharacterFrame-InActiveTab"
+    local TAB_HEIGHT   = 32
+    local TAB_PADDING  = 15
+
+    local function createTabButton(index, labelText, parent)
+        -- Attempt the Blizzard template first
         local tab
-        local tabOk, tabResult = pcall(function()
-            return CreateFrame("Button", "IPEditorTab" .. i, f, "CharacterFrameTabButtonTemplate")
+        local ok, result = pcall(function()
+            return CreateFrame("Button", "IPEditorTab" .. index, parent, "CharacterFrameTabButtonTemplate")
         end)
-        if tabOk and tabResult then
-            tab = tabResult
+        if ok and result then
+            tab = result
         else
-            tab = CreateFrame("Button", "IPEditorTab" .. i, f, "UIPanelButtonTemplate")
+            tab = CreateFrame("Button", "IPEditorTab" .. index, parent)
         end
 
-        tab:SetText(name)
-        tab:SetID(i)
+        tab:SetID(index)
+        tab:SetHeight(TAB_HEIGHT)
+
+        -- Ensure we have the three texture regions for the tab shape
+        -- (Left cap, Right cap, Middle stretch). The Blizzard template may
+        -- already provide these; if not, create them manually.
+        if not tab.Left then
+            local left = tab:CreateTexture(nil, "BACKGROUND")
+            left:SetWidth(20)
+            left:SetHeight(TAB_HEIGHT)
+            left:SetPoint("BOTTOMLEFT")
+            tab.Left = left
+        end
+        if not tab.Right then
+            local right = tab:CreateTexture(nil, "BACKGROUND")
+            right:SetWidth(20)
+            right:SetHeight(TAB_HEIGHT)
+            right:SetPoint("BOTTOMRIGHT")
+            tab.Right = right
+        end
+        if not tab.Middle then
+            local middle = tab:CreateTexture(nil, "BACKGROUND")
+            middle:SetHeight(TAB_HEIGHT)
+            middle:SetPoint("LEFT", tab.Left, "RIGHT")
+            middle:SetPoint("RIGHT", tab.Right, "LEFT")
+            tab.Middle = middle
+        end
+
+        -- Apply inactive texture as default state
+        pcall(function() tab.Left:SetTexture(INACTIVE_TEX) end)
+        pcall(function() tab.Right:SetTexture(INACTIVE_TEX) end)
+        pcall(function() tab.Middle:SetTexture(INACTIVE_TEX) end)
+
+        -- TexCoords for Blizzard tab texture atlas:
+        --   Left cap:  0, 0.15625, 0, 1
+        --   Right cap: 0.84375, 1, 0, 1
+        --   Middle:    0.15625, 0.84375, 0, 1
+        pcall(function() tab.Left:SetTexCoord(0, 0.15625, 0, 1) end)
+        pcall(function() tab.Right:SetTexCoord(0.84375, 1, 0, 1) end)
+        pcall(function() tab.Middle:SetTexCoord(0.15625, 0.84375, 0, 1) end)
+
+        -- Text label
+        if not tab:GetFontString() then
+            local fs = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            fs:SetPoint("CENTER", 0, 2)
+            tab:SetFontString(fs)
+        end
+        tab:SetText(labelText)
+        tab:GetFontString():SetPoint("CENTER", 0, 2)
+
+        -- Size to fit text + padding
+        local textWidth = tab:GetFontString():GetStringWidth() or 60
+        tab:SetWidth(textWidth + TAB_PADDING * 2)
+
+        -- Highlight texture for mouseover
+        pcall(function()
+            local hl = tab:CreateTexture(nil, "HIGHLIGHT")
+            hl:SetAllPoints()
+            hl:SetTexture(ACTIVE_TEX)
+            hl:SetTexCoord(0.15625, 0.84375, 0, 1)
+            hl:SetAlpha(0.4)
+        end)
+
+        return tab
+    end
+
+    for i, name in ipairs(tabNames) do
+        local tab = createTabButton(i, name, f)
 
         if i == 1 then
             tab:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 20, -30)
         else
             tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", -16, 0)
         end
-
-        pcall(function() PanelTemplates_TabResize(tab, 0) end)
 
         tab:SetScript("OnClick", function()
             Editor._selectTab(i)
@@ -563,12 +637,9 @@ local function BuildEditorFrame()
     end
     f._tabs = tabs
 
-    -- Register tab count and set initial selection so Blizzard template
-    -- renders correctly (selected tab elevated with gold highlight).
-    pcall(function()
-        PanelTemplates_SetNumTabs(f, #tabNames)
-        PanelTemplates_SetTab(f, 1)
-    end)
+    -- Store texture paths on the frame for state management
+    f._tabActiveTex   = ACTIVE_TEX
+    f._tabInactiveTex = INACTIVE_TEX
 
     ---------------------------------------------------------------------------
     -- Layout: Three columns
@@ -869,9 +940,33 @@ function Editor._selectTab(tabIndex)
     end
 
     local tabs = _editorFrame._tabs or {}
+    local activeTex   = _editorFrame._tabActiveTex   or "Interface\\CharacterFrame\\UI-CharacterFrame-ActiveTab"
+    local inactiveTex = _editorFrame._tabInactiveTex or "Interface\\CharacterFrame\\UI-CharacterFrame-InActiveTab"
+
     for i, tab in ipairs(tabs) do
+        local isSelected = (i == tabIndex)
+        local tex = isSelected and activeTex or inactiveTex
+
+        -- Update tab textures
+        pcall(function() tab.Left:SetTexture(tex) end)
+        pcall(function() tab.Right:SetTexture(tex) end)
+        pcall(function() tab.Middle:SetTexture(tex) end)
+
+        -- Text color: gold for selected, dim for inactive
         pcall(function()
-            if i == tabIndex then
+            local fs = tab:GetFontString()
+            if fs then
+                if isSelected then
+                    fs:SetTextColor(1, 0.82, 0)
+                else
+                    fs:SetTextColor(0.6, 0.6, 0.6)
+                end
+            end
+        end)
+
+        -- Also try Blizzard's built-in tab state APIs as a bonus
+        pcall(function()
+            if isSelected then
                 PanelTemplates_SelectTab(tab)
             else
                 PanelTemplates_DeselectTab(tab)
