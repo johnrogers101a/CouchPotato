@@ -88,12 +88,16 @@ local function BuildExportPopup()
     instr:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -36)
     instr:SetText("Select all (Ctrl+A) then copy (Ctrl+C)")
 
-    local eb = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -56)
+    scrollFrame:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -32, 16)
+
+    local eb = CreateFrame("EditBox", nil, scrollFrame)
     eb:SetMultiLine(true)
     eb:SetAutoFocus(true)
     eb:SetFontObject("GameFontHighlightSmall")
-    eb:SetSize(WINDOW_W - 80, 200)
-    eb:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -56)
+    eb:SetWidth(WINDOW_W - 80)
+    scrollFrame:SetScrollChild(eb)
     eb:SetScript("OnEscapePressed", function() f:Hide() end)
     f._editBox = eb
 
@@ -283,11 +287,7 @@ local function ShowSettingsTab()
     end
     -- Refresh addon visibility checkboxes to reflect current DB state
     RefreshAddonCheckboxes()
-    -- Refresh the StatPriority spec dropdown to reflect current DB value
-    if _G.CouchPotatoConfigFrame and _G.CouchPotatoConfigFrame._spDropdown then
-        pcall(UIDropDownMenu_SetSelectedValue, _G.CouchPotatoConfigFrame._spDropdown,
-              (_G.StatPriorityDB and _G.StatPriorityDB.specOverride) or "current")
-    end
+    -- InfoPanels settings are managed through the editor
 end
 
 local function _build()
@@ -471,9 +471,7 @@ local function _build()
 
     -- Addons that get checkboxes (order matters for layout)
     local ADDON_CHECKBOX_LIST = {
-        { key = "DelveCompanionStats",  label = "Delve Companion Stats"  },
-        { key = "DelversJourney",       label = "Delver's Journey"       },
-        { key = "StatPriority",         label = "Stat Priority"          },
+        { key = "InfoPanels",           label = "Info Panels"            },
         { key = "ControllerCompanion",  label = "Controller Companion"   },
     }
 
@@ -517,10 +515,10 @@ local function _build()
     f._addonCheckboxes = checkboxes
     _addonCheckboxes = checkboxes
 
-    -- Section header: StatPriority
+    -- Section header: InfoPanels
     local spSectionLabel = settingsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     spSectionLabel:SetPoint("TOPLEFT", settingsPanel, "TOPLEFT", 20, -16 - #ADDON_CHECKBOX_LIST * CHECKBOX_SPACING - 20)
-    spSectionLabel:SetText("StatPriority")
+    spSectionLabel:SetText("Info Panels")
     spSectionLabel:SetTextColor(1, 0.82, 0.0, 1)
 
     -- Separator under section header
@@ -530,124 +528,36 @@ local function _build()
     spSep:SetPoint("TOPRIGHT", settingsPanel,  "TOPRIGHT",   -20, 0)
     spSep:SetColorTexture(0.4, 0.4, 0.4, 0.6)
 
-    -- "Display Spec" label
+    -- "Open Editor" button for InfoPanels
+    local editorBtn = CreateFrame("Button", nil, settingsPanel, "UIPanelButtonTemplate")
+    editorBtn:SetSize(160, 24)
+    editorBtn:SetPoint("TOPLEFT", spSectionLabel, "BOTTOMLEFT", 0, -20)
+    editorBtn:SetText("Open Panel Editor")
+    editorBtn:SetScript("OnClick", function()
+        if _G.InfoPanelsNS and _G.InfoPanelsNS.Editor then
+            f:Hide()
+            _G.InfoPanelsNS.Editor.Show()
+        end
+    end)
+
+    -- Run Tests button for InfoPanels
+    local runTestsBtn = CreateFrame("Button", nil, settingsPanel, "UIPanelButtonTemplate")
+    runTestsBtn:SetSize(160, 24)
+    runTestsBtn:SetPoint("LEFT", editorBtn, "RIGHT", 8, 0)
+    runTestsBtn:SetText("Run Tests")
+    runTestsBtn:SetScript("OnClick", function()
+        if _G.InfoPanelsNS and _G.InfoPanelsNS.InGameTests then
+            _G.InfoPanelsNS.InGameTests.RunAll()
+            -- Switch to debug log to see results
+            ShowDebugTab()
+            RebuildDebugList()
+        end
+    end)
+
+    -- Placeholder for future InfoPanels settings
     local spDropLabel = settingsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    spDropLabel:SetPoint("TOPLEFT", spSectionLabel, "BOTTOMLEFT", 0, -20)
-    spDropLabel:SetText("Display Spec:")
-
-    -- UIDropDownMenu for spec override
-    -- Using pcall guards because UIDropDownMenu is not available in test environments.
-    local spDropdown = CreateFrame("Frame", "CouchPotatoSPSpecDropdown", settingsPanel, "UIDropDownMenuTemplate")
-    spDropdown:SetPoint("TOPLEFT", spDropLabel, "BOTTOMLEFT", -16, -4)
-    f._spDropdown = spDropdown
-
-    local function InitSpecDropdown(self, level)
-        if _G.CouchPotatoLog then
-            _G.CouchPotatoLog:Info("CP", "ConfigWindow: InitSpecDropdown called, level=" .. tostring(level))
-        end
-
-        local currentOverride = (_G.StatPriorityDB and _G.StatPriorityDB.specOverride) or "current"
-
-        -- "Current Spec" option
-        local infoOk, info = pcall(UIDropDownMenu_CreateInfo)
-        if not infoOk then return end  -- UIDropDownMenu API not loaded
-
-        info.text     = "Current Spec"
-        info.value    = "current"
-        info.checked  = (currentOverride == "current")
-        info.func     = function(self)
-            local prev = _G.StatPriorityDB and _G.StatPriorityDB.specOverride
-            if _G.StatPriorityDB then _G.StatPriorityDB.specOverride = "current" end
-            if _G.CouchPotatoLog then
-                _G.CouchPotatoLog:Info("CP", "ConfigWindow: specOverride changed from '" ..
-                    tostring(prev) .. "' to 'current'")
-            end
-            pcall(UIDropDownMenu_SetSelectedValue, spDropdown, "current")
-            if _G.StatPriorityNS and _G.StatPriorityNS.UpdateStatPriority then
-                _G.StatPriorityNS:UpdateStatPriority()
-            end
-        end
-        pcall(UIDropDownMenu_AddButton, info, level)
-
-        -- "Loot Spec" option
-        local ok2, info2 = pcall(UIDropDownMenu_CreateInfo)
-        if not ok2 then return end
-        info2.text     = "Loot Spec"
-        info2.value    = "loot"
-        info2.checked  = (currentOverride == "loot")
-        info2.func     = function(self)
-            local prev = _G.StatPriorityDB and _G.StatPriorityDB.specOverride
-            if _G.StatPriorityDB then _G.StatPriorityDB.specOverride = "loot" end
-            if _G.CouchPotatoLog then
-                _G.CouchPotatoLog:Info("CP", "ConfigWindow: specOverride changed from '" ..
-                    tostring(prev) .. "' to 'loot'")
-            end
-            local lootID = (_G.GetLootSpecialization and _G.GetLootSpecialization()) or 0
-            if _G.CouchPotatoLog then
-                _G.CouchPotatoLog:Info("CP", "ConfigWindow: GetLootSpecialization()=" .. tostring(lootID))
-            end
-            pcall(UIDropDownMenu_SetSelectedValue, spDropdown, "loot")
-            if _G.StatPriorityNS and _G.StatPriorityNS.UpdateStatPriority then
-                _G.StatPriorityNS:UpdateStatPriority()
-            end
-        end
-        pcall(UIDropDownMenu_AddButton, info2, level)
-
-        -- One entry per class spec
-        if _G.GetNumSpecializations then
-            local numSpecs = _G.GetNumSpecializations()
-            if _G.CouchPotatoLog then
-                _G.CouchPotatoLog:Info("CP", "ConfigWindow: building spec list, numSpecs=" .. tostring(numSpecs))
-            end
-            for i = 1, numSpecs do
-                local specID, specName = _G.GetSpecializationInfo(i)
-                if specID and specName then
-                    local ok3, info3 = pcall(UIDropDownMenu_CreateInfo)
-                    if ok3 then
-                        local capturedSpecID = specID
-                        info3.text     = specName
-                        info3.value    = capturedSpecID
-                        info3.checked  = (currentOverride == capturedSpecID)
-                        info3.func     = function(self)
-                            local prev = _G.StatPriorityDB and _G.StatPriorityDB.specOverride
-                            if _G.StatPriorityDB then
-                                _G.StatPriorityDB.specOverride = capturedSpecID
-                            end
-                            if _G.CouchPotatoLog then
-                                _G.CouchPotatoLog:Info("CP", "ConfigWindow: specOverride changed from '" ..
-                                    tostring(prev) .. "' to specID=" .. tostring(capturedSpecID) ..
-                                    " (" .. tostring(specName) .. ")")
-                            end
-                            pcall(UIDropDownMenu_SetSelectedValue, spDropdown, capturedSpecID)
-                            if _G.StatPriorityNS and _G.StatPriorityNS.UpdateStatPriority then
-                                _G.StatPriorityNS:UpdateStatPriority()
-                            end
-                        end
-                        pcall(UIDropDownMenu_AddButton, info3, level)
-                    end
-                end
-            end
-        end
-    end
-
-    pcall(UIDropDownMenu_Initialize, spDropdown, InitSpecDropdown)
-    pcall(UIDropDownMenu_SetWidth, spDropdown, 160)
-
-    -- Set initial selected text
-    local initialOverride = (_G.StatPriorityDB and _G.StatPriorityDB.specOverride) or "current"
-    if initialOverride == "current" then
-        pcall(UIDropDownMenu_SetText, spDropdown, "Current Spec")
-    elseif initialOverride == "loot" then
-        pcall(UIDropDownMenu_SetText, spDropdown, "Loot Spec")
-    else
-        -- Try to get spec name
-        local specName = tostring(initialOverride)
-        if _G.GetSpecializationInfoByID then
-            local _, n = _G.GetSpecializationInfoByID(initialOverride)
-            if n then specName = n end
-        end
-        pcall(UIDropDownMenu_SetText, spDropdown, specName)
-    end
+    spDropLabel:SetPoint("TOPLEFT", editorBtn, "BOTTOMLEFT", 0, -8)
+    spDropLabel:SetText("Use /ip editor or the button above to create and manage panels.")
 
     if _G.CouchPotatoLog then
         _G.CouchPotatoLog:Info("CP", "ConfigWindow: Settings tab created, initial specOverride=" ..
