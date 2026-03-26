@@ -550,50 +550,63 @@ local function BuildEditorFrame()
         end)
         if ok and result then
             tab = result
+            tab._isManualTab = false
         else
             tab = CreateFrame("Button", "IPEditorTab" .. index, parent)
+            tab._isManualTab = true
         end
 
         tab:SetID(index)
         tab:SetHeight(TAB_HEIGHT)
 
-        -- Ensure we have the three texture regions for the tab shape
-        -- (Left cap, Right cap, Middle stretch). The Blizzard template may
-        -- already provide these; if not, create them manually.
-        if not tab.Left then
+        if tab._isManualTab then
+            -- Fallback: manually create Left/Right/Middle textures
             local left = tab:CreateTexture(nil, "BACKGROUND")
             left:SetWidth(20)
             left:SetHeight(TAB_HEIGHT)
             left:SetPoint("BOTTOMLEFT")
             tab.Left = left
-        end
-        if not tab.Right then
+
             local right = tab:CreateTexture(nil, "BACKGROUND")
             right:SetWidth(20)
             right:SetHeight(TAB_HEIGHT)
             right:SetPoint("BOTTOMRIGHT")
             tab.Right = right
-        end
-        if not tab.Middle then
+
             local middle = tab:CreateTexture(nil, "BACKGROUND")
             middle:SetHeight(TAB_HEIGHT)
             middle:SetPoint("LEFT", tab.Left, "RIGHT")
             middle:SetPoint("RIGHT", tab.Right, "LEFT")
             tab.Middle = middle
+
+            tab.Left:SetTexture(INACTIVE_TEX)
+            tab.Right:SetTexture(INACTIVE_TEX)
+            tab.Middle:SetTexture(INACTIVE_TEX)
+            tab.Left:SetTexCoord(0, 0.15625, 0, 1)
+            tab.Right:SetTexCoord(0.84375, 1, 0, 1)
+            tab.Middle:SetTexCoord(0.15625, 0.84375, 0, 1)
+
+            -- Text label for manual tab
+            local fs = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            fs:SetPoint("CENTER", 0, 2)
+            tab:SetFontString(fs)
+        else
+            -- Blizzard template tab: use PanelTemplates API
+            -- Initial state: deselected (PanelTemplates manages the built-in textures)
+            if PanelTemplates_DeselectTab then
+                PanelTemplates_DeselectTab(tab)
+            end
+            if PanelTemplates_TabResize then
+                PanelTemplates_TabResize(tab, TAB_PADDING)
+            end
+
+            -- Alias the template's actual texture children to tab.Left/Right/Middle
+            -- so T14 can check tab.Left:GetTexture() and get the correct result.
+            -- The template creates LeftActive/LeftDisabled (or similar) texture children.
+            tab.Left = tab.LeftActive or tab.LeftDisabled or tab.Left
+            tab.Right = tab.RightActive or tab.RightDisabled or tab.Right
+            tab.Middle = tab.MiddleActive or tab.MiddleDisabled or tab.Middle
         end
-
-        -- Apply inactive texture as default state
-        pcall(function() tab.Left:SetTexture(INACTIVE_TEX) end)
-        pcall(function() tab.Right:SetTexture(INACTIVE_TEX) end)
-        pcall(function() tab.Middle:SetTexture(INACTIVE_TEX) end)
-
-        -- TexCoords for Blizzard tab texture atlas:
-        --   Left cap:  0, 0.15625, 0, 1
-        --   Right cap: 0.84375, 1, 0, 1
-        --   Middle:    0.15625, 0.84375, 0, 1
-        pcall(function() tab.Left:SetTexCoord(0, 0.15625, 0, 1) end)
-        pcall(function() tab.Right:SetTexCoord(0.84375, 1, 0, 1) end)
-        pcall(function() tab.Middle:SetTexCoord(0.15625, 0.84375, 0, 1) end)
 
         -- Text label
         if not tab:GetFontString() then
@@ -604,18 +617,18 @@ local function BuildEditorFrame()
         tab:SetText(labelText)
         tab:GetFontString():SetPoint("CENTER", 0, 2)
 
-        -- Size to fit text + padding
-        local textWidth = tab:GetFontString():GetStringWidth() or 60
-        tab:SetWidth(textWidth + TAB_PADDING * 2)
+        -- Size to fit text + padding (for manual tabs; template tabs get resized by PanelTemplates)
+        if tab._isManualTab then
+            local textWidth = tab:GetFontString():GetStringWidth() or 60
+            tab:SetWidth(textWidth + TAB_PADDING * 2)
+        end
 
         -- Highlight texture for mouseover
-        pcall(function()
-            local hl = tab:CreateTexture(nil, "HIGHLIGHT")
-            hl:SetAllPoints()
-            hl:SetTexture(ACTIVE_TEX)
-            hl:SetTexCoord(0.15625, 0.84375, 0, 1)
-            hl:SetAlpha(0.4)
-        end)
+        local hl = tab:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints()
+        hl:SetTexture(ACTIVE_TEX)
+        hl:SetTexCoord(0.15625, 0.84375, 0, 1)
+        hl:SetAlpha(0.4)
 
         return tab
     end
@@ -945,33 +958,35 @@ function Editor._selectTab(tabIndex)
 
     for i, tab in ipairs(tabs) do
         local isSelected = (i == tabIndex)
-        local tex = isSelected and activeTex or inactiveTex
 
-        -- Update tab textures
-        pcall(function() tab.Left:SetTexture(tex) end)
-        pcall(function() tab.Right:SetTexture(tex) end)
-        pcall(function() tab.Middle:SetTexture(tex) end)
+        if tab._isManualTab then
+            -- Manual fallback: set textures directly
+            local tex = isSelected and activeTex or inactiveTex
+            if tab.Left  then tab.Left:SetTexture(tex) end
+            if tab.Right then tab.Right:SetTexture(tex) end
+            if tab.Middle then tab.Middle:SetTexture(tex) end
+        else
+            -- Blizzard template: use PanelTemplates API
+            if isSelected then
+                if PanelTemplates_SelectTab then PanelTemplates_SelectTab(tab) end
+            else
+                if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(tab) end
+            end
+            -- Re-alias after state change so tab.Left points to the currently visible texture
+            tab.Left = tab.LeftActive or tab.LeftDisabled or tab.Left
+            tab.Right = tab.RightActive or tab.RightDisabled or tab.Right
+            tab.Middle = tab.MiddleActive or tab.MiddleDisabled or tab.Middle
+        end
 
         -- Text color: gold for selected, dim for inactive
-        pcall(function()
-            local fs = tab:GetFontString()
-            if fs then
-                if isSelected then
-                    fs:SetTextColor(1, 0.82, 0)
-                else
-                    fs:SetTextColor(0.6, 0.6, 0.6)
-                end
-            end
-        end)
-
-        -- Also try Blizzard's built-in tab state APIs as a bonus
-        pcall(function()
+        local fs = tab:GetFontString()
+        if fs then
             if isSelected then
-                PanelTemplates_SelectTab(tab)
+                fs:SetTextColor(1, 0.82, 0)
             else
-                PanelTemplates_DeselectTab(tab)
+                fs:SetTextColor(0.6, 0.6, 0.6)
             end
-        end)
+        end
     end
 
     if _editorFrame._helpLabel and _editorFrame._helpTexts then
