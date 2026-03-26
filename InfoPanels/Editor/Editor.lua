@@ -869,7 +869,11 @@ local function BuildEditorFrame()
 
     for i, cond in ipairs(VIS_CONDITIONS) do
         local cb = CreateFrame("CheckButton", "IPEditorVisCB" .. i, visTab, "UICheckButtonTemplate")
-        cb:SetPoint("TOPLEFT", visTab, "TOPLEFT", 12, VIS_CB_TOP - (i - 1) * VIS_CB_SPACING)
+        local col = (i <= 5) and 0 or 1
+        local row = (i <= 5) and (i - 1) or (i - 6)
+        local xOffset = 12 + col * 220
+        local yOffset = VIS_CB_TOP - row * VIS_CB_SPACING
+        cb:SetPoint("TOPLEFT", visTab, "TOPLEFT", xOffset, yOffset)
         cb:SetSize(22, 22)
 
         local cbLabel = visTab:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
