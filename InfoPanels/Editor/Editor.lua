@@ -2,12 +2,11 @@
 -- Main editor facade: Blizzard-native frame chrome, tab navigation,
 -- and orchestration of sub-components.
 --
--- NEW ARCHITECTURE:
+-- ARCHITECTURE:
 --   Left column: Panel list (same as before)
 --   Middle column: "Lines" editor — text boxes for each line with {{FUNCTION}} templates
 --   Right column: Live Preview
---   Bottom tabs: "Functions" tab (edit function code), "Properties", "Visibility"
---                "Textures" tab hidden for now
+--   Bottom tabs: "Panels" (func list + visibility), "Functions" (code editor)
 --
 -- Single Responsibility: Editor lifecycle and UI orchestration.
 -- Combat lockdown: editor disables during combat.
@@ -60,11 +59,15 @@ end)
 -- Line editor entries (middle column)
 -------------------------------------------------------------------------------
 local _lineEntries = {}  -- { frame, editBox, removeBtn }
+local _focusedLineEditBox = nil      -- tracks which line editbox currently has focus
+local _lastFocusedLineEditBox = nil  -- persists after focus loss so double-click can still insert
 
 local function _rebuildLineEditors()
     if not _editorFrame then return end
     local scrollChild = _editorFrame._linesScrollChild
     if not scrollChild then return end
+    _focusedLineEditBox = nil       -- clear stale focus reference on rebuild
+    _lastFocusedLineEditBox = nil   -- also clear last-focused on rebuild
 
     -- Hide all existing entries
     for _, entry in ipairs(_lineEntries) do
@@ -124,6 +127,16 @@ local function _rebuildLineEditors()
         end)
         entry.editBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
         entry.editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        entry.editBox:SetScript("OnEditFocusGained", function(self)
+            _focusedLineEditBox = self
+            _lastFocusedLineEditBox = self
+        end)
+        entry.editBox:SetScript("OnEditFocusLost", function(self)
+            if _focusedLineEditBox == self then _focusedLineEditBox = nil end
+            -- _lastFocusedLineEditBox is intentionally NOT cleared here so that
+            -- a double-click on the function list (which steals focus first) can
+            -- still find the editbox that was previously focused.
+        end)
 
         entry.removeBtn:SetScript("OnClick", function()
             Editor._removeLine(capturedIndex)
@@ -146,12 +159,8 @@ local function _buildFunctionsTab(parent)
     local container = CreateFrame("Frame", nil, parent)
     container:SetAllPoints(parent)
 
-    -- Left side: function list (~35% of bottom section width, capped to leave
-    -- at least 250px for the code editor on the right side.
-    -- Min of 180 ensures DELVE_COMPANION_LEVEL (~141px) fits without truncation.
-    local listWidth = math.floor(parent:GetWidth() * 0.35)
-    if listWidth < 180 then listWidth = 180 end
-    if listWidth > 180 then listWidth = 180 end
+    -- Left side: function list — fixed 200px width, full height of editor
+    local listWidth = 200
     local listHeader = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     listHeader:SetPoint("TOPLEFT", container, "TOPLEFT", 4, -2)
     listHeader:SetText("Functions")
@@ -185,7 +194,7 @@ local function _buildFunctionsTab(parent)
 
     -- Right side: code editor
     local codeHeader = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    codeHeader:SetPoint("TOPLEFT", container, "TOPLEFT", listWidth + 8, -2)
+    codeHeader:SetPoint("TOPLEFT", container, "TOPLEFT", listWidth + 4, -2)
     codeHeader:SetText("Code (Lua — must return a string)")
     codeHeader:SetTextColor(1, 0.82, 0, 1)
 
@@ -205,7 +214,7 @@ local function _buildFunctionsTab(parent)
     -- Code edit box
     local codeScroll = CreateFrame("ScrollFrame", "IPEditorFuncCodeScroll", container, "UIPanelScrollFrameTemplate")
     codeScroll:SetPoint("TOPLEFT", nameLabel, "BOTTOMLEFT", 0, -6)
-    codeScroll:SetPoint("RIGHT", container, "RIGHT", -20, 0)
+    codeScroll:SetPoint("RIGHT", container, "RIGHT", -14, 0)
     codeScroll:SetPoint("BOTTOM", container, "BOTTOM", 0, 32)
 
     local codeEB = CreateFrame("EditBox", nil, codeScroll)
@@ -242,14 +251,23 @@ local function _buildFunctionsTab(parent)
         Editor._deleteCurrentFunction()
     end)
 
-    -- Test button
-    local testFuncBtn = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
-    testFuncBtn:SetSize(80, 22)
-    testFuncBtn:SetPoint("LEFT", delFuncBtn, "RIGHT", 8, 0)
-    testFuncBtn:SetText("Test")
-    testFuncBtn:SetScript("OnClick", function()
+    -- Validate button (replaces Test — shows result inline)
+    local validateFuncBtn = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
+    validateFuncBtn:SetSize(80, 22)
+    validateFuncBtn:SetPoint("LEFT", delFuncBtn, "RIGHT", 8, 0)
+    validateFuncBtn:SetText("Validate")
+    validateFuncBtn:SetScript("OnClick", function()
         Editor._testCurrentFunction()
     end)
+
+    -- Result display area just above the buttons row
+    local resultLabel = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    resultLabel:SetPoint("BOTTOMLEFT", saveFuncBtn, "TOPLEFT", 0, 4)
+    resultLabel:SetPoint("RIGHT", container, "RIGHT", -8, 0)
+    resultLabel:SetJustifyH("LEFT")
+    resultLabel:SetWordWrap(true)
+    resultLabel:SetText("")
+    container._resultLabel = resultLabel
 
     _funcEditorFrame = container
     return container
@@ -339,6 +357,102 @@ function Editor._refreshFuncList()
     scrollChild:SetHeight(math.max(#sorted * (rowHeight + rowSpacing), 1))
 end
 
+-------------------------------------------------------------------------------
+-- Panels-tab function list (read-only, double-click to insert)
+-------------------------------------------------------------------------------
+local _panelFuncListEntries = {}
+
+function Editor._refreshPanelFuncList()
+    if not _editorFrame or not _editorFrame._panelFuncScrollChild then return end
+    local scrollChild = _editorFrame._panelFuncScrollChild
+
+    for _, e in ipairs(_panelFuncListEntries) do
+        if e.button then e.button:Hide() end
+    end
+
+    local Functions = ns.Functions
+    if not Functions then return end
+
+    local sorted = Functions.GetAllSorted()
+    local rowHeight = 22
+    local rowSpacing = 2
+
+    for i, item in ipairs(sorted) do
+        local entry = _panelFuncListEntries[i]
+        if not entry then
+            local btn = CreateFrame("Button", nil, scrollChild)
+            btn:SetSize(scrollChild:GetWidth(), rowHeight)
+            btn:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, -(i - 1) * (rowHeight + rowSpacing))
+
+            local bg = btn:CreateTexture(nil, "BACKGROUND")
+            bg:SetAllPoints()
+            bg:SetColorTexture(0.15, 0.15, 0.15, 0.6)
+
+            local highlight = btn:CreateTexture(nil, "HIGHLIGHT")
+            highlight:SetAllPoints()
+            highlight:SetColorTexture(1, 0.82, 0, 0.15)
+
+            local selBg = btn:CreateTexture(nil, "BORDER")
+            selBg:SetAllPoints()
+            selBg:SetColorTexture(1, 0.82, 0, 0.3)
+            selBg:Hide()
+
+            local label = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            label:SetPoint("LEFT", btn, "LEFT", 4, 0)
+            label:SetPoint("RIGHT", btn, "RIGHT", -4, 0)
+            label:SetJustifyH("LEFT")
+            label:SetWordWrap(false)
+
+            entry = { button = btn, label = label, selBg = selBg }
+            _panelFuncListEntries[i] = entry
+        end
+
+        entry.label:SetText(item.name)
+
+        -- Tooltip
+        local fullName = item.name
+        entry.button:SetScript("OnEnter", function(self)
+            if GameTooltip then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                if GameTooltip.SetText then GameTooltip:SetText(fullName) end
+                if item.info.builtin and GameTooltip.AddLine then
+                    GameTooltip:AddLine("Built-in function", 0.5, 0.5, 0.5)
+                end
+                GameTooltip:Show()
+            end
+        end)
+        entry.button:SetScript("OnLeave", function()
+            if GameTooltip then GameTooltip:Hide() end
+        end)
+
+        -- Single click: highlight only
+        entry.button:SetScript("OnClick", function()
+            for _, e in ipairs(_panelFuncListEntries) do
+                if e.selBg then e.selBg:Hide() end
+            end
+            entry.selBg:Show()
+        end)
+
+        -- Double click: insert {{FUNCTION_NAME}} into the last focused line editbox.
+        -- We use _lastFocusedLineEditBox (not _focusedLineEditBox) because clicking
+        -- the button fires OnEditFocusLost on the editbox before OnDoubleClick fires,
+        -- so _focusedLineEditBox would already be nil by the time we get here.
+        entry.button:SetScript("OnDoubleClick", function()
+            if _lastFocusedLineEditBox then
+                _lastFocusedLineEditBox:SetFocus()
+                _lastFocusedLineEditBox:Insert("{{" .. fullName .. "}}")
+            end
+        end)
+
+        -- Ensure button does not steal keyboard focus
+        entry.button:SetScript("OnMouseDown", function() end)
+
+        entry.button:Show()
+    end
+
+    scrollChild:SetHeight(math.max(#sorted * (rowHeight + rowSpacing), 1))
+end
+
 function Editor._editFunction(name)
     local Functions = ns.Functions
     if not Functions then return end
@@ -351,15 +465,10 @@ function Editor._editFunction(name)
     if _funcEditorFrame then
         if _funcEditorFrame._funcNameInput then
             _funcEditorFrame._funcNameInput:SetText(name)
-            -- Disable name editing for built-in functions
-            if info.builtin then
-                _funcEditorFrame._funcNameInput:Disable()
-            else
-                _funcEditorFrame._funcNameInput:Enable()
-            end
+            _funcEditorFrame._funcNameInput:Enable()
         end
         if _funcEditorFrame._funcCodeEB then
-            _funcEditorFrame._funcCodeEB:SetText(info.code or "-- Built-in function (code is native Lua)")
+            _funcEditorFrame._funcCodeEB:SetText(info.code or "-- No code available")
         end
     end
 end
@@ -390,18 +499,17 @@ function Editor._saveCurrentFunction()
         return
     end
 
-    -- Don't allow saving over built-in functions
-    local existing = Functions.Get(name)
-    if existing and existing.builtin then
-        iplog("Warn", "Editor: cannot overwrite built-in function " .. name)
-        return
-    end
-
+    -- Save as user function (overrides built-in if one exists with same name)
     local ok, err = Functions.SaveUserFunction(name, code)
     if ok then
         _currentEditFunc = name:upper()
         Editor._refreshFuncList()
-        iplog("Info", "Editor: saved function " .. name)
+        local existing = Functions.Get(name)
+        local overrideNote = ""
+        if existing and existing._builtinBackup then
+            overrideNote = " (overriding built-in)"
+        end
+        iplog("Info", "Editor: saved function " .. name .. overrideNote)
     else
         iplog("Error", "Editor: failed to save function: " .. tostring(err))
     end
@@ -414,10 +522,19 @@ function Editor._deleteCurrentFunction()
 
     local ok, err = Functions.DeleteUserFunction(_currentEditFunc)
     if ok then
-        _currentEditFunc = nil
-        Editor._newFunction()
-        Editor._refreshFuncList()
-        iplog("Info", "Editor: deleted function")
+        -- Check if a built-in was restored (DeleteUserFunction handles this)
+        local restored = Functions.Get(_currentEditFunc)
+        if restored and restored.builtin then
+            -- Built-in was restored; show it in the editor
+            Editor._editFunction(_currentEditFunc)
+            Editor._refreshFuncList()
+            iplog("Info", "Editor: reverted " .. _currentEditFunc .. " to built-in")
+        else
+            _currentEditFunc = nil
+            Editor._newFunction()
+            Editor._refreshFuncList()
+            iplog("Info", "Editor: deleted function")
+        end
     else
         iplog("Warn", "Editor: " .. tostring(err))
     end
@@ -432,17 +549,27 @@ function Editor._testCurrentFunction()
     local name = _funcEditorFrame._funcNameInput and _funcEditorFrame._funcNameInput:GetText() or "TEST"
 
     local val, err = Functions._executeCode(code, name)
-    local msg = "Test result for " .. name .. ": "
-    if val then
-        msg = msg .. tostring(val)
-    else
-        msg = msg .. "|cffff4444" .. tostring(err) .. "|r"
-    end
+    local resultLabel = _funcEditorFrame._resultLabel
 
-    if _G.CouchPotatoLog then
-        _G.CouchPotatoLog:Print("IP", msg)
+    if val ~= nil then
+        local display = tostring(val)
+        local msg = "Validate " .. name .. ": " .. display
+        if resultLabel then
+            resultLabel:SetText("Result: " .. display)
+            resultLabel:SetTextColor(0.2, 1.0, 0.2)
+        end
+        if _G.CouchPotatoLog then _G.CouchPotatoLog:Print("IP", msg) end
+        iplog("Info", msg)
+    else
+        local errStr = tostring(err)
+        local msg = "Validate " .. name .. ": ERROR — " .. errStr
+        if resultLabel then
+            resultLabel:SetText("Error: " .. errStr)
+            resultLabel:SetTextColor(1.0, 0.3, 0.3)
+        end
+        if _G.CouchPotatoLog then _G.CouchPotatoLog:Print("IP", msg) end
+        iplog("Error", msg)
     end
-    iplog("Info", msg)
 end
 
 -------------------------------------------------------------------------------
@@ -542,10 +669,10 @@ local function BuildEditorFrame()
     end
 
     ---------------------------------------------------------------------------
-    -- Bottom tabs: Functions, Properties, Visibility
+    -- Bottom tabs: Panels, Functions
     -- Plain Button frames with custom TGA textures (tab-active / tab-inactive).
     ---------------------------------------------------------------------------
-    local tabNames = { "Functions", "Properties", "Visibility" }
+    local tabNames = { "Panels", "Functions" }
     local tabs = {}
 
     local ACTIVE_TEX   = "Interface\\AddOns\\InfoPanels\\Textures\\tab-active"
@@ -610,7 +737,7 @@ local function BuildEditorFrame()
         if i == 1 then
             tab:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 20, -30)
         else
-            tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", -16, 0)
+            tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", 4, 0)
         end
 
         tab:SetScript("OnClick", function()
@@ -669,7 +796,7 @@ local function BuildEditorFrame()
     end
 
     -- Action buttons with spacing (UX fix #3)
-    local btnContainerHeight = 82  -- 3 rows * 22px + 2 gaps * 6px + 4px padding
+    local btnContainerHeight = 82  -- 3 rows * 22px + 2 gaps * 6px + padding (5 buttons: Save, Export, Delete, Import, Duplicate)
     local btnContainer = CreateFrame("Frame", nil, sidebarFrame)
     btnContainer:SetSize(SIDEBAR_W - 8, btnContainerHeight)
     btnContainer:SetPoint("BOTTOMLEFT", sidebarFrame, "BOTTOMLEFT", 2, 4)
@@ -695,21 +822,15 @@ local function BuildEditorFrame()
     deleteBtn:SetText("Delete")
     deleteBtn:SetScript("OnClick", function() Editor.DeleteCurrentPanel() end)
 
-    local extDataBtn = CreateFrame("Button", nil, btnContainer, "UIPanelButtonTemplate")
-    extDataBtn:SetSize(halfW, 22)
-    extDataBtn:SetPoint("LEFT", deleteBtn, "RIGHT", btnSpacing, 0)
-    extDataBtn:SetText("Ext. Data")
-    extDataBtn:SetScript("OnClick", function() Editor._showExternalDataEntry() end)
-
     local importBtn2 = CreateFrame("Button", nil, btnContainer, "UIPanelButtonTemplate")
     importBtn2:SetSize(halfW, 22)
-    importBtn2:SetPoint("TOPLEFT", deleteBtn, "BOTTOMLEFT", 0, -btnSpacing)
+    importBtn2:SetPoint("LEFT", deleteBtn, "RIGHT", btnSpacing, 0)
     importBtn2:SetText("Import")
     importBtn2:SetScript("OnClick", function() Editor.ShowImportDialog() end)
 
     local dupeBtn2 = CreateFrame("Button", nil, btnContainer, "UIPanelButtonTemplate")
     dupeBtn2:SetSize(halfW, 22)
-    dupeBtn2:SetPoint("LEFT", importBtn2, "RIGHT", btnSpacing, 0)
+    dupeBtn2:SetPoint("TOPLEFT", deleteBtn, "BOTTOMLEFT", 0, -btnSpacing)
     dupeBtn2:SetText("Duplicate")
     dupeBtn2:SetScript("OnClick", function() Editor.DuplicateCurrentPanel() end)
 
@@ -794,36 +915,54 @@ local function BuildEditorFrame()
     tabContentFrame:SetPoint("BOTTOMRIGHT", centerFrame, "BOTTOMRIGHT", 0, 0)
     f._tabContentFrame = tabContentFrame
 
-    -- Tab 1: Functions editor
-    local funcTab = _buildFunctionsTab(tabContentFrame)
-    funcTab:Show()
+    -- Tab 1: Panels tab (function list bottom-left, visibility bottom-right)
+    local panelsTab = CreateFrame("Frame", nil, tabContentFrame)
+    panelsTab:SetAllPoints(tabContentFrame)
+    panelsTab:Show()
     f._tabFrames = f._tabFrames or {}
-    f._tabFrames[1] = funcTab
+    f._tabFrames[1] = panelsTab
 
-    -- Tab 2: Properties Panel
-    local PropertiesPanel = ns.EditorPropertiesPanel
-    if PropertiesPanel then
-        local ppFrame = PropertiesPanel.Build(tabContentFrame, tabContentFrame:GetWidth() or 350, 0)
-        ppFrame:SetAllPoints(tabContentFrame)
-        ppFrame:Hide()
-        f._tabFrames[2] = ppFrame
-    end
+    -- Panels tab: bottom-left = scrollable function list (read-only, for insert)
+    local panelFuncHeader = panelsTab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    panelFuncHeader:SetPoint("TOPLEFT", panelsTab, "TOPLEFT", 4, -2)
+    panelFuncHeader:SetText("Functions (double-click to insert)")
+    panelFuncHeader:SetTextColor(1, 0.82, 0, 1)
 
-    -- Tab 3: Visibility conditions
-    local visTab = CreateFrame("Frame", nil, tabContentFrame)
-    visTab:SetAllPoints(tabContentFrame)
-    visTab:Hide()
-    f._tabFrames[3] = visTab
+    local panelFuncListWidth = math.floor((tabContentFrame:GetWidth() or 400) * 0.45)
+    if panelFuncListWidth < 180 then panelFuncListWidth = 180 end
 
-    local visInstr = visTab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    visInstr:SetPoint("TOPLEFT", visTab, "TOPLEFT", 8, -8)
-    visInstr:SetText("Visibility Conditions")
-    visInstr:SetTextColor(1, 0.82, 0, 1)
+    local panelFuncScroll = CreateFrame("ScrollFrame", "IPEditorPanelFuncScroll", panelsTab, "UIPanelScrollFrameTemplate")
+    panelFuncScroll:SetPoint("TOPLEFT", panelFuncHeader, "BOTTOMLEFT", 0, -4)
+    panelFuncScroll:SetPoint("BOTTOM", panelsTab, "BOTTOM", 0, 4)
+    panelFuncScroll:SetWidth(panelFuncListWidth)
 
-    local visDesc = visTab:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    visDesc:SetPoint("TOPLEFT", visInstr, "BOTTOMLEFT", 0, -4)
-    visDesc:SetText("Check conditions below. All checked conditions must be true (AND logic).")
-    visDesc:SetJustifyH("LEFT")
+    local panelFuncScrollChild = CreateFrame("Frame", nil, panelFuncScroll)
+    panelFuncScrollChild:SetWidth(panelFuncListWidth - 24)
+    panelFuncScrollChild:SetHeight(1)
+    panelFuncScroll:SetScrollChild(panelFuncScrollChild)
+    f._panelFuncScrollChild = panelFuncScrollChild
+
+    -- Panels tab: bottom-right = visibility checkboxes
+    local visSep = panelsTab:CreateTexture(nil, "ARTWORK")
+    visSep:SetWidth(1)
+    visSep:SetPoint("TOPLEFT", panelsTab, "TOPLEFT", panelFuncListWidth + 4, 0)
+    visSep:SetPoint("BOTTOMLEFT", panelsTab, "BOTTOMLEFT", panelFuncListWidth + 4, 0)
+    visSep:SetColorTexture(0.4, 0.4, 0.4, 0.5)
+
+    local visHeader = panelsTab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    visHeader:SetPoint("TOPLEFT", panelsTab, "TOPLEFT", panelFuncListWidth + 12, -2)
+    visHeader:SetText("Visibility (AND logic)")
+    visHeader:SetTextColor(1, 0.82, 0, 1)
+
+    -- Visibility scroll frame for future-proofing
+    local visScroll = CreateFrame("ScrollFrame", "IPEditorVisScroll", panelsTab, "UIPanelScrollFrameTemplate")
+    visScroll:SetPoint("TOPLEFT", visHeader, "BOTTOMLEFT", 0, -4)
+    visScroll:SetPoint("BOTTOMRIGHT", panelsTab, "BOTTOMRIGHT", -14, 4)
+
+    local visScrollChild = CreateFrame("Frame", nil, visScroll)
+    visScrollChild:SetWidth(visScroll:GetWidth() or 200)
+    visScrollChild:SetHeight(1)
+    visScroll:SetScrollChild(visScrollChild)
 
     local VIS_CONDITIONS = {
         { key = "always",       label = "Always visible",        type = "always" },
@@ -840,18 +979,17 @@ local function BuildEditorFrame()
 
     local visCheckboxes = {}
     local VIS_CB_SPACING = 24
-    local VIS_CB_TOP = -36
 
     for i, cond in ipairs(VIS_CONDITIONS) do
-        local cb = CreateFrame("CheckButton", "IPEditorVisCB" .. i, visTab, "UICheckButtonTemplate")
+        local cb = CreateFrame("CheckButton", "IPEditorVisCB" .. i, visScrollChild, "UICheckButtonTemplate")
         local col = (i <= 5) and 0 or 1
         local row = (i <= 5) and (i - 1) or (i - 6)
-        local xOffset = 12 + col * 220
-        local yOffset = VIS_CB_TOP - row * VIS_CB_SPACING
-        cb:SetPoint("TOPLEFT", visTab, "TOPLEFT", xOffset, yOffset)
+        local xOffset = 4 + col * 160
+        local yOffset = -(row * VIS_CB_SPACING)
+        cb:SetPoint("TOPLEFT", visScrollChild, "TOPLEFT", xOffset, yOffset)
         cb:SetSize(22, 22)
 
-        local cbLabel = visTab:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        local cbLabel = visScrollChild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         cbLabel:SetPoint("LEFT", cb, "RIGHT", 4, 0)
         cbLabel:SetText(cond.label)
 
@@ -864,16 +1002,30 @@ local function BuildEditorFrame()
 
         visCheckboxes[cond.key] = cb
     end
+    visScrollChild:SetHeight(5 * VIS_CB_SPACING + 4)
     f._visCheckboxes = visCheckboxes
     f._visConditions = VIS_CONDITIONS
+
+    -- Properties panel: build as overlay on Panels tab (shown when preview element clicked)
+    local PropertiesPanel = ns.EditorPropertiesPanel
+    if PropertiesPanel then
+        local ppFrame = PropertiesPanel.Build(panelsTab, tabContentFrame:GetWidth() or 350, 0)
+        ppFrame:SetAllPoints(panelsTab)
+        ppFrame:Hide()
+        f._propertiesOverlay = ppFrame
+    end
+
+    -- Tab 2: Functions editor (FULL editor area — covers sidebar, lines, preview)
+    local funcTab = _buildFunctionsTab(workArea)
+    funcTab:Hide()
+    f._tabFrames[2] = funcTab
 
     ---------------------------------------------------------------------------
     -- Help text
     ---------------------------------------------------------------------------
     local HELP_TEXTS = {
-        [1] = "Browse and edit Functions. Use {{FUNCTION_NAME}} in your Lines to insert dynamic values.",
-        [2] = "Edit properties for the selected panel: font, color, format.",
-        [3] = "Set Visibility conditions. All checked conditions must be true (AND logic).",
+        [1] = "Double-click a function to insert {{NAME}} into a line. Set visibility conditions on the right.",
+        [2] = "Browse and edit Functions. Use Save to persist, Validate to test return values.",
     }
 
     local helpLabel = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -910,6 +1062,15 @@ local function BuildEditorFrame()
 
     f._activeTab = 1
 
+    -- Store references for tab-switching visibility control
+    f._sidebarFrame = sidebarFrame
+    f._previewFrame = previewFrame
+    f._linesHeader = linesHeader
+    f._linesHint = linesHint
+    f._addLineBtn = addLineBtn
+    f._linesScroll = linesScroll
+    f._centerSep = centerSep
+
     _editorFrame = f
     return f
 end
@@ -929,6 +1090,20 @@ function Editor._selectTab(tabIndex)
 
     if tabFrames[tabIndex] then
         tabFrames[tabIndex]:Show()
+    end
+
+    -- Show/hide Panels-only UI elements based on active tab
+    -- Functions tab (2) takes over entire workArea; Panels tab (1) shows normal layout
+    local showPanelsUI = (tabIndex == 1)
+    local panelsElements = {
+        _editorFrame._sidebarFrame,
+        _editorFrame._previewFrame,
+        _editorFrame._centerFrame,
+    }
+    for _, elem in ipairs(panelsElements) do
+        if elem then
+            if showPanelsUI then elem:Show() else elem:Hide() end
+        end
     end
 
     local tabs = _editorFrame._tabs or {}
@@ -957,8 +1132,10 @@ function Editor._selectTab(tabIndex)
         _editorFrame._helpLabel:SetText(_editorFrame._helpTexts[tabIndex] or "")
     end
 
-    -- Refresh functions list when switching to Functions tab
+    -- Refresh content based on active tab
     if tabIndex == 1 then
+        Editor._refreshPanelFuncList()
+    elseif tabIndex == 2 then
         Editor._refreshFuncList()
     end
 
@@ -1086,15 +1263,6 @@ function Editor._updatePreview()
     end
 
     LivePreview.UpdateLines(name ~= "" and name or "Untitled Panel", previewLines)
-end
-
--------------------------------------------------------------------------------
--- External data entry
--------------------------------------------------------------------------------
-function Editor._showExternalDataEntry()
-    local ImportExport = ns.EditorImportExport
-    if not ImportExport then return end
-    ImportExport.ShowExternalDataEntry("manual", "Manual Data Entry")
 end
 
 -------------------------------------------------------------------------------

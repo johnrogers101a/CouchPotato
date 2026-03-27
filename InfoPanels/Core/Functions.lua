@@ -26,6 +26,9 @@ local cache = {}
 -- Event subscriptions per function
 local eventMap = {}  -- event -> { funcName1, funcName2, ... }
 
+-- Built-in backups: stores original built-in info when overridden by user
+local builtinBackups = {}
+
 -- Performance guard
 local MAX_FUNCTIONS = 200
 
@@ -286,6 +289,7 @@ function Functions.RegisterBuiltInFunctions()
             description = def.label .. " rating",
             builtin = true,
             events = { "UNIT_STATS", "PLAYER_ENTERING_WORLD" },
+            code = 'if not UnitStat then return nil, "UnitStat not available" end\nlocal ok, val = pcall(UnitStat, "player", ' .. statIndex .. ')\nif ok and val then return tostring(math.floor(val + 0.5)) end\nreturn nil, "Could not read ' .. def.label .. '"',
             fetch = function()
                 if not UnitStat then return nil, "UnitStat not available" end
                 local ok, val = pcall(UnitStat, "player", statIndex)
@@ -309,6 +313,7 @@ function Functions.RegisterBuiltInFunctions()
             description = def.label .. " percentage",
             builtin = true,
             events = { "UNIT_STATS", "PLAYER_ENTERING_WORLD", "COMBAT_RATING_UPDATE" },
+            code = 'local fn = _G["' .. fnName .. '"]\nif not fn then return nil, "' .. fnName .. ' not available" end\nlocal ok, val = pcall(fn)\nif ok and val then return string.format("' .. fmt .. '", val) end\nreturn nil, "Could not read ' .. def.label .. '"',
             fetch = function()
                 local fn = _G[fnName]
                 if not fn then return nil, fnName .. " not available" end
@@ -325,6 +330,7 @@ function Functions.RegisterBuiltInFunctions()
         description = "Versatility damage bonus percentage",
         builtin = true,
         events = { "COMBAT_RATING_UPDATE", "PLAYER_ENTERING_WORLD" },
+        code = 'if not _G.GetCombatRatingBonus or not _G.CR_VERSATILITY_DAMAGE_DONE then\n    return nil, "Versatility API not available"\nend\nlocal ok, val = pcall(_G.GetCombatRatingBonus, _G.CR_VERSATILITY_DAMAGE_DONE)\nif ok and val then return string.format("%.1f%%", val) end\nreturn nil, "Could not read Versatility"',
         fetch = function()
             if not _G.GetCombatRatingBonus or not _G.CR_VERSATILITY_DAMAGE_DONE then
                 return nil, "Versatility API not available"
@@ -341,6 +347,7 @@ function Functions.RegisterBuiltInFunctions()
         description = "Your character's name",
         builtin = true,
         events = { "PLAYER_ENTERING_WORLD" },
+        code = 'if not UnitName then return nil, "UnitName not available" end\nlocal ok, name = pcall(UnitName, "player")\nif ok and name then return name end\nreturn nil, "Could not read player name"',
         fetch = function()
             if not UnitName then return nil, "UnitName not available" end
             local ok, name = pcall(UnitName, "player")
@@ -354,6 +361,7 @@ function Functions.RegisterBuiltInFunctions()
         description = "Your character's level",
         builtin = true,
         events = { "PLAYER_LEVEL_UP", "PLAYER_ENTERING_WORLD" },
+        code = 'if not UnitLevel then return nil, "UnitLevel not available" end\nlocal ok, level = pcall(UnitLevel, "player")\nif ok and level then return tostring(level) end\nreturn nil, "Could not read player level"',
         fetch = function()
             if not UnitLevel then return nil, "UnitLevel not available" end
             local ok, level = pcall(UnitLevel, "player")
@@ -367,6 +375,7 @@ function Functions.RegisterBuiltInFunctions()
         description = "Your character's class",
         builtin = true,
         events = { "PLAYER_ENTERING_WORLD" },
+        code = 'if not UnitClass then return nil, "UnitClass not available" end\nlocal ok, className = pcall(UnitClass, "player")\nif ok and className then return className end\nreturn nil, "Could not read player class"',
         fetch = function()
             if not UnitClass then return nil, "UnitClass not available" end
             local ok, className = pcall(UnitClass, "player")
@@ -380,6 +389,7 @@ function Functions.RegisterBuiltInFunctions()
         description = "Current health",
         builtin = true,
         events = { "UNIT_HEALTH", "PLAYER_ENTERING_WORLD" },
+        code = 'if not UnitHealth then return nil, "UnitHealth not available" end\nlocal ok, val = pcall(UnitHealth, "player")\nif ok and val then return tostring(val) end\nreturn nil, "Could not read health"',
         fetch = function()
             if not UnitHealth then return nil, "UnitHealth not available" end
             local ok, val = pcall(UnitHealth, "player")
@@ -393,6 +403,7 @@ function Functions.RegisterBuiltInFunctions()
         description = "Maximum health",
         builtin = true,
         events = { "UNIT_MAXHEALTH", "PLAYER_ENTERING_WORLD" },
+        code = 'if not UnitHealthMax then return nil, "UnitHealthMax not available" end\nlocal ok, val = pcall(UnitHealthMax, "player")\nif ok and val then return tostring(val) end\nreturn nil, "Could not read max health"',
         fetch = function()
             if not UnitHealthMax then return nil, "UnitHealthMax not available" end
             local ok, val = pcall(UnitHealthMax, "player")
@@ -406,6 +417,7 @@ function Functions.RegisterBuiltInFunctions()
         description = "Active specialization name",
         builtin = true,
         events = { "PLAYER_SPECIALIZATION_CHANGED", "PLAYER_ENTERING_WORLD" },
+        code = 'if not GetSpecialization or not GetSpecializationInfo then\n    return nil, "Spec API not available"\nend\nlocal idx = GetSpecialization()\nif not idx or idx <= 0 then return "None", nil end\nlocal ok, _, name = pcall(GetSpecializationInfo, idx)\nif ok and name then return name end\nreturn nil, "Could not read specialization"',
         fetch = function()
             if not GetSpecialization or not GetSpecializationInfo then
                 return nil, "Spec API not available"
@@ -424,6 +436,7 @@ function Functions.RegisterBuiltInFunctions()
         description = "Your delve companion's current level",
         builtin = true,
         events = { "UPDATE_FACTION", "PLAYER_ENTERING_WORLD" },
+        code = 'if not C_DelvesUI or not C_DelvesUI.GetFactionForCompanion then\n    return nil, "Delve API not available"\nend\nlocal ok, factionID = pcall(C_DelvesUI.GetFactionForCompanion)\nif not ok or not factionID or factionID == 0 then\n    return nil, "No companion data"\nend\nif not C_GossipInfo or not C_GossipInfo.GetFriendshipReputation then\n    return nil, "Friendship API not available"\nend\nlocal ok2, fr = pcall(C_GossipInfo.GetFriendshipReputation, factionID)\nif ok2 and fr and fr.reaction then return tostring(fr.reaction) end\nreturn nil, "Could not read companion level"',
         fetch = function()
             if not C_DelvesUI or not C_DelvesUI.GetFactionForCompanion then
                 return nil, "Delve API not available"
@@ -446,6 +459,7 @@ function Functions.RegisterBuiltInFunctions()
         description = "Your Delver's Journey season rank",
         builtin = true,
         events = { "MAJOR_FACTION_RENOWN_LEVEL_CHANGED", "UPDATE_FACTION", "PLAYER_ENTERING_WORLD" },
+        code = 'if not C_DelvesUI or not C_DelvesUI.GetDelvesFactionForSeason then\n    return nil, "Delves season API not available"\nend\nlocal ok, factionID = pcall(C_DelvesUI.GetDelvesFactionForSeason)\nif not ok or not factionID or factionID == 0 then\n    return nil, "No season data"\nend\nif not C_MajorFactions or not C_MajorFactions.GetMajorFactionRenownInfo then\n    return nil, "Major Factions API not available"\nend\nlocal ok2, rInfo = pcall(C_MajorFactions.GetMajorFactionRenownInfo, factionID)\nif ok2 and rInfo and rInfo.renownLevel then return tostring(rInfo.renownLevel) end\nreturn nil, "Could not read season rank"',
         fetch = function()
             if not C_DelvesUI or not C_DelvesUI.GetDelvesFactionForSeason then
                 return nil, "Delves season API not available"
@@ -468,6 +482,7 @@ function Functions.RegisterBuiltInFunctions()
         description = "Current / Max XP for Delver's Journey rank",
         builtin = true,
         events = { "MAJOR_FACTION_RENOWN_LEVEL_CHANGED", "UPDATE_FACTION" },
+        code = 'if not C_DelvesUI or not C_DelvesUI.GetDelvesFactionForSeason then\n    return nil, "Delves season API not available"\nend\nlocal ok, factionID = pcall(C_DelvesUI.GetDelvesFactionForSeason)\nif not ok or not factionID or factionID == 0 then\n    return nil, "No season data"\nend\nif not C_MajorFactions or not C_MajorFactions.GetMajorFactionRenownInfo then\n    return nil, "Major Factions API not available"\nend\nlocal ok2, rInfo = pcall(C_MajorFactions.GetMajorFactionRenownInfo, factionID)\nif ok2 and rInfo then\n    local earned = rInfo.renownReputationEarned or 0\n    local max = rInfo.renownLevelThreshold or 0\n    return earned .. " / " .. max\nend\nreturn nil, "Could not read season XP"',
         fetch = function()
             if not C_DelvesUI or not C_DelvesUI.GetDelvesFactionForSeason then
                 return nil, "Delves season API not available"
@@ -494,6 +509,7 @@ function Functions.RegisterBuiltInFunctions()
         description = "Whether you are currently inside a delve (true/false)",
         builtin = true,
         events = { "ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD" },
+        code = 'local Utils = ns.Utils\nif Utils and Utils.IsInDelve then\n    return tostring(Utils.IsInDelve())\nend\nreturn "false"',
         fetch = function()
             local Utils = ns.Utils
             if Utils and Utils.IsInDelve then
@@ -503,7 +519,69 @@ function Functions.RegisterBuiltInFunctions()
         end,
     })
 
-    iplog("Info", "RegisterBuiltInFunctions: complete")
+    -- Nemesis / Enemy Groups (Delve)
+    Functions.Register("NEMESIS_REMAINING", {
+        category = "Delve Info",
+        description = "Enemy groups remaining in current delve",
+        builtin = true,
+        events = { "SCENARIO_CRITERIA_UPDATE", "CRITERIA_COMPLETE", "PLAYER_ENTERING_WORLD" },
+        code = 'if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then\n    return nil, "Scenario API not available"\nend\nlocal ok, stepInfo = pcall(C_ScenarioInfo.GetScenarioStepInfo)\nif not ok or not stepInfo then return nil, "No scenario data" end\nlocal numCriteria = stepInfo.numCriteria or 0\nlocal total, completed = 0, 0\nfor i = 1, numCriteria do\n    local ok2, ci = pcall(C_ScenarioInfo.GetCriteriaInfo, i)\n    if ok2 and ci and ci.description then\n        local desc = ci.description:lower()\n        if desc:find("enem") or desc:find("group") or desc:find("kill") or desc:find("defeat") then\n            total = total + (ci.totalQuantity or 0)\n            completed = completed + (ci.quantity or 0)\n        end\n    end\nend\nif total > 0 then return tostring(total - completed) end\nreturn nil, "No enemy group data"',
+        fetch = function()
+            if not _G.C_ScenarioInfo or not _G.C_ScenarioInfo.GetScenarioStepInfo then
+                return nil, "Scenario API not available"
+            end
+            local ok, stepInfo = pcall(_G.C_ScenarioInfo.GetScenarioStepInfo)
+            if not ok or not stepInfo then return nil, "No scenario data" end
+            local numCriteria = stepInfo.numCriteria or 0
+            local total, completed = 0, 0
+            for i = 1, numCriteria do
+                local ok2, ci = pcall(_G.C_ScenarioInfo.GetCriteriaInfo, i)
+                if ok2 and ci and ci.description then
+                    local desc = ci.description:lower()
+                    if desc:find("enem") or desc:find("group") or desc:find("kill") or desc:find("defeat") then
+                        total = total + (ci.totalQuantity or 0)
+                        completed = completed + (ci.quantity or 0)
+                    end
+                end
+            end
+            if total > 0 then return tostring(total - completed) end
+            return nil, "No enemy group data"
+        end,
+    })
+
+    Functions.Register("NEMESIS_TOTAL", {
+        category = "Delve Info",
+        description = "Total enemy groups in current delve",
+        builtin = true,
+        events = { "SCENARIO_CRITERIA_UPDATE", "CRITERIA_COMPLETE", "PLAYER_ENTERING_WORLD" },
+        code = 'if not C_ScenarioInfo or not C_ScenarioInfo.GetScenarioStepInfo then\n    return nil, "Scenario API not available"\nend\nlocal ok, stepInfo = pcall(C_ScenarioInfo.GetScenarioStepInfo)\nif not ok or not stepInfo then return nil, "No scenario data" end\nlocal numCriteria = stepInfo.numCriteria or 0\nlocal total = 0\nfor i = 1, numCriteria do\n    local ok2, ci = pcall(C_ScenarioInfo.GetCriteriaInfo, i)\n    if ok2 and ci and ci.description then\n        local desc = ci.description:lower()\n        if desc:find("enem") or desc:find("group") or desc:find("kill") or desc:find("defeat") then\n            total = total + (ci.totalQuantity or 0)\n        end\n    end\nend\nif total > 0 then return tostring(total) end\nreturn nil, "No enemy group data"',
+        fetch = function()
+            if not _G.C_ScenarioInfo or not _G.C_ScenarioInfo.GetScenarioStepInfo then
+                return nil, "Scenario API not available"
+            end
+            local ok, stepInfo = pcall(_G.C_ScenarioInfo.GetScenarioStepInfo)
+            if not ok or not stepInfo then return nil, "No scenario data" end
+            local numCriteria = stepInfo.numCriteria or 0
+            local total = 0
+            for i = 1, numCriteria do
+                local ok2, ci = pcall(_G.C_ScenarioInfo.GetCriteriaInfo, i)
+                if ok2 and ci and ci.description then
+                    local desc = ci.description:lower()
+                    if desc:find("enem") or desc:find("group") or desc:find("kill") or desc:find("defeat") then
+                        total = total + (ci.totalQuantity or 0)
+                    end
+                end
+            end
+            if total > 0 then return tostring(total) end
+            return nil, "No enemy group data"
+        end,
+    })
+
+    iplog("Info", "RegisterBuiltInFunctions: complete (" .. (function()
+        local count = 0
+        for _ in pairs(registry) do count = count + 1 end
+        return count
+    end)() .. " functions)")
 end
 
 -------------------------------------------------------------------------------
@@ -514,12 +592,19 @@ function Functions.LoadUserFunctions()
     if not db or not db.functions then return end
 
     for name, funcDef in pairs(db.functions) do
+        local upperName = name:upper()
+        -- Backup built-in if user function overrides it
+        local existing = registry[upperName]
+        if existing and existing.builtin and not builtinBackups[upperName] then
+            builtinBackups[upperName] = existing
+        end
         Functions.Register(name, {
             code = funcDef.code or "",
             events = funcDef.events or {},
             category = funcDef.category or "User",
             description = funcDef.description or "",
             builtin = false,
+            _builtinBackup = builtinBackups[upperName] ~= nil,
         })
     end
 
@@ -541,6 +626,12 @@ function Functions.SaveUserFunction(name, code, events, category, description)
     db.functions = db.functions or {}
     _G.InfoPanelsDB = db
 
+    -- Backup the built-in if we're overriding one
+    local existing = registry[name]
+    if existing and existing.builtin and not builtinBackups[name] then
+        builtinBackups[name] = existing
+    end
+
     db.functions[name] = {
         code = code or "",
         events = events or {},
@@ -555,6 +646,7 @@ function Functions.SaveUserFunction(name, code, events, category, description)
         category = category or "User",
         description = description or "",
         builtin = false,
+        _builtinBackup = builtinBackups[name] ~= nil,
     })
 
     -- Invalidate cache
@@ -572,13 +664,23 @@ function Functions.DeleteUserFunction(name)
     name = name:upper()
 
     local info = registry[name]
-    if info and info.builtin then
+    if info and info.builtin and not builtinBackups[name] then
         return false, "Cannot delete built-in function"
     end
 
     local db = _G.InfoPanelsDB or {}
     if db.functions then
         db.functions[name] = nil
+    end
+
+    -- If there's a built-in backup, restore it instead of removing
+    if builtinBackups[name] then
+        local backup = builtinBackups[name]
+        builtinBackups[name] = nil
+        Functions.Unregister(name)
+        Functions.Register(name, backup)
+        iplog("Info", "DeleteUserFunction: restored built-in " .. name)
+        return true
     end
 
     Functions.Unregister(name)
