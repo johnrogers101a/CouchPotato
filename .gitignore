@@ -7,5 +7,15 @@
 
 # Default luac compiler output
 luac.out
+
+# Build output
+**/dist/
+**/out/
+**/build/
+**/bin/
+**/obj/
+**/coverage/
+**/*.tsbuildinfo
+
 wow-controller-ui-feasibility-2026-03-01-1213.md
 .agent-work/
