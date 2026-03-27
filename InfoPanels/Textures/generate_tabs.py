@@ -10,7 +10,7 @@ import os
 
 WIDTH  = 256
 HEIGHT = 32
-CORNER_RADIUS = 3  # px rounded corner at top-left / top-right
+CORNER_RADIUS = 4  # px rounded corner at top-left / top-right
 
 def lerp(a, b, t):
     return int(a + (b - a) * t)
@@ -41,10 +41,10 @@ def generate_active(width, height):
         # row 0 = top of image
         y = row
         t = y / (height - 1)  # 0 = top, 1 = bottom
-        # Background gradient: top darker → bottom lighter (WoW tab convention)
-        r_bg = lerp(60, 80, t)
-        g_bg = lerp(56, 75, t)
-        b_bg = lerp(48, 65, t)
+        # Background gradient: warm khaki/brown matching Blizzard active tab
+        r_bg = lerp(100, 125, t)
+        g_bg = lerp(92, 115, t)
+        b_bg = lerp(75, 95, t)
 
         for col in range(width):
             x = col
@@ -54,22 +54,17 @@ def generate_active(width, height):
                 pixels.append(make_pixel(0, 0, 0, 0))
                 continue
 
-            # Top edge: 2px gold line
+            # Top edge: 2px bright gold line
             if y == 0:
-                pixels.append(make_pixel(180, 150, 50, 255))
+                pixels.append(make_pixel(210, 175, 65, 255))
                 continue
             if y == 1:
-                pixels.append(make_pixel(160, 130, 40, 255))
+                pixels.append(make_pixel(185, 155, 55, 255))
                 continue
 
-            # Left/right 1px border (subtle darker)
+            # Left/right 1px border
             if x == 0 or x == width - 1:
-                pixels.append(make_pixel(
-                    max(0, r_bg - 25),
-                    max(0, g_bg - 22),
-                    max(0, b_bg - 18),
-                    255
-                ))
+                pixels.append(make_pixel(70, 64, 52, 255))
                 continue
 
             pixels.append(make_pixel(r_bg, g_bg, b_bg, 255))
@@ -82,10 +77,10 @@ def generate_inactive(width, height):
     for row in range(height):
         y = row
         t = y / (height - 1)
-        # Background gradient: darker overall
-        r_bg = lerp(30, 40, t)
-        g_bg = lerp(28, 38, t)
-        b_bg = lerp(24, 32, t)
+        # Background gradient: very dark brown-black matching Blizzard inactive tab
+        r_bg = lerp(32, 45, t)
+        g_bg = lerp(30, 42, t)
+        b_bg = lerp(26, 36, t)
 
         for col in range(width):
             x = col
@@ -95,24 +90,19 @@ def generate_inactive(width, height):
                 pixels.append(make_pixel(0, 0, 0, 0))
                 continue
 
-            # Top edge: 1px subtle dark gold-brown
+            # Top edge: 1px subtle border
             if y == 0:
-                pixels.append(make_pixel(60, 55, 45, 255))
+                pixels.append(make_pixel(55, 50, 42, 255))
                 continue
 
             # Bottom separator
             if y == height - 1:
-                pixels.append(make_pixel(20, 18, 15, 200))
+                pixels.append(make_pixel(22, 20, 17, 255))
                 continue
 
             # Left/right 1px border
             if x == 0 or x == width - 1:
-                pixels.append(make_pixel(
-                    max(0, r_bg - 10),
-                    max(0, g_bg - 8),
-                    max(0, b_bg - 6),
-                    255
-                ))
+                pixels.append(make_pixel(25, 23, 20, 255))
                 continue
 
             pixels.append(make_pixel(r_bg, g_bg, b_bg, 255))

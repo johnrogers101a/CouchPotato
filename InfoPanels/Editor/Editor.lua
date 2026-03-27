@@ -551,7 +551,7 @@ local function BuildEditorFrame()
     local ACTIVE_TEX   = "Interface\\AddOns\\InfoPanels\\Textures\\tab-active"
     local INACTIVE_TEX = "Interface\\AddOns\\InfoPanels\\Textures\\tab-inactive"
     local TAB_HEIGHT   = 32
-    local TAB_PADDING  = 15
+    local TAB_PADDING  = 20
 
     local function createTabButton(index, labelText, parent)
         local tab = CreateFrame("Button", "IPEditorTab" .. index, parent)
@@ -610,7 +610,7 @@ local function BuildEditorFrame()
         if i == 1 then
             tab:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 20, -30)
         else
-            tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", -16, 0)
+            tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", -10, 0)
         end
 
         tab:SetScript("OnClick", function()
