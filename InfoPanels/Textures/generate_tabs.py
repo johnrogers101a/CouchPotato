@@ -42,9 +42,9 @@ def generate_active(width, height):
         y = row
         t = y / (height - 1)  # 0 = top, 1 = bottom
         # Background gradient: warm khaki/brown matching Blizzard active tab
-        r_bg = lerp(100, 125, t)
-        g_bg = lerp(92, 115, t)
-        b_bg = lerp(75, 95, t)
+        r_bg = lerp(110, 140, t)  # was 100, 125
+        g_bg = lerp(100, 130, t)  # was 92, 115
+        b_bg = lerp(82, 105, t)   # was 75, 95
 
         for col in range(width):
             x = col
@@ -56,15 +56,15 @@ def generate_active(width, height):
 
             # Top edge: 2px bright gold line
             if y == 0:
-                pixels.append(make_pixel(210, 175, 65, 255))
+                pixels.append(make_pixel(220, 185, 70, 255))   # was 210, 175, 65
                 continue
             if y == 1:
-                pixels.append(make_pixel(185, 155, 55, 255))
+                pixels.append(make_pixel(195, 165, 60, 255))   # was 185, 155, 55
                 continue
 
             # Left/right 1px border
             if x == 0 or x == width - 1:
-                pixels.append(make_pixel(70, 64, 52, 255))
+                pixels.append(make_pixel(85, 78, 62, 255))    # was 70, 64, 52
                 continue
 
             pixels.append(make_pixel(r_bg, g_bg, b_bg, 255))

@@ -610,7 +610,7 @@ local function BuildEditorFrame()
         if i == 1 then
             tab:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 20, -30)
         else
-            tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", -10, 0)
+            tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", -16, 0)
         end
 
         tab:SetScript("OnClick", function()
