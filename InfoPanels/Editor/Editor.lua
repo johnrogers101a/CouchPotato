@@ -542,12 +542,12 @@ local function BuildEditorFrame()
     end
 
     ---------------------------------------------------------------------------
-    -- Bottom tabs: Functions, Properties, Visibility (Textures hidden)
+    -- Bottom tabs: Functions, Properties, Visibility
+    -- Plain Button frames with custom TGA textures (tab-active / tab-inactive).
     ---------------------------------------------------------------------------
     local tabNames = { "Functions", "Properties", "Visibility" }
     local tabs = {}
 
-    -- Custom tab textures: built images stored in InfoPanels/Textures/
     local ACTIVE_TEX   = "Interface\\AddOns\\InfoPanels\\Textures\\tab-active"
     local INACTIVE_TEX = "Interface\\AddOns\\InfoPanels\\Textures\\tab-inactive"
     local TAB_HEIGHT   = 32
@@ -558,49 +558,48 @@ local function BuildEditorFrame()
         tab:SetID(index)
         tab:SetHeight(TAB_HEIGHT)
 
-        -- Create Left/Middle/Right texture regions for 3-slice tab background
+        -- Left cap (20px)
         local left = tab:CreateTexture(nil, "BACKGROUND")
         left:SetWidth(20)
         left:SetHeight(TAB_HEIGHT)
         left:SetPoint("BOTTOMLEFT")
+        left:SetTexture(INACTIVE_TEX)
+        left:SetTexCoord(0, 0.078125, 0, 1)
         tab.Left = left
 
+        -- Right cap (20px)
         local right = tab:CreateTexture(nil, "BACKGROUND")
         right:SetWidth(20)
         right:SetHeight(TAB_HEIGHT)
         right:SetPoint("BOTTOMRIGHT")
+        right:SetTexture(INACTIVE_TEX)
+        right:SetTexCoord(0.921875, 1, 0, 1)
         tab.Right = right
 
+        -- Middle stretch
         local middle = tab:CreateTexture(nil, "BACKGROUND")
         middle:SetHeight(TAB_HEIGHT)
-        middle:SetPoint("LEFT", tab.Left, "RIGHT")
-        middle:SetPoint("RIGHT", tab.Right, "LEFT")
+        middle:SetPoint("LEFT", left, "RIGHT")
+        middle:SetPoint("RIGHT", right, "LEFT")
+        middle:SetTexture(INACTIVE_TEX)
+        middle:SetTexCoord(0.078125, 0.921875, 0, 1)
         tab.Middle = middle
 
-        -- Set initial texture (inactive) with tex coords for 3-slice
-        tab.Left:SetTexture(INACTIVE_TEX)
-        tab.Right:SetTexture(INACTIVE_TEX)
-        tab.Middle:SetTexture(INACTIVE_TEX)
-        tab.Left:SetTexCoord(0, 0.078125, 0, 1)
-        tab.Right:SetTexCoord(0.921875, 1, 0, 1)
-        tab.Middle:SetTexCoord(0.078125, 0.921875, 0, 1)
-
-        -- Text label
+        -- Font
         local fs = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         fs:SetPoint("CENTER", 0, 2)
         tab:SetFontString(fs)
         tab:SetText(labelText)
 
-        -- Size to fit text + padding
-        local textWidth = tab:GetFontString():GetStringWidth() or 60
+        local textWidth = fs:GetStringWidth() or 60
         tab:SetWidth(textWidth + TAB_PADDING * 2)
 
-        -- Highlight texture for mouseover
+        -- Highlight on hover
         local hl = tab:CreateTexture(nil, "HIGHLIGHT")
         hl:SetAllPoints()
         hl:SetTexture(ACTIVE_TEX)
         hl:SetTexCoord(0.078125, 0.921875, 0, 1)
-        hl:SetAlpha(0.4)
+        hl:SetAlpha(0.3)
 
         return tab
     end
@@ -621,10 +620,6 @@ local function BuildEditorFrame()
         tabs[i] = tab
     end
     f._tabs = tabs
-
-    -- Store texture paths on the frame for state management
-    f._tabActiveTex   = ACTIVE_TEX
-    f._tabInactiveTex = INACTIVE_TEX
 
     ---------------------------------------------------------------------------
     -- Layout: Three columns
@@ -937,24 +932,23 @@ function Editor._selectTab(tabIndex)
     end
 
     local tabs = _editorFrame._tabs or {}
-    local activeTex   = "Interface\\AddOns\\InfoPanels\\Textures\\tab-active"
-    local inactiveTex = "Interface\\AddOns\\InfoPanels\\Textures\\tab-inactive"
 
     for i, tab in ipairs(tabs) do
         local isSelected = (i == tabIndex)
-        local tex = isSelected and activeTex or inactiveTex
+        local tex = isSelected
+            and "Interface\\AddOns\\InfoPanels\\Textures\\tab-active"
+            or  "Interface\\AddOns\\InfoPanels\\Textures\\tab-inactive"
 
-        if tab.Left  then tab.Left:SetTexture(tex) end
-        if tab.Right then tab.Right:SetTexture(tex) end
+        if tab.Left   then tab.Left:SetTexture(tex) end
+        if tab.Right  then tab.Right:SetTexture(tex) end
         if tab.Middle then tab.Middle:SetTexture(tex) end
 
-        -- Text color: gold for selected, dim for inactive
         local fs = tab:GetFontString()
         if fs then
             if isSelected then
-                fs:SetTextColor(1, 0.82, 0)
+                fs:SetTextColor(1, 0.82, 0)       -- bright gold
             else
-                fs:SetTextColor(0.6, 0.6, 0.6)
+                fs:SetTextColor(0.78, 0.64, 0)     -- dimmer gold
             end
         end
     end
