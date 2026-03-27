@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — macOS installer for CouchPotato WoW addons
+# install.sh — Cross-platform installer for CouchPotato WoW addons
 # Installs all addons in this repo into the WoW Retail Interface/AddOns folder.
 # Performs a CLEAN install: removes the destination addon directory before
 # copying, so stale files from previously-installed-but-now-removed addons
@@ -8,7 +8,8 @@
 # Usage:
 #   ./install.sh [/path/to/WoW/_retail_/Interface/AddOns]
 #
-# If no path is given the script probes the standard macOS install location.
+# If no path is given the script auto-detects macOS vs Windows (WSL/Git Bash)
+# and probes the standard install location for the detected OS.
 
 set -euo pipefail
 
@@ -29,20 +30,36 @@ ADDON_NAMES=(
 # ---------------------------------------------------------------------------
 
 find_addons_path() {
-    # Standard macOS Blizzard install location
-    local standard="/Applications/World of Warcraft/_retail_/Interface/AddOns"
-    if [[ -d "$standard" ]]; then
-        echo "$standard"
-        return
-    fi
-
-    # Home directory installs
-    local home_path="$HOME/Applications/World of Warcraft/_retail_/Interface/AddOns"
-    if [[ -d "$home_path" ]]; then
-        echo "$home_path"
-        return
-    fi
-
+    case "$(uname -s)" in
+        Darwin)
+            # Standard macOS Blizzard install location
+            local mac_standard="/Applications/World of Warcraft/_retail_/Interface/AddOns"
+            if [[ -d "$mac_standard" ]]; then
+                echo "$mac_standard"
+                return
+            fi
+            # Home directory installs
+            local mac_home="$HOME/Applications/World of Warcraft/_retail_/Interface/AddOns"
+            if [[ -d "$mac_home" ]]; then
+                echo "$mac_home"
+                return
+            fi
+            ;;
+        MINGW*|MSYS*|CYGWIN*|Linux)
+            # Windows via Git Bash / MSYS2 / Cygwin
+            local win_path="/c/Program Files (x86)/World of Warcraft/_retail_/Interface/AddOns"
+            if [[ -d "$win_path" ]]; then
+                echo "$win_path"
+                return
+            fi
+            # WSL: try the mounted Windows path
+            local wsl_path="/mnt/c/Program Files (x86)/World of Warcraft/_retail_/Interface/AddOns"
+            if [[ -d "$wsl_path" ]]; then
+                echo "$wsl_path"
+                return
+            fi
+            ;;
+    esac
     echo ""
 }
 
