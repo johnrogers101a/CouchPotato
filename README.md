@@ -44,15 +44,23 @@ This keeps WoW's memory footprint minimal for keyboard/mouse players while provi
 
 ## Installation
 
-### Using the Install Script (Windows)
+### Using the Install Script (macOS, Windows, WSL)
 
-Run the included PowerShell script to install all addons automatically:
+Run the included shell script to install all addons automatically:
 
-```powershell
-.\install.ps1
+```bash
+bash install.sh
 ```
 
-The script auto-detects your WoW Retail `Interface\AddOns` folder (via registry, common paths, or prompting you), performs a clean install removing stale files, and copies all suite addons.
+The script auto-detects your OS via `uname -s` and uses the correct WoW AddOns path for your platform:
+
+| Platform | WoW AddOns path |
+|---|---|
+| macOS | `/Applications/World of Warcraft/_retail_/Interface/AddOns` |
+| Windows (Git Bash) | `/c/Program Files (x86)/World of Warcraft/_retail_/Interface/AddOns` |
+| WSL | `/mnt/c/Program Files (x86)/World of Warcraft/_retail_/Interface/AddOns` |
+
+The script performs a clean install — removes stale files and copies all suite addons.
 
 ### Manual Installation
 
