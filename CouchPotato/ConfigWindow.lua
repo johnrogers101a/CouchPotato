@@ -600,6 +600,7 @@ CP.ConfigWindow = {
         if _G.CouchPotatoLog then
             _G.CouchPotatoLog:Info("CP", "ConfigWindow: Show() called")
         end
+        ShowSettingsTab()
         _frame:Show()
         _frame:Raise()
     end,
@@ -619,6 +620,7 @@ CP.ConfigWindow = {
             end
             _frame:Hide()
         else
+            ShowSettingsTab()
             if _G.CouchPotatoLog then
                 _G.CouchPotatoLog:Info("CP", "ConfigWindow: toggled open")
             end

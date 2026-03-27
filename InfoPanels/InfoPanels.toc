@@ -31,4 +31,5 @@ Editor/PropertiesPanel.lua
 Editor/TextureBrowser.lua
 Editor/ImportExport.lua
 Editor/Editor.lua
+MinimapButton.lua
 InfoPanels.lua

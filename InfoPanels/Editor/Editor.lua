@@ -194,13 +194,13 @@ local function _buildFunctionsTab(parent)
 
     -- Right side: code editor
     local codeHeader = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    codeHeader:SetPoint("TOPLEFT", container, "TOPLEFT", listWidth + 4, -2)
+    codeHeader:SetPoint("TOPLEFT", container, "TOPLEFT", listWidth + 104, -2)
     codeHeader:SetText("Code (Lua — must return a string)")
     codeHeader:SetTextColor(1, 0.82, 0, 1)
 
-    -- Function name input
+    -- Function name input — 8px gap below code header
     local nameLabel = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    nameLabel:SetPoint("TOPLEFT", codeHeader, "BOTTOMLEFT", 0, -4)
+    nameLabel:SetPoint("TOPLEFT", codeHeader, "BOTTOMLEFT", 0, -8)
     nameLabel:SetText("Name:")
 
     local nameInput = CreateFrame("EditBox", "IPEditorFuncName", container, "InputBoxTemplate")
@@ -211,33 +211,10 @@ local function _buildFunctionsTab(parent)
     nameInput:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     container._funcNameInput = nameInput
 
-    -- Code edit box
-    local codeScroll = CreateFrame("ScrollFrame", "IPEditorFuncCodeScroll", container, "UIPanelScrollFrameTemplate")
-    codeScroll:SetPoint("TOPLEFT", nameLabel, "BOTTOMLEFT", 0, -6)
-    codeScroll:SetPoint("RIGHT", container, "RIGHT", -14, 0)
-    codeScroll:SetPoint("BOTTOM", container, "BOTTOM", 0, 32)
-
-    local codeEB = CreateFrame("EditBox", nil, codeScroll)
-    codeEB:SetMultiLine(true)
-    codeEB:SetAutoFocus(false)
-    codeEB:SetFontObject("GameFontHighlightSmall")
-    local codeWidth = math.max(codeScroll:GetWidth() or 0, 250)
-    codeEB:SetWidth(codeWidth)
-    codeEB:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    codeScroll:SetScrollChild(codeEB)
-
-    -- Dynamically update EditBox width when container resizes
-    codeScroll:SetScript("OnSizeChanged", function(self, w)
-        if w and w > 0 then
-            codeEB:SetWidth(math.max(w, 250))
-        end
-    end)
-    container._funcCodeEB = codeEB
-
-    -- Save & Delete buttons
+    -- Save & Delete buttons — anchored to container bottom with 8px padding
     local saveFuncBtn = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
     saveFuncBtn:SetSize(80, 22)
-    saveFuncBtn:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", listWidth + 8, 6)
+    saveFuncBtn:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", listWidth + 108, 8)
     saveFuncBtn:SetText("Save")
     saveFuncBtn:SetScript("OnClick", function()
         Editor._saveCurrentFunction()
@@ -260,14 +237,42 @@ local function _buildFunctionsTab(parent)
         Editor._testCurrentFunction()
     end)
 
-    -- Result display area just above the buttons row
+    -- Result display area — sits between code area and buttons, ~20px tall
     local resultLabel = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    resultLabel:SetPoint("BOTTOMLEFT", saveFuncBtn, "TOPLEFT", 0, 4)
+    resultLabel:SetPoint("BOTTOMLEFT", saveFuncBtn, "TOPLEFT", 0, 6)
     resultLabel:SetPoint("RIGHT", container, "RIGHT", -8, 0)
     resultLabel:SetJustifyH("LEFT")
-    resultLabel:SetWordWrap(true)
+    resultLabel:SetWordWrap(false)
     resultLabel:SetText("")
     container._resultLabel = resultLabel
+
+    -- Code scroll frame — starts 8px below Name row, ends 60px above container bottom
+    -- (buttons 22px + 8px padding + 20px result label + ~10px gap = ~60px)
+    -- Right anchor is -24 to leave room for the UIPanelScrollFrameTemplate scrollbar (~20px wide).
+    local codeScroll = CreateFrame("ScrollFrame", "IPEditorFuncCodeScroll", container, "UIPanelScrollFrameTemplate")
+    codeScroll:SetPoint("TOPLEFT", nameLabel, "BOTTOMLEFT", 0, -8)
+    codeScroll:SetPoint("RIGHT", container, "RIGHT", -24, 0)
+    codeScroll:SetPoint("BOTTOM", container, "BOTTOM", 0, 60)
+
+    -- EditBox inset 8px from left; right anchor tracks scroll frame right so it never
+    -- overlaps the scrollbar regardless of frame size.
+    local codeEB = CreateFrame("EditBox", nil, codeScroll)
+    codeEB:SetMultiLine(true)
+    codeEB:SetAutoFocus(false)
+    codeEB:SetFontObject("GameFontHighlightSmall")
+    codeEB:SetPoint("TOPLEFT", codeScroll, "TOPLEFT", 8, 0)
+    -- Fallback width until OnSizeChanged fires (GetWidth returns 0 at build time).
+    codeEB:SetWidth(400)
+    codeEB:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    codeScroll:SetScrollChild(codeEB)
+
+    -- Dynamically update EditBox width when scroll frame resizes
+    codeScroll:SetScript("OnSizeChanged", function(self, w)
+        if w and w > 0 then
+            codeEB:SetWidth(math.max(w - 8, 220))  -- 8px left inset only; scrollbar is outside frame
+        end
+    end)
+    container._funcCodeEB = codeEB
 
     _funcEditorFrame = container
     return container
@@ -381,8 +386,9 @@ function Editor._refreshPanelFuncList()
         local entry = _panelFuncListEntries[i]
         if not entry then
             local btn = CreateFrame("Button", nil, scrollChild)
-            btn:SetSize(scrollChild:GetWidth(), rowHeight)
+            btn:SetHeight(rowHeight)
             btn:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, -(i - 1) * (rowHeight + rowSpacing))
+            btn:SetPoint("RIGHT", scrollChild, "RIGHT", 0, 0)
 
             local bg = btn:CreateTexture(nil, "BACKGROUND")
             bg:SetAllPoints()
@@ -890,7 +896,8 @@ local function BuildEditorFrame()
 
     local linesScrollChild = CreateFrame("Frame", nil, linesScroll)
     local initCenterW = centerFrame:GetWidth()
-    linesScrollChild:SetWidth((initCenterW and initCenterW > 0) and (initCenterW - 32) or 300)
+    -- Subtract 52px: 24px for scroll frame inset + ~28px for scrollbar clearance
+    linesScrollChild:SetWidth((initCenterW and initCenterW > 0) and (initCenterW - 52) or 280)
     linesScrollChild:SetHeight(1)
     linesScroll:SetScrollChild(linesScrollChild)
     f._linesScrollChild = linesScrollChild
@@ -898,7 +905,7 @@ local function BuildEditorFrame()
     -- Dynamically update scroll child width when center frame resizes
     centerFrame:HookScript("OnSizeChanged", function(self, w)
         if w and w > 0 and linesScrollChild then
-            linesScrollChild:SetWidth(w - 32)
+            linesScrollChild:SetWidth(w - 52)
         end
     end)
 
@@ -954,27 +961,36 @@ local function BuildEditorFrame()
     visHeader:SetText("Visibility (AND logic)")
     visHeader:SetTextColor(1, 0.82, 0, 1)
 
-    -- Visibility scroll frame for future-proofing
+    -- Visibility scroll frame for future-proofing.
+    -- Right anchor is -24 to leave room outside the scroll frame for the scrollbar.
     local visScroll = CreateFrame("ScrollFrame", "IPEditorVisScroll", panelsTab, "UIPanelScrollFrameTemplate")
     visScroll:SetPoint("TOPLEFT", visHeader, "BOTTOMLEFT", 0, -4)
-    visScroll:SetPoint("BOTTOMRIGHT", panelsTab, "BOTTOMRIGHT", -14, 4)
+    visScroll:SetPoint("BOTTOMRIGHT", panelsTab, "BOTTOMRIGHT", -24, 4)
 
+    -- Scroll child width set dynamically so it never overlaps the scrollbar.
     local visScrollChild = CreateFrame("Frame", nil, visScroll)
-    visScrollChild:SetWidth(visScroll:GetWidth() or 200)
+    visScrollChild:SetWidth(320)  -- safe fallback; updated by OnSizeChanged below
     visScrollChild:SetHeight(1)
     visScroll:SetScrollChild(visScrollChild)
 
+    -- Keep scroll child width in sync with the scroll frame width.
+    visScroll:SetScript("OnSizeChanged", function(self, w)
+        if w and w > 0 then
+            visScrollChild:SetWidth(math.max(w - 4, 160))
+        end
+    end)
+
     local VIS_CONDITIONS = {
-        { key = "always",       label = "Always visible",        type = "always" },
-        { key = "in_delve",     label = "Only in Delves",        sourceId = "delve.indelve",   operator = "truthy" },
-        { key = "in_dungeon",   label = "Only in Dungeons",      type = "instance_check", instanceType = "party" },
-        { key = "in_raid",      label = "Only in Raids",         type = "instance_check", instanceType = "raid" },
-        { key = "in_pvp",       label = "Only in PvP",           type = "instance_check", instanceType = "pvp" },
-        { key = "in_openworld", label = "Only in open world",    type = "instance_check", instanceType = "none" },
-        { key = "in_group",     label = "Only when in a group",  type = "group_check",    inGroup = true },
-        { key = "solo",         label = "Only when solo",        type = "group_check",    inGroup = false },
-        { key = "in_combat",    label = "Only in combat",        type = "combat_check",   inCombat = true },
-        { key = "out_combat",   label = "Only out of combat",    type = "combat_check",   inCombat = false },
+        { key = "always",       label = "Always",        type = "always" },
+        { key = "in_delve",     label = "In Delves",     sourceId = "delve.indelve",   operator = "truthy" },
+        { key = "in_dungeon",   label = "In Dungeons",   type = "instance_check", instanceType = "party" },
+        { key = "in_raid",      label = "In Raids",      type = "instance_check", instanceType = "raid" },
+        { key = "in_pvp",       label = "In PvP",        type = "instance_check", instanceType = "pvp" },
+        { key = "in_openworld", label = "Open World",    type = "instance_check", instanceType = "none" },
+        { key = "in_group",     label = "In Group",      type = "group_check",    inGroup = true },
+        { key = "solo",         label = "Solo",          type = "group_check",    inGroup = false },
+        { key = "in_combat",    label = "In Combat",     type = "combat_check",   inCombat = true },
+        { key = "out_combat",   label = "Out of Combat", type = "combat_check",   inCombat = false },
     }
 
     local visCheckboxes = {}
@@ -991,6 +1007,8 @@ local function BuildEditorFrame()
 
         local cbLabel = visScrollChild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         cbLabel:SetPoint("LEFT", cb, "RIGHT", 4, 0)
+        -- Constrain label width so text does not overflow into the scrollbar area
+        cbLabel:SetWidth(140)
         cbLabel:SetText(cond.label)
 
         cb._condKey = cond.key

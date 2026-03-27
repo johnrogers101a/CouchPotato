@@ -273,5 +273,19 @@ loadFrame:SetScript("OnEvent", function(self, event, arg1)
         end
 
         OnLoad()
+
+        -- Build the minimap button once the DB is available and Minimap exists.
+        -- Defer to PLAYER_LOGIN so SavedVariables (InfoPanelsDB) are fully loaded.
+        local loginFrame = CreateFrame("Frame")
+        loginFrame:RegisterEvent("PLAYER_LOGIN")
+        loginFrame:SetScript("OnEvent", function(self, event)
+            if event == "PLAYER_LOGIN" then
+                self:UnregisterEvent("PLAYER_LOGIN")
+                if ns.MinimapButton then
+                    iplog("Info", "InfoPanels: PLAYER_LOGIN — building minimap button")
+                    ns.MinimapButton.Build()
+                end
+            end
+        end)
     end
 end)

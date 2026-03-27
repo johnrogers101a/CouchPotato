@@ -9,16 +9,15 @@ local EditorConstants = {}
 ns.EditorConstants = EditorConstants
 
 -- Frame dimensions
-EditorConstants.FRAME_WIDTH = 960
+EditorConstants.FRAME_WIDTH = 1060
 EditorConstants.FRAME_HEIGHT = 580
 EditorConstants.SIDEBAR_WIDTH = 200
 EditorConstants.PREVIEW_WIDTH = 280
 EditorConstants.PROPERTIES_HEIGHT = 180
 
 -- Tab identifiers
-EditorConstants.TAB_FUNCTIONS = 1
-EditorConstants.TAB_PROPERTIES = 2
-EditorConstants.TAB_VISIBILITY = 3
+EditorConstants.TAB_PANELS = 1
+EditorConstants.TAB_FUNCTIONS = 2
 
 -- Search
 EditorConstants.MAX_SEARCH_RESULTS = 500

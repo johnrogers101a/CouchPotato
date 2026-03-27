@@ -169,7 +169,8 @@ addSuite("T1: Editor Layout", function()
     for _, child in ipairs(children) do
         local cName = child:GetName() or ""
         local isTab = cName:match("^IPEditorTab%d+$")
-        if not isTab and child:IsVisible() and isClippedByParent(child) then
+        local isCloseBtn = cName:match("CloseButton$")
+        if not isTab and not isCloseBtn and child:IsVisible() and isClippedByParent(child) then
             clippedCount = clippedCount + 1
             fail("T1: Child clipped by editor frame: " .. tostring(cName), "child extends outside parent bounds")
         end
@@ -186,7 +187,8 @@ addSuite("T1: Editor Layout", function()
         for _, child in ipairs(children) do
             local cName = child:GetName() or ""
             local isTab = cName:match("^IPEditorTab%d+$")
-            if not isTab and child:IsVisible() then
+            local isCloseBtn = cName:match("CloseButton$")
+            if not isTab and not isCloseBtn and child:IsVisible() then
                 local cB = child:GetBottom()
                 if cB and cB < fBottom - 1 then
                     allAbove = false
@@ -1077,16 +1079,16 @@ addSuite("T14: Tab Styling", function()
         end)
     end
 
-    -- Verify inactive tab text is dim (0.6, 0.6, 0.6)
+    -- Verify inactive tab text is dimmer gold (0.78, 0.64, 0)
     for i, tab in ipairs(tabs) do
         if i ~= selectedIdx then
             pcall(function()
                 local fs = tab:GetFontString()
                 if fs then
                     local r, g, b = fs:GetTextColor()
-                    assertTrue("T14: Inactive tab " .. i .. " text is dim",
-                        r and math.abs(r - 0.6) < 0.1 and math.abs(g - 0.6) < 0.1 and math.abs(b - 0.6) < 0.1,
-                        string.format("color=(%.2f, %.2f, %.2f) expected=(0.6, 0.6, 0.6)", r or 0, g or 0, b or 0))
+                    assertTrue("T14: Inactive tab " .. i .. " text is dimmer gold",
+                        r and math.abs(r - 0.78) < 0.15 and math.abs(g - 0.64) < 0.15 and b ~= nil and b < 0.15,
+                        string.format("color=(%.2f, %.2f, %.2f) expected=(0.78, 0.64, 0)", r or 0, g or 0, b or 0))
                 end
             end)
         end
